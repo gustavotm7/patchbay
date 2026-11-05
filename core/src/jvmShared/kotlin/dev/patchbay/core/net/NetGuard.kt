@@ -18,6 +18,8 @@ import java.net.NetworkInterface
 import java.net.Proxy
 import java.net.Socket
 import java.net.SocketTimeoutException
+import javax.net.ssl.SSLSocket
+import dev.patchbay.core.net.tls.PinnedTls
 
 /**
  * An address NetGuard has approved. The constructor is internal: the only way to get one is
@@ -82,6 +84,44 @@ public class NetGuard {
     }
 
     /**
+     * Opens a TLS connection with device trust per ADR 0005. With [pinnedSha256] null (pairing), any key is
+     * accepted **for this handshake only** and returned in [TlsConnection.spkiSha256] with `firstUse = true`.
+     * The caller must show that fingerprint to the user and get confirmation before sending any credential.
+     * With a pin, a different key fails with [PatchbayError.TrustChanged].
+     */
+    public suspend fun connectTls(
+        to: LanAddress,
+        port: Int,
+        pinnedSha256: String?,
+        deviceName: String,
+        timeoutMs: Int = 5_000,
+    ): PatchbayResult<TlsConnection> {
+        val tcp = when (val r = connectTcp(to, port, timeoutMs)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> return r
+        }
+        return withContext(Dispatchers.IO) {
+            val observed = PinnedTls.ObservedKey()
+            try {
+                val ctx = PinnedTls.context(pinnedSha256, observed)
+                val ssl = ctx.socketFactory.createSocket(tcp, to.literal, port, true) as SSLSocket
+                PinnedTls.harden(ssl)
+                ssl.soTimeout = timeoutMs
+                ssl.startHandshake()
+                PatchbayResult.Ok(TlsConnection(ssl, observed.spkiSha256 ?: "", firstUse = pinnedSha256 == null))
+            } catch (e: IOException) {
+                tcp.close()
+                val mismatch = generateSequence<Throwable>(e) { it.cause }.filterIsInstance<PinnedTls.PinMismatch>().firstOrNull()
+                if (mismatch != null) {
+                    PatchbayResult.Err(PatchbayError.TrustChanged(deviceName, "$deviceName presented a different key than the one you paired"))
+                } else {
+                    PatchbayResult.Err(PatchbayError.Unreachable("TLS to ${to.literal}:$port failed: ${e.javaClass.simpleName}"))
+                }
+            }
+        }
+    }
+
+    /**
      * Opens a UDP socket bound to [bindPort] on all local addresses (0 = ephemeral). Binding is local and
      * not a destination; every send is checked.
      */
@@ -129,6 +169,13 @@ public class NetGuard {
     private fun deny(what: String, why: String): PatchbayResult<Nothing> {
         _stats.update { it.copy(denied = it.denied + 1, lastDenied = what) }
         return PatchbayResult.Err(PatchbayError.NetGuardDenied(what, "NetGuard refused $what ($why)"))
+    }
+}
+
+/** An established, pinned TLS connection. [spkiSha256] is what the device presented. */
+public class TlsConnection(public val socket: SSLSocket, public val spkiSha256: String, public val firstUse: Boolean) : AutoCloseable {
+    override fun close() {
+        socket.close()
     }
 }
 

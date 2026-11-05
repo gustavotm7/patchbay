@@ -102,7 +102,7 @@ public class NetworkCensus(
         )
 
         /** "Living-TV._googlecast._tcp.local" or "_googlecast._tcp.local" -> "_googlecast._tcp". */
-        internal fun serviceType(name: String): String {
+        public fun serviceType(name: String): String {
             val parts = name.removeSuffix(".local").split('.')
             val i = parts.indexOfFirst { it.startsWith("_") }
             return if (i < 0) name else parts.drop(i).joinToString(".")
