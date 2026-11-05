@@ -35,6 +35,24 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
 | App lock: Windows PIN (PBKDF2 hash in the encrypted DB, auto-lock on unfocus) | `core/.../lock/`, `app-windows/.../DesktopLock.kt`, `ui/.../Lock.kt` | logic tests; UI builds in CI |
 | UI: Control Room design system, demo home, live network screen, light / TV / printer panels, pairing panel | `ui/` | CI screenshot job (25 renders) |
 
+## Priority: MVP first (owner's direction, 2026-11-05)
+
+Don't add features yet. The MVP is: **the owner's real Govee lights, LG TV and Bambu H2D work end to end on the
+phone and the laptop**, with scan, encrypted storage and app lock. Everything else (Cast, eufy, ESPHome,
+ecobee, Phase 2) waits until the MVP is solid on real hardware.
+
+MVP checklist:
+- [x] Govee, LG webOS and Bambu adapters plus pairing UI (simulator-tested; CI green at `560fc88`)
+- [x] Encrypted storage, census, exposure report
+- [x] Windows PIN lock (`441b015` — confirm CI is green)
+- [ ] Android app lock (step 1 below)
+- [ ] Owner runs `docs/HARDWARE_TEST.md` G1.x / T1.x / B1.x on real devices; fix what breaks (step 2)
+- [ ] Bambu manual add, *only if* SSDP discovery fails on the real H2D (step 3)
+- [ ] Merge `ci/verification-bootstrap` → `main` via a PR once the above are green
+
+Keep it easy to build on: every new system follows `docs/ADDING_AN_ADAPTER.md`, and the UI renders from
+capabilities, so most additions need no new screens.
+
 ## Next steps (in order)
 
 1. **Android app lock.**
@@ -47,14 +65,18 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
    **New dependency → refresh checksums:** push to the branch; the `verification-bootstrap` workflow prints
    the new metadata (gzip+base64 between `PB-METADATA-BEGIN/END`) in its job log. Decode it, diff it, and
    commit `gradle/verification-metadata.xml`. Also add a `docs/DEPENDENCIES.md` row.
-2. **Remember the TV's MAC** across restarts, so Wake-on-LAN works right after launch. Options: put it in
-   `Pairing.secret` as JSON, or add an adapter hook for extra persisted state.
-3. **Bambu manual add** (IP + serial), for printers that don't answer SSDP. Also add the camera (RTSPS 322)
-   later.
-4. **eufy RTSP cameras** (see `docs/protocols/eufy.md`). Viewing needs a player: Media3 on Android; desktop TBD.
-5. **Cast / Google TV.** Research first whether Chromecast TLS certificates rotate; if they do, TOFU pinning
+2. **Fix whatever the owner's hardware tests reveal.** Firmware differences are the main risk: webOS power
+   and volume shapes, Bambu discovery, Govee model quirks. Ask for the session log
+   (`%LOCALAPPDATA%\Patchbay\logs\` on Windows) and add the failing case to the simulator *first*, then fix.
+3. **Bambu manual add** (IP + serial), only if discovery fails on the real printer.
+4. **Remember the TV's MAC** across restarts, so Wake-on-LAN works right after launch.
+
+**After the MVP:**
+
+5. **eufy RTSP cameras** (see `docs/protocols/eufy.md`). Viewing needs a player: Media3 on Android; desktop TBD.
+6. **Cast / Google TV.** Research first whether Chromecast TLS certificates rotate; if they do, TOFU pinning
    needs a different rule (ADR 0005 amendment).
-6. Rooms for live devices (the schema has `room_id`), the floor-plan editor, Jazzer fuzzing in CI, then
+7. Rooms for live devices (the schema has `room_id`), the floor-plan editor, Jazzer fuzzing in CI, then
    Phase 2 (ecobee HAP, scenes, automations, ledger, widgets, tray/command bar, peer sync).
 
 ## How to work in the cloud sandbox
