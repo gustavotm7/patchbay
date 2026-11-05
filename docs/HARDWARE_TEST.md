@@ -56,6 +56,11 @@ isolation" on guest networks breaks it.
 | G1.6 | Unplug the light, wait about 20 s | Status goes "No reply", then "Offline". Replug: it recovers by itself (polling back-off ≤ 60 s) |
 | G1.7 | Windows: open Patchbay (Inventory is the start page) → Scan | Windows Firewall may ask about Patchbay. Allow **Private networks only**. The same lights appear |
 | G1.8 | Run Home Assistant's Govee LAN integration on the same PC | Patchbay shows "Govee needs UDP port 4002…" (only one app per machine can listen) |
+| G1.9 | Close and reopen the app; **don't** scan | Your lights are listed immediately (from the encrypted DB) and turn "On/Off" within about 5 s |
+| G1.10 | After a scan, look at "Everything else that answered" | Chromecast/Google TV, the LG TV, printers and other mDNS/SSDP devices are listed with hints like "Cast: local media control". Unidentified ones are flagged ▲ |
+| G1.11 | Exposure → **Copy report**, paste into a note | A Markdown report with your devices, and OpenWrt rules only for lights Patchbay controls. Nothing was changed on your router |
+| G1.12 | Windows: look in `%LOCALAPPDATA%\Patchbay\data\` | `patchbay.db` (an encrypted file, opaque in a text editor) and `dek.wrapped` (DPAPI-protected). No plaintext device list anywhere |
+| G1.13 | Network screen shows "Encrypted storage unavailable…" | Should **not** happen. If it does, send the log line. The app still works but saves nothing |
 
 Please report:
 - Your Govee model numbers, and which ones didn't appear.

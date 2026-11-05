@@ -15,7 +15,11 @@ Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bo
 | **Govee LAN** | Discover, power, brightness, colour temperature, RGB; strict parser; anti-spoofing; pacing and back-off | 10 codec tests + 8 contract tests vs simulator + 2 LanHome tests |
 | **Live control in the apps** | Phone: "This network" tab. Desktop: Inventory section. Scan → list → light panel (2D brightness × K pad, hue strip) | Compiles in CI. **Not yet tried on your real lights** |
 | Bootstrap | paths → wrapped key → encrypted DB → NetGuard → logger → adapters | `BootstrapTest` |
-| **Encrypted storage** | SQLDelight; desktop: sqlite-jdbc-crypt (SQLCipher 4) + DPAPI; Android: SQLCipher + Keystore (StrongBox if present). Discovered devices persist and are polled at startup without a scan | Desktop: 3 storage tests + persistence test. Android: CI compile only |
+| **Encrypted storage** | SQLDelight; desktop: sqlite-jdbc-crypt (SQLCipher 4) + DPAPI; Android: SQLCipher + Keystore (StrongBox if present). Discovered devices persist and are polled at startup without a scan. If storage can't open, the session runs in memory: never plaintext, never a crash | Desktop: storage, persistence and fallback tests. Android: CI build only |
+| **Network census** | mDNS/DNS-SD (legacy-unicast queries, no port 5353 binding) + SSDP M-SEARCH on every scan; "Everything else that answered" list with local-control hints | Strict DNS/SSDP codecs (30 000-input mutation test) + loopback census test |
+| **Exposure report** | Local / cloud-only / unidentified counts; "Copy report" exports Markdown with suggested OpenWrt firewall rules (text only, never applied) | `ExposureReportTest` |
+| **Device TLS pinning** | TOFU with SPKI SHA-256 pins (ADR 0005), ready for webOS/Cast/Bambu adapters | Loopback TLS tests: first use, match, changed key → TrustChanged |
+| Adapter registry | Adding a system = factory + adapter + simulator + contract tests (`docs/ADDING_AN_ADAPTER.md`) | Used by Bootstrap |
 
 ## Get the builds
 
@@ -28,13 +32,17 @@ Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1
 
 ## Not done yet (Phase 1 remainder, in the order I'd do it)
 
-1. ~~Encrypted storage~~ done. Next: rooms for live devices (the schema has `room_id`; the UI to assign is missing).
+1. Adapters, each with a simulator and contract tests like Govee:
+   - LG webOS (SSAP over WSS 3001; TLS pinning is ready)
+   - eufy RTSP cameras
+   - Cast v2 / Android TV Remote v2
+   - Bambu H2D (MQTT/TLS, monitor-only)
+   - ESPHome (Noise NNpsk0)
 2. App lock (BiometricPrompt / Windows Hello or PIN).
-3. Inventory census: mDNS/SSDP browsing, OUI vendor lookup, polite port probe (opt-in). Then the Exposure Map.
-4. Adapters: LG webOS (SSAP/WSS + TOFU pin), Cast v2 / Android TV Remote v2, Bambu H2D (MQTT/TLS,
-   monitor-only), ESPHome (Noise NNpsk0). Each with a simulator and contract tests, like Govee.
-5. Rooms and floor-plan editor for live devices.
-6. Jazzer fuzzing in CI. Parsers currently run a seeded 20 000-input mutation test on every build instead.
+3. Rooms and a floor-plan editor for live devices (the schema has `room_id`; the assignment UI is missing).
+4. Census extras: OUI vendor lookup (desktop ARP table only; Android hides MACs), and an opt-in polite
+   port probe.
+5. Jazzer fuzzing in CI. Parsers currently run seeded mutation tests on every build instead.
 
 ## Adding systems (eufy and later ones)
 
