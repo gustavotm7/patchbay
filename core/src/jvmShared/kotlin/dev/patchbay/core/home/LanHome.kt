@@ -17,7 +17,11 @@ import dev.patchbay.core.result.PatchbayError
 import dev.patchbay.core.result.PatchbayResult
 import dev.patchbay.core.store.HomeStore
 import dev.patchbay.core.store.StoredDevice
+import dev.patchbay.core.discovery.Finding
+import dev.patchbay.core.discovery.NetworkCensus
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +37,7 @@ public class LanHome(
     private val scope: CoroutineScope,
     private val log: SessionLog?,
     private val store: HomeStore? = null,
+    private val censusEngine: NetworkCensus? = null,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : LiveHome {
 
@@ -41,6 +46,8 @@ public class LanHome(
     private val _scan = MutableStateFlow(ScanState.IDLE)
     override val scanState: StateFlow<ScanState> = _scan.asStateFlow()
     override val netStats: StateFlow<NetGuardStats> get() = netGuard.stats
+    private val _census = MutableStateFlow<List<Finding>>(emptyList())
+    override val census: StateFlow<List<Finding>> = _census.asStateFlow()
     private val _problem = MutableStateFlow<String?>(null)
     override val problem: StateFlow<String?> = _problem.asStateFlow()
 
@@ -75,8 +82,16 @@ public class LanHome(
     override suspend fun scan(): PatchbayResult<Int> {
         _scan.value = ScanState.SCANNING
         try {
-            for (a in adapters) {
-                a.discover().collect { found -> add(a, found) }
+            coroutineScope {
+                val censusJob = censusEngine?.let { c -> async { c.run() } }
+                for (a in adapters) {
+                    a.discover().collect { found -> add(a, found) }
+                }
+                when (val r = censusJob?.await()) {
+                    is PatchbayResult.Ok -> _census.value = r.value
+                    is PatchbayResult.Err -> report(r.error.message)
+                    null -> {}
+                }
             }
         } catch (e: Exception) {
             // Adapters return errors as values; this only catches programming errors, and reports them.
@@ -85,7 +100,7 @@ public class LanHome(
             return PatchbayResult.Err(PatchbayError.ProtocolViolation("scan failed"))
         }
         _scan.value = ScanState.DONE
-        log?.info("home", "scan finished: ${_devices.value.size} device(s)")
+        log?.info("home", "scan finished: ${_devices.value.size} managed, ${_census.value.size} answered the census")
         return PatchbayResult.Ok(_devices.value.size)
     }
 

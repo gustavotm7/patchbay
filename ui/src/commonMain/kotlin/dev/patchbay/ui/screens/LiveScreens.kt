@@ -111,11 +111,60 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                 LiveRow(d, d.device.id == selected) { onSelect(d.device.id) }
             }
         }
+        CensusPanel(live)
         VSpace(Space.s)
         PText(
             "Supported now: Govee LAN. LG TV, Cast, Bambu, ESPHome and ecobee arrive in later Phase 1/2 builds.",
             Patchbay.type.caption, c.textTertiary,
         )
+    }
+}
+
+/**
+ * Everything else that answered mDNS/SSDP. These are devices Patchbay doesn't manage (yet), with what their
+ * advertised services say about local control. This is how you find the devices you'd forgotten.
+ */
+@Composable
+private fun CensusPanel(live: LiveHome) {
+    val c = Patchbay.colors
+    val census by live.census.collectAsState()
+    val scan by live.scanState.collectAsState()
+    if (scan == ScanState.IDLE) return
+    VSpace(Space.m)
+    Panel(Modifier.fillMaxWidth(), padding = Space.m) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Legend("Everything else that answered")
+            Box(Modifier.weight(1f))
+            PText("${census.size}", Patchbay.type.valueS, c.textSecondary)
+        }
+        VSpace(Space.s)
+        if (census.isEmpty()) {
+            PText(
+                if (scan == ScanState.SCANNING) "Listening for mDNS and SSDP replies…" else "No mDNS or SSDP replies. Guest-network isolation blocks these.",
+                Patchbay.type.body, c.textSecondary,
+            )
+        }
+        census.forEachIndexed { i, f ->
+            if (i > 0) Hairline()
+            Row(Modifier.fillMaxWidth().padding(vertical = Space.s), verticalAlignment = Alignment.Top) {
+                DeviceGlyph(DeviceKind.UNKNOWN, dev.patchbay.ui.designsystem.GlyphState.UNMANAGED, Modifier.size(20.dp))
+                HSpace(Space.m)
+                Column(Modifier.weight(1f)) {
+                    PText(f.friendlyName ?: f.model ?: f.hostNames.firstOrNull() ?: "Unnamed device", Patchbay.type.bodyStrong, maxLines = 1)
+                    PText(listOfNotNull(f.address, f.model?.takeIf { f.friendlyName != null }, f.server).joinToString(" · "), Patchbay.type.mono, c.textSecondary, maxLines = 1)
+                    val hints = f.hints
+                    if (hints.isEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ToneMarker(Tone.ATTENTION, Modifier.size(8.dp))
+                            HSpace(Space.xs)
+                            PText("Unidentified: services ${f.services.take(3).joinToString(", ").ifEmpty { "none advertised" }}", Patchbay.type.caption, c.attention, maxLines = 2)
+                        }
+                    } else {
+                        PText(hints.joinToString(" · "), Patchbay.type.caption, c.textTertiary, maxLines = 2)
+                    }
+                }
+            }
+        }
     }
 }
 

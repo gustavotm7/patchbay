@@ -3,6 +3,7 @@ package dev.patchbay.core.boot
 import app.cash.sqldelight.db.SqlDriver
 import dev.patchbay.core.adapter.DeviceAdapter
 import dev.patchbay.core.db.PatchbayDb
+import dev.patchbay.core.discovery.NetworkCensus
 import dev.patchbay.core.store.DataKey
 import dev.patchbay.core.store.HomeStore
 import dev.patchbay.core.store.KeyWrapper
@@ -87,7 +88,7 @@ public object Bootstrap {
         val govee = GoveeLanAdapter(netGuard, scope)
         val started = govee.start()
         val adapters = listOf<DeviceAdapter>(govee)
-        val home = LanHome(netGuard, adapters, scope, log, store)
+        val home = LanHome(netGuard, adapters, scope, log, store, NetworkCensus(netGuard))
         if (started is PatchbayResult.Err) home.reportStartupProblem(started.error.message)
         log.info("boot", "ready: ${adapters.size} adapter(s)")
         return Services(paths, store, keyWrapper.kind, driver, netGuard, log, adapters, home, scope)

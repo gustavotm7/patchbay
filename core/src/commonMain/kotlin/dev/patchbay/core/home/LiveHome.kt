@@ -1,5 +1,6 @@
 package dev.patchbay.core.home
 
+import dev.patchbay.core.discovery.Finding
 import dev.patchbay.core.model.Command
 import dev.patchbay.core.model.Device
 import dev.patchbay.core.model.DeviceId
@@ -22,10 +23,13 @@ public interface LiveHome {
     public val scanState: StateFlow<ScanState>
     public val netStats: StateFlow<NetGuardStats>
 
+    /** Everything that answered the last network census (mDNS/SSDP), including devices we don't manage. */
+    public val census: StateFlow<List<Finding>>
+
     /** Last problem worth showing the user (redacted), e.g. "Govee needs UDP port 4002". */
     public val problem: StateFlow<String?>
 
-    /** Runs discovery on every adapter. Returns the number of devices known afterwards. */
+    /** Runs discovery on every adapter and the network census. Returns the number of managed devices afterwards. */
     public suspend fun scan(): PatchbayResult<Int>
 
     /** Validates against the device's capabilities, then sends. */
