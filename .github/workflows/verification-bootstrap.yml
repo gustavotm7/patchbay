@@ -1,11 +1,15 @@
-# Manually run: regenerates gradle/verification-metadata.xml on a runner that can reach Google Maven,
-# so it covers the Android and Compose graphs too (app-windows pins the Windows Skiko runtime, so
-# one Linux run covers the MSI's dependencies). The result is an artifact, never auto-committed:
-# review the diff (new components, unexpected groups), then commit it.
+# Regenerates gradle/verification-metadata.xml on a runner that can reach Google Maven, covering the
+# Android and Compose graphs (app-windows pins the Windows Skiko runtime, so one Linux run covers the MSI).
+#
+# Runs on manual dispatch, or on a push to a `ci/verification-bootstrap*` branch. The result is uploaded
+# as an artifact AND printed to the log as gzip+base64 between markers (logs of public repos can be read
+# without a token). It is never committed automatically: review the diff, then commit.
 name: verification-bootstrap
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["ci/verification-bootstrap*"]
 
 permissions:
   contents: read
@@ -18,13 +22,24 @@ jobs:
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with: { distribution: temurin, java-version: "21" }
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - name: Write metadata (sha256)
+      - name: Resolve everything (no compilation)
+        run: ./gradlew --write-verification-metadata sha256 resolveAllDependencies help
+      - name: Run the real tasks too (tool configurations resolved inside tasks); failures are reported, not fatal
         run: |
-          ./gradlew --write-verification-metadata sha256 \
+          ./gradlew --continue --write-verification-metadata sha256 \
             :core:jvmTest :simulators:jvmTest :hub:build :ui:desktopTest \
             :app-android:assembleDebug :app-android:assembleRelease :app-android:lintRelease \
-            :app-windows:jar :app-windows:createDistributable cyclonedxBom help
-          git diff --stat gradle/verification-metadata.xml
+            :app-windows:jar :app-windows:createDistributable cyclonedxBom 2>&1 | tee build.log || true
+          echo "::group::Build failures (if any)"
+          grep -nE "^e: |FAILED|What went wrong" -A3 build.log | head -300 || true
+          echo "::endgroup::"
+      - name: Print metadata
+        run: |
+          echo "PB-METADATA-BEGIN"
+          gzip -9c gradle/verification-metadata.xml | base64 -w 0
+          echo
+          echo "PB-METADATA-END"
+          sha256sum gradle/verification-metadata.xml
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verification-metadata

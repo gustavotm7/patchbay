@@ -4,7 +4,8 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
+    paths-ignore: ["docs/**", "*.md"]
   pull_request:
   workflow_dispatch:
 
