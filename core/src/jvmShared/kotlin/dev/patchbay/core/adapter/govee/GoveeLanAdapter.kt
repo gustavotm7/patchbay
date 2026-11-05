@@ -152,6 +152,8 @@ public class GoveeLanAdapter(
         }
     }
 
+    override fun deviceId(found: DiscoveredDevice): DeviceId = deviceIdFor(found.key)
+
     override fun capabilities(device: DeviceId): List<Capability> = CAPABILITIES
 
     override fun observe(device: DeviceId): Flow<DeviceSnapshot> = flow {

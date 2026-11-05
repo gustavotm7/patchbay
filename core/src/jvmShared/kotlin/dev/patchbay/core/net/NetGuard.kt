@@ -34,14 +34,6 @@ public class LanAddress internal constructor(internal val inet: InetAddress, pub
     override fun toString(): String = literal
 }
 
-/** Running totals shown in the UI ("NetGuard: LAN only · 0 internet connections"). */
-public data class NetGuardStats(
-    val allowed: Long = 0,
-    val denied: Long = 0,
-    val droppedInbound: Long = 0,
-    val lastDenied: String? = null,
-)
-
 /**
  * The single door to the network (privacy invariant 1). Created once by Bootstrap and shared.
  * Everything here is LAN-only by construction. `tools/check-policy.sh` (NET001) fails the build if

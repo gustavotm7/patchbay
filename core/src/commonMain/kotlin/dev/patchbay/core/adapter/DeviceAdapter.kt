@@ -29,6 +29,9 @@ public interface DeviceAdapter {
      */
     public suspend fun pair(device: DiscoveredDevice, prompt: PairingPrompt): PatchbayResult<Pairing>
 
+    /** The stable [DeviceId] this adapter uses for a discovered device (adapters own their ID scheme). */
+    public fun deviceId(found: DiscoveredDevice): DeviceId
+
     public fun capabilities(device: DeviceId): List<Capability>
 
     /** Hot flow of state for a paired device. Reconnects with back-off; never hammers. */
