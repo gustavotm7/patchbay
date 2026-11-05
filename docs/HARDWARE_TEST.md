@@ -101,3 +101,12 @@ Prerequisite: LAN Only Mode + Developer Mode on (see `docs/protocols/bambu.md`),
 | B1.5 | Chamber light toggle | Both chamber lights switch |
 | B1.6 | Stop… → Confirm stop (only on a print you're willing to cancel) | The print is cancelled |
 | B1.7 | Restart Patchbay | The printer reconnects without asking for the code again |
+
+## Phase 1 — App lock
+
+| # | Step | Expected |
+|---|---|---|
+| L1.1 | Android: open Patchbay | "Locked", then the system prompt (fingerprint/face or your PIN). Unlock → the app |
+| L1.2 | Android: switch away for more than 1 min, come back | Locked again. Under a minute: still unlocked |
+| L1.3 | Windows: first start | "Create a PIN (4–12 digits)", then confirm it |
+| L1.4 | Windows: restart, or leave the window unfocused for more than 1 min | Enter your PIN. Three wrong attempts → a growing wait |

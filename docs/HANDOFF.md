@@ -2,6 +2,14 @@
 
 Written 2026-11-05 at the end of the first long session. Read this first, then `docs/STATUS.md`.
 
+## Final state at end of session (07:4x UTC, 2026-11-05)
+
+- Work branch `ci/verification-bootstrap` holds everything. The last commits are the Android app lock (androidx.biometric added,
+  verification metadata bootstrapped) and permission-allowlist updates.
+- If the latest CI run on the branch is red, check the Android job first. The lock was the last change, and CI was still
+  running on it when the session ended. The previous fully green commit is `5661b45`.
+- Next for the MVP: the owner tests on real devices (`docs/HARDWARE_TEST.md`), then fix what breaks.
+
 ## Paste this to start a new session
 
 > Continue the Patchbay project in https://github.com/gustavotm7/patchbay. Work on the branch
@@ -45,7 +53,7 @@ MVP checklist:
 - [x] Govee, LG webOS and Bambu adapters plus pairing UI (simulator-tested; CI green at `560fc88`)
 - [x] Encrypted storage, census, exposure report
 - [x] Windows PIN lock (CI green at `441b015`)
-- [ ] Android app lock (step 1 below)
+- [x] Android app lock: BiometricPrompt (strong biometric or device PIN), auto-lock after 1 min in background (`AndroidLock.kt`)
 - [ ] Owner runs `docs/HARDWARE_TEST.md` G1.x / T1.x / B1.x on real devices; fix what breaks (step 2)
 - [ ] Bambu manual add, *only if* SSDP discovery fails on the real H2D (step 3)
 - [ ] Merge `ci/verification-bootstrap` → `main` via a PR once the above are green
@@ -55,7 +63,7 @@ capabilities, so most additions need no new screens.
 
 ## Next steps (in order)
 
-1. **Android app lock.**
+1. ~~Android app lock~~ done (see the checklist). The original plan, kept for reference:
    1. Add `androidx.biometric:biometric` (stable) to `gradle/libs.versions.toml` and `app-android`.
    2. Make `MainActivity` a `FragmentActivity`.
    3. Implement `LockController` with `BiometricPrompt` (`BIOMETRIC_STRONG or DEVICE_CREDENTIAL`). Keep an

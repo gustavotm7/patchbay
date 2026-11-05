@@ -23,7 +23,7 @@ Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bo
 | **Device TLS pinning** | TOFU with SPKI SHA-256 pins (ADR 0005), ready for webOS/Cast/Bambu adapters | Loopback TLS tests: first use, match, changed key → TrustChanged |
 | **LG webOS TV** | Pinned WSS on 3001 only; pairing = fingerprint in Patchbay + accept on the TV; volume, mute, inputs, media keys, power off, power on (Wake-on-LAN) | 7 SSAP codec tests + 6 contract tests vs a simulated TV (incl. impostor → TrustChanged). CI green at `a6c3f3c`. **Not yet tried on your TV** (HARDWARE_TEST T1.x) |
 | **Bambu H2D** | Pinned MQTT/TLS 8883 + access code; dual-nozzle/bed/chamber temps, job progress, AMS swatches, HMS; pause/resume/stop + chamber lights only | 9 codec tests + 5 contract tests vs a simulated H2D (incl. wrong code, impostor). **Not yet tried on your printer** (HARDWARE_TEST B1.x) |
-| **App lock** | Windows: PIN (PBKDF2 in encrypted DB), locks at start and after unfocus. **Android: not yet** (needs androidx.biometric) | AppLock/PinHash tests |
+| **App lock** | Windows: PIN (PBKDF2 in encrypted DB), locks at start and after unfocus. Android: BiometricPrompt (biometric or device PIN), auto-lock after 1 min in background | AppLock/PinHash tests |
 | Pairing UI | Inline panel: fingerprint → Trust/Cancel, on-device prompt, masked code entry; "Pair" on devices that need it | Compiles in CI |
 | Adapter registry | Adding a system = factory + adapter + simulator + contract tests (`docs/ADDING_AN_ADAPTER.md`) | Used by Bootstrap |
 
@@ -44,7 +44,7 @@ Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1
    - Cast v2 / Android TV Remote v2
    - ~~Bambu H2D~~ done; follow-ups: camera (RTSPS), manual add by IP + serial
    - ESPHome (Noise NNpsk0)
-2. App lock on Android (BiometricPrompt); Windows Hello later (Windows PIN lock is done).
+2. Windows Hello (app lock is done on both platforms: Android biometric, Windows PIN).
 3. Rooms and a floor-plan editor for live devices (the schema has `room_id`; the assignment UI is missing).
 4. Census extras: OUI vendor lookup (desktop ARP table only; Android hides MACs), and an opt-in polite
    port probe.
