@@ -39,7 +39,7 @@ Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1
 ## Not done yet (Phase 1 remainder, in the order I'd do it)
 
 1. Adapters, each with a simulator and contract tests like Govee:
-   - ~~LG webOS~~ done; follow-up: persist the MAC so power-on works right after a restart
+   - ~~LG webOS~~ done (including power-on after restart)
    - eufy RTSP cameras
    - Cast v2 / Android TV Remote v2
    - ~~Bambu H2D~~ done; follow-ups: camera (RTSPS), manual add by IP + serial

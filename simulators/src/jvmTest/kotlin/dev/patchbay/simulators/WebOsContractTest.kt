@@ -79,7 +79,7 @@ class WebOsContractTest {
         assertNotNull(prompt.fingerprint)
         assertEquals(p.pinnedFingerprint, prompt.fingerprint!!.replace(" ", ""))
         assertTrue(prompt.instructions.single().contains("TV"))
-        assertTrue(p.secret.decodeToString() in tv.issuedKeys)
+        assertTrue(p.secret.decodeToString().substringBefore('\n') in tv.issuedKeys)
     }
 
     @Test
@@ -119,10 +119,24 @@ class WebOsContractTest {
     }
 
     @Test
-    fun powerOnBeforeTheMacIsKnownExplainsWhy(): Unit = runBlocking {
+    fun macLearnedAtPairingSurvivesRestartForPowerOn(): Unit = runBlocking {
         val d = discoverOne()
         val p = adapter.pair(d, RecordingPrompt()).getOrNull()!!
-        adapter.restore(p.deviceId, d.address, p) // no session yet, so no MAC
+        assertTrue(p.secret.decodeToString().endsWith("\n" + tv.mac))
+        // A fresh adapter (as after an app restart) with only the stored pairing, and the TV in standby.
+        tv.on = false
+        val restarted = WebOsAdapter(guard, WebOsAdapter.Config(wssPort = tv.wssPort, bindLoopbackOnly = true, wolTargets = listOf("127.0.0.10"), wolPort = tv.wolPort))
+        restarted.restore(p.deviceId, d.address, p)
+        assertTrue(restarted.command(p.deviceId, Command.SetPower(true)) is PatchbayResult.Ok)
+        withTimeout(2_000) { while (!tv.on) kotlinx.coroutines.delay(20) }
+    }
+
+    @Test
+    fun powerOnWithoutAnyKnownMacExplainsWhy(): Unit = runBlocking {
+        val d = discoverOne()
+        val p = adapter.pair(d, RecordingPrompt()).getOrNull()!!
+        val keyOnly = dev.patchbay.core.adapter.Pairing(p.deviceId, p.secret.decodeToString().substringBefore('\n').encodeToByteArray(), p.pinnedFingerprint)
+        adapter.restore(p.deviceId, d.address, keyOnly) // e.g. paired by an older build
         val err = adapter.command(p.deviceId, Command.SetPower(true)).errorOrNull()
         assertIs<PatchbayError.Unsupported>(err)
         assertTrue("remote" in err.message)

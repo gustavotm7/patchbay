@@ -132,7 +132,10 @@ public class WebOsAdapter(
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
         }
-        known[device] = Known(a, pairing?.secret?.decodeToString(), pairing?.pinnedFingerprint, "LG TV")
+        // Secret = client key, optionally followed by "\n" + the TV's MAC (learned at pairing, for Wake-on-LAN).
+        val parts = pairing?.secret?.decodeToString()?.split('\n')
+        parts?.getOrNull(1)?.let(WakeOnLan::parseMac)?.let { macs[device] = it }
+        known[device] = Known(a, parts?.firstOrNull(), pairing?.pinnedFingerprint, "LG TV")
         sessions.remove(device)?.ws?.close()
         return PatchbayResult.Ok(Unit)
     }
@@ -165,12 +168,12 @@ public class WebOsAdapter(
                 tls.socket.soTimeout = config.pairingTimeoutMs
                 when (val first = next(ws)) {
                     is Ssap.Incoming.PromptShown -> prompt.instruct("Accept the “Patchbay” request on your TV")
-                    is Ssap.Incoming.Registered -> return@withContext PatchbayResult.Ok(Pairing(id, first.clientKey.encodeToByteArray(), tls.spkiSha256))
+                    is Ssap.Incoming.Registered -> return@withContext PatchbayResult.Ok(Pairing(id, secretFor(ws, first.clientKey), tls.spkiSha256))
                     is Ssap.Incoming.Error -> return@withContext PatchbayResult.Err(PatchbayError.Unauthorized("TV refused pairing: ${first.message}"))
                     else -> return@withContext err("unexpected pairing reply")
                 }
                 when (val second = next(ws)) {
-                    is Ssap.Incoming.Registered -> PatchbayResult.Ok(Pairing(id, second.clientKey.encodeToByteArray(), tls.spkiSha256))
+                    is Ssap.Incoming.Registered -> PatchbayResult.Ok(Pairing(id, secretFor(ws, second.clientKey), tls.spkiSha256))
                     is Ssap.Incoming.Error -> PatchbayResult.Err(PatchbayError.Unauthorized("pairing was declined on the TV"))
                     null -> PatchbayResult.Err(PatchbayError.Timeout("no answer on the TV"))
                     else -> err("unexpected pairing reply")
@@ -307,6 +310,15 @@ public class WebOsAdapter(
                 err("no reply for $uri")
             }
         }
+
+    /** While still authenticated at pairing, also ask for the MAC so power-on works after a restart. */
+    private fun secretFor(ws: WebSocketClient, clientKey: String): ByteArray {
+        val mac = runCatching {
+            ws.sendText(Ssap.request("pb_mac", "com.webos.service.connectionmanager/getinfo"))
+            (next(ws) as? Ssap.Incoming.Response)?.payload?.let(Ssap::macAddress)
+        }.getOrNull()
+        return (if (mac != null) "$clientKey\n$mac" else clientKey).encodeToByteArray()
+    }
 
     private suspend fun wake(device: DeviceId): PatchbayResult<Unit> {
         val mac = macs[device] ?: return PatchbayResult.Err(
