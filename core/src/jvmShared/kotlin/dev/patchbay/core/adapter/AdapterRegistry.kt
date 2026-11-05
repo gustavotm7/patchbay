@@ -1,6 +1,7 @@
 package dev.patchbay.core.adapter
 
 import dev.patchbay.core.adapter.govee.GoveeLanAdapter
+import dev.patchbay.core.adapter.webos.WebOsAdapter
 import dev.patchbay.core.log.SessionLog
 import dev.patchbay.core.net.NetGuard
 import dev.patchbay.core.result.PatchbayResult
@@ -30,6 +31,9 @@ public object AdapterRegistry {
         }
     }
 
+    /** LG webOS TVs: pinned TLS on 3001 only; needs pairing (fingerprint + on-TV prompt). */
+    public val LG_WEBOS: AdapterFactory = AdapterFactory { ctx -> WebOsAdapter(ctx.netGuard) }
+
     /** Local adapters enabled by default, in discovery order. */
-    public val LOCAL: List<AdapterFactory> = listOf(GOVEE)
+    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS)
 }
