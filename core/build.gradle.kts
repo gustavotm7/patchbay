@@ -24,6 +24,10 @@ kotlin {
         minSdk = libs.versions.android.minSdk.get().toInt()
     }
     sourceSets {
+        // JVM APIs (java.net, JCA) shared by the jvm and android targets (ADR 0001).
+        val jvmShared = create("jvmShared") { dependsOn(commonMain.get()) }
+        jvmMain.get().dependsOn(jvmShared)
+        getByName("androidMain").dependsOn(jvmShared)
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
