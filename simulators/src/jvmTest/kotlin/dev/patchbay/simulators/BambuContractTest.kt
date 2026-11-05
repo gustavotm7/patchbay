@@ -43,7 +43,7 @@ class BambuContractTest {
         NetGuard(),
         BambuAdapter.Config(
             ssdpTargets = listOf("127.0.0.20"), ssdpPorts = listOf(printer.ssdpPort), mqttPort = printer.mqttPort,
-            scanWindowMs = 500, connectTimeoutMs = 2_000, idleMs = 1_000, minEmitGapMs = 0, bindLoopbackOnly = true,
+            scanWindowMs = 500, connectTimeoutMs = 2_000, idleMs = 1_000, minEmitGapMs = 0, bindLoopbackOnly = true, notifyPort = 0,
         ),
     )
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -128,7 +128,7 @@ class BambuContractTest {
         val p = adapter.pair(d, Prompt("12345678")).getOrNull()!!
         val impostor = BambuSimulator("127.0.0.21", "0948AD4A0B00001", "12345678", keystore("device-b.p12"), "testpass".toCharArray())
         try {
-            val a2 = BambuAdapter(NetGuard(), BambuAdapter.Config(mqttPort = impostor.mqttPort, connectTimeoutMs = 2_000, bindLoopbackOnly = true))
+            val a2 = BambuAdapter(NetGuard(), BambuAdapter.Config(mqttPort = impostor.mqttPort, connectTimeoutMs = 2_000, bindLoopbackOnly = true, notifyPort = 0))
             a2.restore(p.deviceId, "127.0.0.21", p)
             val first = withTimeout(10_000) { a2.observe(p.deviceId).first() }
             assertEquals(Reachability.DEGRADED, first.reachability)

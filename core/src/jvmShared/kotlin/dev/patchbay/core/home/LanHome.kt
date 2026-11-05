@@ -117,9 +117,8 @@ public class LanHome(
         try {
             coroutineScope {
                 val censusJob = censusEngine?.let { c -> async { c.run() } }
-                for (a in adapters) {
-                    a.discover().collect { found -> add(a, found) }
-                }
+                // All adapters listen at once, so a scan takes as long as the slowest one, not the sum.
+                adapters.map { a -> launch { a.discover().collect { found -> synchronized(this@LanHome) { add(a, found) } } } }.forEach { it.join() }
                 when (val r = censusJob?.await()) {
                     is PatchbayResult.Ok -> _census.value = r.value
                     is PatchbayResult.Err -> report(r.error.message)

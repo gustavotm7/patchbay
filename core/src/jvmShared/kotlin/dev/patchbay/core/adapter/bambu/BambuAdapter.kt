@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.ConcurrentHashMap
@@ -55,6 +56,8 @@ public class BambuAdapter(
         val ssdpTargets: List<String> = listOf(Ssdp.GROUP_V4),
         /** Bambu printers answer/announce on non-standard SSDP ports; we ask on both. */
         val ssdpPorts: List<Int> = listOf(Ssdp.PORT, 1990),
+        /** Many printers only broadcast NOTIFY to this port (Bambu Studio listens here). 0 = don't listen. */
+        val notifyPort: Int = 2021,
         val mqttPort: Int = BambuReport.MQTT_PORT,
         val scanWindowMs: Long = 2_500,
         val connectTimeoutMs: Int = 5_000,
@@ -77,33 +80,44 @@ public class BambuAdapter(
     private val trustBroken = ConcurrentHashMap.newKeySet<DeviceId>()
 
     override fun discover(): Flow<DiscoveredDevice> = channelFlow {
-        val sock = (netGuard.openUdp(0, config.bindLoopbackOnly) as? PatchbayResult.Ok)?.value ?: return@channelFlow
-        sock.use { s ->
-            for (t in config.ssdpTargets) for (port in config.ssdpPorts) {
-                val a = (netGuard.address(t) as? PatchbayResult.Ok)?.value ?: continue
-                s.send(a, port, Ssdp.search(BambuReport.SSDP_ST))
-            }
-            val seen = HashSet<String>()
+        val seen = java.util.Collections.synchronizedSet(HashSet<String>())
+        suspend fun listen(sock: dev.patchbay.core.net.GuardedUdp) {
             val deadline = System.nanoTime() + config.scanWindowMs * 1_000_000
             while (currentCoroutineContext().isActive) {
                 val left = ((deadline - System.nanoTime()) / 1_000_000).toInt()
                 if (left <= 0) break
-                val d = (s.receive(4_096, left) as? PatchbayResult.Ok)?.value ?: continue
+                val d = (sock.receive(4_096, left) as? PatchbayResult.Ok)?.value ?: continue
                 val r = (Ssdp.parse(d.payload) as? PatchbayResult.Ok)?.value ?: continue
                 if (r.st?.contains("bambulab-com") != true) continue
                 val serial = r.usn?.trim()?.uppercase()?.takeIf(BambuReport::isSerial) ?: continue
                 if (!seen.add(serial)) continue
-                val model = r.headers["devmodel.bambu.com"]?.take(16)
-                val name = r.headers["devname.bambu.com"]?.take(48)
                 send(
                     DiscoveredDevice(
                         adapter = ID, key = serial, address = d.from.literal, port = config.mqttPort, kind = DeviceKind.PRINTER_3D,
-                        vendor = "Bambu Lab", model = model ?: "printer", displayName = name,
+                        vendor = "Bambu Lab", model = r.headers["devmodel.bambu.com"]?.take(16) ?: "printer",
+                        displayName = r.headers["devname.bambu.com"]?.take(48),
                         controlPath = ControlPath.LOCAL_AFTER_SETUP, seenAt = EpochMillis(clock()),
                     ),
                 )
             }
         }
+        // 1. Ask (M-SEARCH) and listen for replies.
+        val search = (netGuard.openUdp(0, config.bindLoopbackOnly) as? PatchbayResult.Ok)?.value
+        // 2. Also listen for the printer's periodic NOTIFY broadcasts. If the port is busy (Bambu Studio on this PC), skip.
+        val notify = if (config.notifyPort > 0) (netGuard.openUdp(config.notifyPort, config.bindLoopbackOnly) as? PatchbayResult.Ok)?.value else null
+        // Each listener owns and closes its socket, including on cancellation.
+        search?.let { s ->
+            launch {
+                s.use {
+                    for (t in config.ssdpTargets) for (port in config.ssdpPorts) {
+                        val a = (netGuard.address(t) as? PatchbayResult.Ok)?.value ?: continue
+                        it.send(a, port, Ssdp.search(BambuReport.SSDP_ST))
+                    }
+                    listen(it)
+                }
+            }
+        }
+        notify?.let { n -> launch { n.use { listen(it) } } }
     }
 
     override fun deviceId(found: DiscoveredDevice): DeviceId = DeviceId("bambu-${found.key.lowercase()}")
