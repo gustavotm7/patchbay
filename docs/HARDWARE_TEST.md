@@ -87,3 +87,17 @@ Prerequisite: the TV is on, on the same network, and Settings → General → De
 
 Please report: the TV model and webOS version; whether T1.3's prompt appeared; any step that failed, with the
 time it happened (for the log).
+
+## Phase 1 — Bambu H2D
+
+Prerequisite: LAN Only Mode + Developer Mode on (see `docs/protocols/bambu.md`), with the access code at hand.
+
+| # | Step | Expected |
+|---|---|---|
+| B1.1 | Scan | "Bambu Lab H2D" appears with **Pair**. If it doesn't, check the census list for "Bambu printer: local in LAN mode", and tell me (manual add is a follow-up) |
+| B1.2 | Pair → **Trust** the fingerprint → enter the 8-character access code (masked) | Pairing completes. A wrong code says "the device rejected the access code" |
+| B1.3 | Open the printer during a print | Layer stack, %, layer x / total, time left; both nozzles, bed and chamber temperatures; AMS slots with real filament colours |
+| B1.4 | Pause, then Resume | The printer pauses and resumes. The status tag follows within about 1 s |
+| B1.5 | Chamber light toggle | Both chamber lights switch |
+| B1.6 | Stop… → Confirm stop (only on a print you're willing to cancel) | The print is cancelled |
+| B1.7 | Restart Patchbay | The printer reconnects without asking for the code again |

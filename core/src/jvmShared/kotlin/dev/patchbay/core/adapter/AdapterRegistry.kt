@@ -1,5 +1,6 @@
 package dev.patchbay.core.adapter
 
+import dev.patchbay.core.adapter.bambu.BambuAdapter
 import dev.patchbay.core.adapter.govee.GoveeLanAdapter
 import dev.patchbay.core.adapter.webos.WebOsAdapter
 import dev.patchbay.core.log.SessionLog
@@ -34,6 +35,9 @@ public object AdapterRegistry {
     /** LG webOS TVs: pinned TLS on 3001 only; needs pairing (fingerprint + on-TV prompt). */
     public val LG_WEBOS: AdapterFactory = AdapterFactory { ctx -> WebOsAdapter(ctx.netGuard) }
 
+    /** Bambu Lab printers: pinned MQTT/TLS on 8883 + LAN access code; monitor, pause/resume/stop, light. */
+    public val BAMBU: AdapterFactory = AdapterFactory { ctx -> BambuAdapter(ctx.netGuard) }
+
     /** Local adapters enabled by default, in discovery order. */
-    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS)
+    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU)
 }

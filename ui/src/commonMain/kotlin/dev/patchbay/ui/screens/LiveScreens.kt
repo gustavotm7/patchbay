@@ -129,7 +129,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
         ExposurePanel(live)
         VSpace(Space.s)
         PText(
-            "Supported now: Govee lights (LAN) and LG webOS TVs. Cast, Bambu, ESPHome, eufy RTSP and ecobee come next.",
+            "Supported now: Govee lights (LAN), LG webOS TVs, Bambu Lab printers (monitoring + pause/resume/stop). Cast, ESPHome, eufy RTSP and ecobee come next.",
             Patchbay.type.caption, c.textTertiary,
         )
     }
@@ -269,6 +269,20 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
         LightPanel(d, onCommand = send, modifier = modifier)
     } else if (d.device.kind == DeviceKind.TV) {
         TvPanel(d, onCommand = send, modifier = modifier)
+    } else if (d.device.kind == DeviceKind.PRINTER_3D) {
+        val snap = d.snapshot
+        if (snap == null || snap.state<CapabilityState.PrintJobState>() == null) {
+            Column(modifier) {
+                PText(d.device.name, Patchbay.type.title)
+                PText(if (d.needsPairing) "Pair to start monitoring." else "Waiting for the first report…", Patchbay.type.body, Patchbay.colors.textSecondary)
+            }
+        } else {
+            PrinterPanel(
+                d.device, snap, dev.patchbay.core.model.TrendSource { _, _ -> null }, roomName = null, modifier = modifier,
+                onPrintAction = { send(dev.patchbay.core.model.Command.ControlPrint(it)) },
+                onLight = { send(dev.patchbay.core.model.Command.SetAuxLight("Chamber light", it)) },
+            )
+        }
     } else {
         Column(modifier) { PText(d.device.name, Patchbay.type.title) }
     }
