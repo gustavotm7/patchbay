@@ -138,7 +138,7 @@ public class GoveeLanAdapter(
         collector.cancel()
     }
 
-    override fun restore(device: DeviceId, address: String): PatchbayResult<Unit> =
+    override fun restore(device: DeviceId, address: String, pairing: Pairing?): PatchbayResult<Unit> =
         when (val a = netGuard.address(address)) {
             is PatchbayResult.Ok -> { known[device] = a.value; PatchbayResult.Ok(Unit) }
             is PatchbayResult.Err -> a

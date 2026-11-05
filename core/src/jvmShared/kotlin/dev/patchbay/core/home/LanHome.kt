@@ -2,6 +2,8 @@ package dev.patchbay.core.home
 
 import dev.patchbay.core.adapter.DeviceAdapter
 import dev.patchbay.core.adapter.DiscoveredDevice
+import dev.patchbay.core.adapter.Pairing
+import dev.patchbay.core.adapter.PairingPrompt
 import dev.patchbay.core.log.SessionLog
 import dev.patchbay.core.model.CapabilityState
 import dev.patchbay.core.model.Command
@@ -17,6 +19,7 @@ import dev.patchbay.core.result.PatchbayError
 import dev.patchbay.core.result.PatchbayResult
 import dev.patchbay.core.store.HomeStore
 import dev.patchbay.core.store.StoredDevice
+import dev.patchbay.core.store.StoredPairing
 import dev.patchbay.core.discovery.Finding
 import dev.patchbay.core.discovery.NetworkCensus
 import kotlinx.coroutines.CoroutineScope
@@ -63,20 +66,50 @@ public class LanHome(
         val saved = store?.devices() ?: return
         for (sd in saved) {
             val adapter = adapters.firstOrNull { it.id.value == sd.adapter } ?: continue
-            if (adapter.restore(sd.id, sd.address) is PatchbayResult.Err) continue
+            val pairing = store.pairing(sd.id)?.let { Pairing(it.deviceId, it.secret, it.pinnedSha256) }
+            if (adapter.restore(sd.id, sd.address, pairing) is PatchbayResult.Err) continue
             val device = Device(
                 id = sd.id, name = sd.name, kind = sd.kind, vendor = sd.vendor, model = sd.model, roomId = sd.roomId,
                 placement = null, controlPath = sd.controlPath, capabilities = adapter.capabilities(sd.id), adapter = adapter.id,
             )
-            track(adapter, device, sd.address)
+            val unpaired = adapter.requiresPairing && pairing == null
+            if (unpaired) {
+                pendingPairing[sd.id] = DiscoveredDevice(
+                    adapter.id, sd.adapterKey, sd.address, sd.port, sd.kind, sd.vendor, sd.model, sd.name, sd.controlPath, EpochMillis(sd.lastSeen),
+                )
+            }
+            track(adapter, device, sd.address, observe = !unpaired)
         }
         if (saved.isNotEmpty()) log?.info("home", "restored ${_devices.value.size} saved device(s)")
     }
 
-    private fun track(adapter: DeviceAdapter, device: Device, address: String?) {
+    private val pendingPairing = ConcurrentHashMap<DeviceId, DiscoveredDevice>()
+
+    private fun track(adapter: DeviceAdapter, device: Device, address: String?, observe: Boolean = true) {
         owners[device.id] = adapter
-        _devices.update { it + LiveDevice(device, null, address) }
-        observers[device.id] = scope.launch { adapter.observe(device.id).collect { snap -> updateSnapshot(snap) } }
+        _devices.update { it + LiveDevice(device, null, address, needsPairing = !observe) }
+        if (observe) startObserving(adapter, device.id)
+    }
+
+    private fun startObserving(adapter: DeviceAdapter, id: DeviceId) {
+        observers[id]?.cancel()
+        observers[id] = scope.launch { adapter.observe(id).collect { snap -> updateSnapshot(snap) } }
+    }
+
+    override suspend fun pair(device: DeviceId, prompt: PairingPrompt): PatchbayResult<Unit> {
+        val adapter = owners[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown device"))
+        val found = pendingPairing[device] ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("device is already paired"))
+        val pairing = when (val r = adapter.pair(found, prompt)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> { report(r.error.message); return r }
+        }
+        store?.savePairing(StoredPairing(device, pairing.secret, pairing.pinnedFingerprint, clock()))
+        adapter.restore(device, found.address, pairing)
+        pendingPairing.remove(device)
+        _devices.update { list -> list.map { if (it.device.id == device) it.copy(needsPairing = false) else it } }
+        log?.info("home", "paired ${found.displayName ?: found.model ?: "device"} (key pinned)")
+        startObserving(adapter, device)
+        return PatchbayResult.Ok(Unit)
     }
 
     override suspend fun scan(): PatchbayResult<Int> {
@@ -115,8 +148,10 @@ public class LanHome(
                 kind = found.kind, vendor = found.vendor, model = found.model, roomId = null, placement = null,
                 controlPath = found.controlPath, capabilities = adapter.capabilities(id), adapter = adapter.id,
             )
-            track(adapter, device, found.address)
-            log?.info("home", "found ${device.name} at ${found.address}")
+            val unpaired = adapter.requiresPairing && store?.pairing(id) == null
+            if (unpaired) pendingPairing[id] = found
+            track(adapter, device, found.address, observe = !unpaired)
+            log?.info("home", "found ${device.name} at ${found.address}" + if (unpaired) " (needs pairing)" else "")
         } else if (existing.address != found.address) {
             _devices.update { list -> list.map { if (it.device.id == id) it.copy(address = found.address) else it } }
         }

@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.Flow
 public interface DeviceAdapter {
     public val id: AdapterId
 
+    /** True when a device must be paired (TV prompt, access code, TOFU) before [observe]/[command] work. */
+    public val requiresPairing: Boolean get() = false
+
     /** Finds candidate devices on the LAN. The flow completes when the scan window ends. */
     public fun discover(): Flow<DiscoveredDevice>
 
@@ -34,8 +37,11 @@ public interface DeviceAdapter {
 
     public fun capabilities(device: DeviceId): List<Capability>
 
-    /** Re-registers a device known from storage at [address], without a scan. */
-    public fun restore(device: DeviceId, address: String): PatchbayResult<Unit>
+    /**
+     * Re-registers a device known from storage at [address], without a scan. [pairing] is what [pair]
+     * returned earlier (secret + pinned fingerprint), or null for adapters that don't pair.
+     */
+    public fun restore(device: DeviceId, address: String, pairing: Pairing?): PatchbayResult<Unit>
 
     /** Hot flow of state for a paired device. Reconnects with back-off; never hammers. */
     public fun observe(device: DeviceId): Flow<DeviceSnapshot>
