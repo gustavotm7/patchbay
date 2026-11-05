@@ -6,8 +6,8 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
 
 - Work branch `ci/verification-bootstrap` holds everything. The last commits are the Android app lock (androidx.biometric added,
   verification metadata bootstrapped) and permission-allowlist updates.
-- If the latest CI run on the branch is red, check the Android job first. The lock was the last change, and CI was still
-  running on it when the session ended. The previous fully green commit is `5661b45`.
+- **CI: all 7 jobs green at `e5a4a84`**, which includes the Android app lock. That run's APK/MSI artifacts are the MVP
+  builds to install.
 - Next for the MVP: the owner tests on real devices (`docs/HARDWARE_TEST.md`), then fix what breaks.
 
 ## Paste this to start a new session
