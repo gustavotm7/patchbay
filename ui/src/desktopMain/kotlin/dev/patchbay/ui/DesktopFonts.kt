@@ -6,7 +6,7 @@ import androidx.compose.ui.text.platform.Font
 import dev.patchbay.ui.designsystem.PatchbayTypefaces
 
 /**
- * Loads the bundled IBM Plex fonts from the classpath (ui/src/fonts/font/*.ttf).
+ * Loads the bundled IBM Plex fonts from the classpath (the TTFs in ui/src/fonts/font).
  * No system font fallback for primary text, and never a network fetch.
  */
 object DesktopFonts {

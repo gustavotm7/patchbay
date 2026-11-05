@@ -36,7 +36,7 @@ class NetGuardTest {
     }
 
     @Test
-    fun tcpConnectToLoopback() = runBlocking {
+    fun tcpConnectToLoopback(): Unit = runBlocking {
         ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress()).use { server ->
             thread { server.accept().use { it.getOutputStream().write(42) } }
             val addr = guard.address("127.0.0.1").getOrNull()!!
@@ -48,14 +48,14 @@ class NetGuardTest {
     }
 
     @Test
-    fun tcpRejectsBadPort() = runBlocking {
+    fun tcpRejectsBadPort(): Unit = runBlocking {
         val addr = guard.address("127.0.0.1").getOrNull()!!
         assertIs<PatchbayError.InvalidArgument>(guard.connectTcp(addr, 0).errorOrNull())
         assertIs<PatchbayError.InvalidArgument>(guard.connectTcp(addr, 70_000).errorOrNull())
     }
 
     @Test
-    fun udpRoundTripOnLoopback() = runBlocking {
+    fun udpRoundTripOnLoopback(): Unit = runBlocking {
         val a = guard.openUdp(0, bindLoopbackOnly = true).getOrNull()!!
         val b = guard.openUdp(0, bindLoopbackOnly = true).getOrNull()!!
         a.use {
@@ -72,7 +72,7 @@ class NetGuardTest {
     }
 
     @Test
-    fun receiveTimesOutWithNull() = runBlocking {
+    fun receiveTimesOutWithNull(): Unit = runBlocking {
         guard.openUdp(0, bindLoopbackOnly = true).getOrNull()!!.use { s ->
             assertNull(s.receive(timeoutMs = 50).getOrNull())
         }

@@ -28,7 +28,7 @@ import java.net.SocketTimeoutException
  * the internet, so devices are addressed by the IP literals that discovery produced.
  */
 public class LanAddress internal constructor(internal val inet: InetAddress, public val verdict: AddressPolicy.Verdict) {
-    public val literal: String get() = inet.hostAddress
+    public val literal: String get() = inet.hostAddress ?: "?"
     override fun equals(other: Any?): Boolean = other is LanAddress && other.inet == inet
     override fun hashCode(): Int = inet.hashCode()
     override fun toString(): String = literal
@@ -65,7 +65,7 @@ public class NetGuard {
         val verdict = AddressPolicy.check(bytes)
         // getByAddress never performs a DNS lookup.
         val inet = InetAddress.getByAddress(bytes)
-        if (!verdict.allowed) return deny(display ?: inet.hostAddress, verdict.name)
+        if (!verdict.allowed) return deny(display ?: (inet.hostAddress ?: "?"), verdict.name)
         return PatchbayResult.Ok(LanAddress(inet, verdict))
     }
 
