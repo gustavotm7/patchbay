@@ -78,7 +78,7 @@ Build commands:
 
 ## Environment notes
 
-Current status and the next steps are in `docs/STATUS.md`. Keep it updated at the end of every session.
+Current status is in `docs/STATUS.md`; how to continue (prompt, next steps, sandbox tips) is in `docs/HANDOFF.md`. Keep it updated at the end of every session.
 
 Cloud sessions cannot reach the home LAN. Every adapter ships a simulator.
 After each phase, update `docs/HARDWARE_TEST.md` with checks for the user to run on real devices.
