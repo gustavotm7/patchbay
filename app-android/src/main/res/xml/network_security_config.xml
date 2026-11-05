@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Applies to platform HTTP stacks (HttpURLConnection etc.). Patchbay's device protocols use raw
+  sockets created by NetGuard, which this file does not govern. Those are restricted to LAN
+  destinations in code, and TLS uses pinned TOFU trust (docs/adr/0006).
+  Cleartext is denied everywhere. Network security config can't express IP ranges, so each
+  protocol that needs LAN cleartext over a platform HTTP stack will get an explicit, documented
+  exception here (none in Phase 0). User-installed CAs are never trusted.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Patchbay" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/pb_background</item>
+        <item name="android:statusBarColor">@color/pb_background</item>
+        <item name="android:navigationBarColor">@color/pb_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <color name="pb_background">#FF111315</color>
+</resources>
