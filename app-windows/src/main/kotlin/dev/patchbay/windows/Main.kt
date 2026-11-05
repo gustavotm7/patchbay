@@ -15,9 +15,13 @@ import dev.patchbay.ui.designsystem.Fmt
 import dev.patchbay.ui.designsystem.PatchbayPalettes
 import dev.patchbay.ui.designsystem.PatchbayTheme
 import dev.patchbay.ui.screens.DesktopApp
+import dev.patchbay.ui.screens.LockGate
+import androidx.compose.runtime.DisposableEffect
+import java.awt.event.WindowEvent
+import java.awt.event.WindowFocusListener
 
 /**
- * Phase 0 shell: renders the demo home in the desktop multi-pane layout.
+ * Windows shell: PIN app lock (DesktopLock), live LAN devices + the demo home in the multi-pane layout.
  * Native window decorations (decided 2026-11-05; DESIGN_SPEC §7): native resize and Windows 11 snap layouts.
  */
 fun main() {
@@ -25,10 +29,10 @@ fun main() {
     val root = System.getenv("LOCALAPPDATA")?.let { File(it, "Patchbay") } ?: File(System.getProperty("user.home"), ".patchbay")
     val services = DesktopBootstrap.start("windows", root)
     Runtime.getRuntime().addShutdownHook(Thread { services.close() })
-    app(services.home)
+    app(services.home, DesktopLock(services.store))
 }
 
-private fun app(live: LiveHome) = application {
+private fun app(live: LiveHome, lock: DesktopLock) = application {
     val home = DemoHome.home()
     val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
     Window(
@@ -36,9 +40,18 @@ private fun app(live: LiveHome) = application {
         title = "Patchbay — ${home.name}",
         state = rememberWindowState(width = 1440.dp, height = 900.dp),
     ) {
+        // Auto-lock after the window has been unfocused for the auto-lock time.
+        DisposableEffect(window) {
+            val l = object : WindowFocusListener {
+                override fun windowGainedFocus(e: WindowEvent?) = lock.onFocusGained()
+                override fun windowLostFocus(e: WindowEvent?) = lock.onFocusLost()
+            }
+            window.addWindowFocusListener(l)
+            onDispose { window.removeWindowFocusListener(l) }
+        }
         val palette = if (isSystemInDarkTheme()) PatchbayPalettes.Dark else PatchbayPalettes.Light
         PatchbayTheme(palette, DesktopFonts.typefaces, FormFactor.DESKTOP) {
-            DesktopApp(home, DemoHome.trends, now, live)
+            LockGate(lock) { DesktopApp(home, DemoHome.trends, now, live) }
         }
     }
 }
