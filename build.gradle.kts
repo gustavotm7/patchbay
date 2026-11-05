@@ -24,6 +24,11 @@ group = "dev.patchbay"
 version = providers.gradleProperty("patchbay.version").getOrElse("0.0.0-phase0")
 
 subprojects {
+    // SBOM covers what ships: runtime classpaths only, not compiler/tooling configurations.
+    tasks.withType<org.cyclonedx.gradle.CyclonedxDirectTask>().configureEach {
+        includeConfigs.set(listOf("jvmRuntimeClasspath", "desktopRuntimeClasspath", "runtimeClasspath", "releaseRuntimeClasspath", "androidRuntimeClasspath"))
+    }
+
     group = rootProject.group
     version = rootProject.version
 
