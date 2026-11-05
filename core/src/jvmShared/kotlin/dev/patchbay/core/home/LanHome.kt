@@ -68,14 +68,14 @@ public class LanHome(
                 id = sd.id, name = sd.name, kind = sd.kind, vendor = sd.vendor, model = sd.model, roomId = sd.roomId,
                 placement = null, controlPath = sd.controlPath, capabilities = adapter.capabilities(sd.id), adapter = adapter.id,
             )
-            track(adapter, device)
+            track(adapter, device, sd.address)
         }
         if (saved.isNotEmpty()) log?.info("home", "restored ${_devices.value.size} saved device(s)")
     }
 
-    private fun track(adapter: DeviceAdapter, device: Device) {
+    private fun track(adapter: DeviceAdapter, device: Device, address: String?) {
         owners[device.id] = adapter
-        _devices.update { it + LiveDevice(device, null) }
+        _devices.update { it + LiveDevice(device, null, address) }
         observers[device.id] = scope.launch { adapter.observe(device.id).collect { snap -> updateSnapshot(snap) } }
     }
 
@@ -115,8 +115,10 @@ public class LanHome(
                 kind = found.kind, vendor = found.vendor, model = found.model, roomId = null, placement = null,
                 controlPath = found.controlPath, capabilities = adapter.capabilities(id), adapter = adapter.id,
             )
-            track(adapter, device)
+            track(adapter, device, found.address)
             log?.info("home", "found ${device.name} at ${found.address}")
+        } else if (existing.address != found.address) {
+            _devices.update { list -> list.map { if (it.device.id == id) it.copy(address = found.address) else it } }
         }
         val d = (existing?.device ?: _devices.value.first { it.device.id == id }.device)
         store?.saveDevice(

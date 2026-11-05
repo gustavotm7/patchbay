@@ -10,7 +10,7 @@ import dev.patchbay.core.result.PatchbayResult
 import kotlinx.coroutines.flow.StateFlow
 
 /** A device on the LAN plus its latest observed state. */
-public data class LiveDevice(val device: Device, val snapshot: DeviceSnapshot?)
+public data class LiveDevice(val device: Device, val snapshot: DeviceSnapshot?, val address: String? = null)
 
 public enum class ScanState { IDLE, SCANNING, DONE, FAILED }
 

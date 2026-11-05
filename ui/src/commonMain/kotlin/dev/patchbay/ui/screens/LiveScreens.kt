@@ -24,6 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import dev.patchbay.core.home.ExposureReport
 import dev.patchbay.core.home.LiveDevice
 import dev.patchbay.core.home.LiveHome
 import dev.patchbay.core.home.ScanState
@@ -112,6 +115,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
             }
         }
         CensusPanel(live)
+        ExposurePanel(live)
         VSpace(Space.s)
         PText(
             "Supported now: Govee LAN. LG TV, Cast, Bambu, ESPHome and ecobee arrive in later Phase 1/2 builds.",
@@ -165,6 +169,46 @@ private fun CensusPanel(live: LiveHome) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Exposure summary plus an explicit "Copy report" action (the only way the report leaves the app). The
+ * report includes suggested router rules as text; Patchbay never applies them.
+ */
+@Composable
+private fun ExposurePanel(live: LiveHome) {
+    val c = Patchbay.colors
+    val devices by live.devices.collectAsState()
+    val census by live.census.collectAsState()
+    val scan by live.scanState.collectAsState()
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    if (scan == ScanState.IDLE) return
+    val report = remember(devices, census) { ExposureReport.build(devices, census, generatedAt = "this session") }
+    VSpace(Space.m)
+    Panel(Modifier.fillMaxWidth(), padding = Space.m) {
+        Legend("Exposure")
+        VSpace(Space.s)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ToneMarker(Tone.NEUTRAL, Modifier.size(8.dp)); HSpace(Space.xs)
+            PText("${report.local.size} local", Patchbay.type.valueS, c.text); HSpace(Space.l)
+            ToneMarker(Tone.ATTENTION, Modifier.size(8.dp)); HSpace(Space.xs)
+            PText("${report.cloudOnly.size} cloud-only", Patchbay.type.valueS, c.text); HSpace(Space.l)
+            ToneMarker(Tone.ATTENTION, Modifier.size(8.dp)); HSpace(Space.xs)
+            PText("${report.unknown.size} unidentified", Patchbay.type.valueS, c.text)
+        }
+        VSpace(Space.s)
+        PText(
+            "The report lists every device and how it can be controlled, plus suggested router rules to block internet " +
+                "for devices Patchbay controls locally. Patchbay never changes your router.",
+            Patchbay.type.caption, c.textTertiary,
+        )
+        VSpace(Space.s)
+        PButton(if (copied) "Copied" else "Copy report", {
+            clipboard.setText(AnnotatedString(report.text()))
+            copied = true
+        })
     }
 }
 
