@@ -33,6 +33,7 @@ key, the result is `TrustChanged` and the stored key is **not** sent (contract t
 |---|---|
 | Power state | `com.webos.service.tvpower/power/getPowerState` (`Active`, `Screen Off` = on) |
 | Power off | `system/turnOff` |
+| Power on | Wake-on-LAN magic packet to `255.255.255.255:9` and the TV's IP. The MAC comes from `com.webos.service.connectionmanager/getinfo` (wired first), learned once per session |
 | Volume | `audio/getVolume`, `audio/setVolume {volume}` |
 | Mute | `audio/setMute {mute}` |
 | Inputs | `tv/getExternalInputList`, `tv/switchInput {inputId}` |
@@ -43,8 +44,7 @@ unreachable. A TV in standby usually drops the socket.
 
 ## Not yet
 
-- **Power on:** needs Wake-on-LAN plus the TV's MAC, and "Turn on via Wi-Fi" enabled on the TV. NetGuard
-  already allows limited broadcast (`255.255.255.255`).
+- Persisting the MAC across restarts, so power-on works before the first connection of a session.
 - Toasts, app launching, and push subscriptions instead of polling.
 - Real-device verification: firmware differences in volume and power-state shapes are handled per
   aiowebostv, but untested on hardware.

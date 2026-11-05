@@ -37,6 +37,7 @@ class WebOsContractTest {
         WebOsAdapter.Config(
             ssdpTargets = listOf("127.0.0.10"), ssdpPort = tv.ssdpPort, wssPort = tv.wssPort, scanWindowMs = 500,
             replyTimeoutMs = 2_000, pairingTimeoutMs = 3_000, pollIntervalMs = 100, maxBackoffMs = 300, bindLoopbackOnly = true,
+            wolTargets = listOf("127.0.0.10"), wolPort = tv.wolPort,
         ),
     )
 
@@ -112,7 +113,19 @@ class WebOsContractTest {
         assertEquals("HDMI_3", tv.input)
         assertTrue(adapter.command(id, Command.SetPower(false)) is PatchbayResult.Ok)
         assertEquals(false, tv.on)
-        assertIs<PatchbayError.Unsupported>(adapter.command(id, Command.SetPower(true)).errorOrNull())
+        // Wake-on-LAN with the MAC learned over the authenticated session.
+        assertTrue(adapter.command(id, Command.SetPower(true)) is PatchbayResult.Ok)
+        withTimeout(2_000) { while (!tv.on) kotlinx.coroutines.delay(20) }
+    }
+
+    @Test
+    fun powerOnBeforeTheMacIsKnownExplainsWhy(): Unit = runBlocking {
+        val d = discoverOne()
+        val p = adapter.pair(d, RecordingPrompt()).getOrNull()!!
+        adapter.restore(p.deviceId, d.address, p) // no session yet, so no MAC
+        val err = adapter.command(p.deviceId, Command.SetPower(true)).errorOrNull()
+        assertIs<PatchbayError.Unsupported>(err)
+        assertTrue("remote" in err.message)
     }
 
     @Test

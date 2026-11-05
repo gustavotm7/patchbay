@@ -51,8 +51,11 @@ public class WebOsSimulator(
     private val bind = InetAddress.getByName(address)
     private val server: SSLServerSocket
     private val ssdp = DatagramSocket(InetSocketAddress(bind, 0))
+    private val wol = DatagramSocket(InetSocketAddress(bind, 0))
     public val wssPort: Int get() = server.localPort
     public val ssdpPort: Int get() = ssdp.localPort
+    public val wolPort: Int get() = wol.localPort
+    public val mac: String = "a8:23:fe:12:34:56"
 
     init {
         val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply { init(keyStore, keyPassword) }
@@ -62,6 +65,18 @@ public class WebOsSimulator(
             while (!server.isClosed) {
                 val c = runCatching { server.accept() }.getOrNull() ?: break
                 thread(isDaemon = true, name = "webos-sim-conn") { runCatching { serve(c) }; runCatching { c.close() } }
+            }
+        }
+        thread(isDaemon = true, name = "webos-sim-wol") {
+            val buf = ByteArray(256)
+            val macBytes = mac.split(':').map { it.toInt(16).toByte() }.toByteArray()
+            while (!wol.isClosed) {
+                val p = DatagramPacket(buf, buf.size)
+                if (runCatching { wol.receive(p) }.isFailure) break
+                val d = p.data.copyOf(p.length)
+                val valid = d.size == 102 && (0 until 6).all { d[it] == 0xFF.toByte() } &&
+                    (0 until 16).all { i -> d.copyOfRange(6 + i * 6, 12 + i * 6).contentEquals(macBytes) }
+                if (valid) on = true
             }
         }
         thread(isDaemon = true, name = "webos-sim-ssdp") {
@@ -128,6 +143,7 @@ public class WebOsSimulator(
                         "audio/setMute" -> { (payload["mute"] as? JsonPrimitive)?.booleanOrNull?.let { muted = it }; """{"returnValue":true}""" }
                         "com.webos.service.tvpower/power/getPowerState" -> """{"returnValue":true,"state":"${if (on) "Active" else "Active Standby"}"}"""
                         "system/turnOff" -> { on = false; """{"returnValue":true}""" }
+                        "com.webos.service.connectionmanager/getinfo" -> """{"returnValue":true,"wiredInfo":{"macAddress":"$mac"},"wifiInfo":{"macAddress":"a8:23:fe:00:00:01"}}"""
                         "tv/getExternalInputList" -> """{"returnValue":true,"devices":[${inputs.joinToString(",") { (i, l) -> """{"id":"$i","label":"$l"}""" }}]}"""
                         "tv/switchInput" -> { (payload["inputId"] as? JsonPrimitive)?.content?.let { input = it }; """{"returnValue":true}""" }
                         "media.controls/play", "media.controls/pause", "media.controls/stop" -> """{"returnValue":true}"""
@@ -186,5 +202,6 @@ public class WebOsSimulator(
     override fun close() {
         server.close()
         ssdp.close()
+        wol.close()
     }
 }

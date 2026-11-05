@@ -124,6 +124,12 @@ public object Ssap {
         else -> null
     }
 
+    /** The TV's MAC from `com.webos.service.connectionmanager/getinfo` (wired first, then Wi-Fi), for Wake-on-LAN. */
+    public fun macAddress(p: JsonObject): String? =
+        listOf("wiredInfo", "wifiInfo").firstNotNullOfOrNull { k ->
+            ((p[k] as? JsonObject)?.str("macAddress"))?.takeIf { dev.patchbay.core.net.WakeOnLan.parseMac(it) != null }
+        }
+
     /** External inputs from `tv/getExternalInputList`: (id, label) pairs. */
     public fun inputs(p: JsonObject): List<Pair<String, String>> =
         (p["devices"] as? JsonArray).orEmpty().take(32).mapNotNull { e ->

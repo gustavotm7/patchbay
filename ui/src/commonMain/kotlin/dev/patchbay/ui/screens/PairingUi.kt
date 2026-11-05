@@ -189,8 +189,14 @@ fun TvPanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifier =
             }
         }
         VSpace(Space.m)
-        PButton("Turn off", { onCommand(Command.SetPower(false)) }, kind = ButtonKind.DESTRUCTIVE, enabled = on)
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            PButton("Turn on", { onCommand(Command.SetPower(true)) }, Modifier.weight(1f), ButtonKind.PRIMARY, enabled = !on)
+            PButton("Turn off", { onCommand(Command.SetPower(false)) }, Modifier.weight(1f), ButtonKind.DESTRUCTIVE, enabled = on)
+        }
         VSpace(Space.xs)
-        PText("Turning on from Patchbay needs Wake-on-LAN, coming next. Use the remote for now.", Patchbay.type.caption, c.textTertiary)
+        PText(
+            "Turn on uses Wake-on-LAN: enable “Turn on via Wi-Fi” on the TV. Patchbay must have reached the TV once this session.",
+            Patchbay.type.caption, c.textTertiary,
+        )
     }
 }

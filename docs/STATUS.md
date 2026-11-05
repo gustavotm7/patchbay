@@ -19,7 +19,7 @@ Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bo
 | **Network census** | mDNS/DNS-SD (legacy-unicast queries, no port 5353 binding) + SSDP M-SEARCH on every scan; "Everything else that answered" list with local-control hints | Strict DNS/SSDP codecs (30 000-input mutation test) + loopback census test |
 | **Exposure report** | Local / cloud-only / unidentified counts; "Copy report" exports Markdown with suggested OpenWrt firewall rules (text only, never applied) | `ExposureReportTest` |
 | **Device TLS pinning** | TOFU with SPKI SHA-256 pins (ADR 0005), ready for webOS/Cast/Bambu adapters | Loopback TLS tests: first use, match, changed key → TrustChanged |
-| **LG webOS TV** | Pinned WSS on 3001 only; pairing = fingerprint in Patchbay + accept on the TV; volume, mute, inputs, media keys, power off (power on not yet) | 7 SSAP codec tests + 6 contract tests vs a simulated TV (incl. impostor → TrustChanged). CI green at `a6c3f3c`. **Not yet tried on your TV** (HARDWARE_TEST T1.x) |
+| **LG webOS TV** | Pinned WSS on 3001 only; pairing = fingerprint in Patchbay + accept on the TV; volume, mute, inputs, media keys, power off, power on (Wake-on-LAN) | 7 SSAP codec tests + 6 contract tests vs a simulated TV (incl. impostor → TrustChanged). CI green at `a6c3f3c`. **Not yet tried on your TV** (HARDWARE_TEST T1.x) |
 | Pairing UI | Inline panel: fingerprint → Trust/Cancel, on-device prompt, masked code entry; "Pair" on devices that need it | Compiles in CI |
 | Adapter registry | Adding a system = factory + adapter + simulator + contract tests (`docs/ADDING_AN_ADAPTER.md`) | Used by Bootstrap |
 
@@ -35,7 +35,7 @@ Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1
 ## Not done yet (Phase 1 remainder, in the order I'd do it)
 
 1. Adapters, each with a simulator and contract tests like Govee:
-   - ~~LG webOS~~ done; follow-up: power-on via Wake-on-LAN
+   - ~~LG webOS~~ done; follow-up: persist the MAC so power-on works right after a restart
    - eufy RTSP cameras
    - Cast v2 / Android TV Remote v2
    - Bambu H2D (MQTT/TLS, monitor-only)

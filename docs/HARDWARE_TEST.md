@@ -80,7 +80,8 @@ Prerequisite: the TV is on, on the same network, and Settings → General → De
 | T1.3 | Look at the TV | A prompt asks to allow "Patchbay". Accept with the remote. Patchbay's panel then disappears, and within about 5 s the TV shows "On" with its volume |
 | T1.4 | Open the TV → volume ±1 / ±5, Mute | The TV follows immediately |
 | T1.5 | Tap an input (e.g. HDMI 2) | The TV switches input |
-| T1.6 | Turn off | The TV goes to standby. Patchbay shows "No reply", then "Offline" (turning on from Patchbay isn't supported yet) |
+| T1.6 | Turn off | The TV goes to standby. Patchbay shows "No reply", then "Offline" |
+| T1.6b | Tap **Turn on** (with "Turn on via Wi-Fi" enabled on the TV) | The TV wakes within a few seconds and Patchbay shows "On" again |
 | T1.7 | Restart Patchbay with the TV on | The TV reconnects **without** a new prompt (stored key, same pin) |
 | T1.8 | (If the TV's firmware updates and its key changes) | Patchbay shows a trust warning rather than silently reconnecting. Re-pair to accept the new key |
 

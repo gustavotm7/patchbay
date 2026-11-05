@@ -20,6 +20,7 @@ import dev.patchbay.core.model.MediaAction
 import dev.patchbay.core.model.Reachability
 import dev.patchbay.core.net.LanAddress
 import dev.patchbay.core.net.NetGuard
+import dev.patchbay.core.net.WakeOnLan
 import dev.patchbay.core.net.tls.PinnedTls
 import dev.patchbay.core.net.ws.WebSocketClient
 import dev.patchbay.core.result.PatchbayError
@@ -46,7 +47,8 @@ import kotlin.math.min
  * - **TLS only** (`wss://:3001`), with the TV's self-signed key pinned on first use (ADR 0005). The legacy
  *   cleartext `ws://:3000` is never used, so the client key never crosses the LAN in the clear.
  * - Pairing needs the user twice: confirm the fingerprint in Patchbay, then accept the prompt on the TV.
- * - Power-on needs Wake-on-LAN and the TV's MAC address. Not done yet: `SetPower(true)` is reported as unsupported.
+ * - Power-on uses Wake-on-LAN. The TV's MAC is read over the authenticated connection, so the TV must have been
+ *   reached once this session, and "Turn on via Wi-Fi" must be enabled on the TV.
  */
 public class WebOsAdapter(
     private val netGuard: NetGuard,
@@ -64,6 +66,9 @@ public class WebOsAdapter(
         val pollIntervalMs: Long = 5_000,
         val maxBackoffMs: Long = 60_000,
         val bindLoopbackOnly: Boolean = false,
+        /** Where magic packets go: LAN broadcast plus the TV's own address. */
+        val wolTargets: List<String> = listOf(WakeOnLan.BROADCAST),
+        val wolPort: Int = WakeOnLan.PORT,
     )
 
     override val id: AdapterId = ID
@@ -81,6 +86,7 @@ public class WebOsAdapter(
     private val sessions = ConcurrentHashMap<DeviceId, Session>()
     private val lastContact = ConcurrentHashMap<DeviceId, Long>()
     private val trustBroken = ConcurrentHashMap.newKeySet<DeviceId>()
+    private val macs = ConcurrentHashMap<DeviceId, ByteArray>()
 
     override fun discover(): Flow<DiscoveredDevice> = channelFlow {
         val sock = (netGuard.openUdp(0, config.bindLoopbackOnly) as? PatchbayResult.Ok)?.value ?: return@channelFlow
@@ -212,6 +218,8 @@ public class WebOsAdapter(
     }
 
     override suspend fun command(device: DeviceId, command: Command): PatchbayResult<Unit> {
+        // A TV in standby has no session to talk to: waking it is a broadcast, not an SSAP call.
+        if (command is Command.SetPower && command.on) return wake(device)
         val s = when (val r = session(device)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
@@ -221,9 +229,7 @@ public class WebOsAdapter(
         val (uri, payload) = when (command) {
             is Command.SetVolume -> "audio/setVolume" to buildJsonObject { put("volume", command.level) }
             is Command.SetMute -> "audio/setMute" to buildJsonObject { put("mute", command.muted) }
-            is Command.SetPower -> if (command.on) {
-                return PatchbayResult.Err(PatchbayError.Unsupported("turning the TV on needs Wake-on-LAN (not yet supported)"))
-            } else "system/turnOff" to empty
+            is Command.SetPower -> if (command.on) return wake(device) else "system/turnOff" to empty
             is Command.SelectInput -> {
                 val inputId = s.inputs.firstOrNull { it.second == command.source || it.first == command.source }?.first
                     ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown input"))
@@ -277,6 +283,9 @@ public class WebOsAdapter(
             }
             val s = Session(ws)
             sessions[device] = s
+            // Learn the MAC for Wake-on-LAN while we're authenticated.
+            (request(s, "com.webos.service.connectionmanager/getinfo") as? PatchbayResult.Ok)?.value
+                ?.let(Ssap::macAddress)?.let(WakeOnLan::parseMac)?.let { macs[device] = it }
             PatchbayResult.Ok(s)
         }
     }
@@ -298,6 +307,25 @@ public class WebOsAdapter(
                 err("no reply for $uri")
             }
         }
+
+    private suspend fun wake(device: DeviceId): PatchbayResult<Unit> {
+        val mac = macs[device] ?: return PatchbayResult.Err(
+            PatchbayError.Unsupported("Patchbay hasn't learned this TV's MAC yet: turn it on once with the remote while Patchbay is running"),
+        )
+        val sock = when (val r = netGuard.openUdp(0, config.bindLoopbackOnly)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> return r
+        }
+        sock.use { u ->
+            val targets = (config.wolTargets + listOfNotNull(known[device]?.address?.literal)).distinct()
+            var sent = false
+            for (t in targets) {
+                val a = (netGuard.address(t) as? PatchbayResult.Ok)?.value ?: continue
+                if (u.send(a, config.wolPort, WakeOnLan.packet(mac)) is PatchbayResult.Ok) sent = true
+            }
+            return if (sent) PatchbayResult.Ok(Unit) else PatchbayResult.Err(PatchbayError.Unreachable("couldn't send the wake-up packet"))
+        }
+    }
 
     private fun next(ws: WebSocketClient): Ssap.Incoming? {
         val text = (ws.receiveText() as? PatchbayResult.Ok)?.value ?: return null
