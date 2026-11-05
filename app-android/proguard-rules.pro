@@ -6,3 +6,5 @@
 }
 # Fail loudly instead of silently stripping missing references.
 -dontnote kotlinx.serialization.**
+# SQLCipher uses JNI; keep its native-bound classes.
+-keep class net.zetetic.database.** { *; }

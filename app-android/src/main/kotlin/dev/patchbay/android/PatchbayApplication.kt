@@ -12,6 +12,11 @@ class PatchbayApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         // App-private storage only (no external storage, excluded from backup).
-        services = Bootstrap.start("android", filesDir)
+        services = Bootstrap.start(
+            platform = "android",
+            root = filesDir,
+            keyWrapper = KeystoreKeyWrapper(this),
+            openDb = { file, key -> AndroidStorage.open(this, file, key) },
+        )
     }
 }

@@ -138,10 +138,11 @@ public class GoveeLanAdapter(
         collector.cancel()
     }
 
-    /** Re-registers a device known from storage (Phase 1 storage) without a scan. */
-    public fun remember(device: DeviceId, address: LanAddress) {
-        known[device] = address
-    }
+    override fun restore(device: DeviceId, address: String): PatchbayResult<Unit> =
+        when (val a = netGuard.address(address)) {
+            is PatchbayResult.Ok -> { known[device] = a.value; PatchbayResult.Ok(Unit) }
+            is PatchbayResult.Err -> a
+        }
 
     /** Govee LAN has no pairing. We confirm the device answers a status query, and store no secret. */
     override suspend fun pair(device: DiscoveredDevice, prompt: PairingPrompt): PatchbayResult<Pairing> {

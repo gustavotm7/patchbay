@@ -1,6 +1,6 @@
 # 0003 — Encrypted database: SQLDelight + SQLCipher (Android) / sqlite-jdbc-crypt (desktop)
 
-Status: Proposed · Date: 2026-11-05
+Status: Proposed (implemented on the work branch, awaiting approval) · Date: 2026-11-05
 
 ## Context
 
@@ -52,7 +52,8 @@ the hub), and a **maintained** encryption option on both.
 
 ## Verification / follow-ups (Phase 1)
 
-- [ ] Contract test: the same SQLDelight schema migrates and round-trips on both drivers.
-- [ ] Test: a file opened without the key fails, and the DB header isn't the plaintext `SQLite format 3`.
+- [x] Desktop: round-trip, wrong key fails, no plaintext header and no plaintext data in the file
+      (`DesktopStorageTest`). Bootstrap end-to-end (`BootstrapTest`).
+- [ ] Android: compiles in CI; runtime check is in HARDWARE_TEST (needs a device).
 - [ ] Confirm current licences and versions at integration time, and add `DEPENDENCIES.md` entries.
 - [ ] Confirm sqlite-jdbc-crypt's bundled natives cover `windows-x86_64` and `linux-aarch64` (hub on a Pi).

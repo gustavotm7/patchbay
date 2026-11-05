@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
@@ -23,10 +24,25 @@ kotlin {
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
+            api(libs.sqldelight.runtime)
+        }
+        jvmMain.dependencies {
+            // Desktop + hub: SQLDelight's JDBC driver over the encrypting SQLite fork (ADR 0003).
+            implementation(libs.sqldelight.sqlite.driver.get().toString()) { exclude(group = "org.xerial", module = "sqlite-jdbc") }
+            implementation(libs.sqlite.jdbc.crypt)
+            implementation(libs.jna.platform)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("PatchbayDb") {
+            packageName.set("dev.patchbay.core.db")
         }
     }
 }

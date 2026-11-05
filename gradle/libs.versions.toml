@@ -10,6 +10,10 @@ kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.12.0"
 androidx-activity = "1.11.0"
 cyclonedx = "3.5.1"
+sqldelight = "2.4.1"
+sqlite-jdbc-crypt = "3.53.4.0"
+sqlcipher-android = "4.20.0"
+jna = "5.19.1"
 
 # Android SDK levels
 android-compileSdk = "37"
@@ -29,6 +33,14 @@ compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.re
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
 
+sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
+sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
+# Encrypted SQLite (SQLite3MultipleCiphers) as a drop-in for xerial's driver (ADR 0003).
+sqlite-jdbc-crypt = { module = "io.github.willena:sqlite-jdbc", version.ref = "sqlite-jdbc-crypt" }
+sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher-android" }
+jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
+
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 
 [plugins]
@@ -38,5 +50,6 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedx" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 # Android plugins are put on the root buildscript classpath (see root build.gradle.kts) and applied
 # by id without a version, so they are only resolved when Android modules are part of the build.

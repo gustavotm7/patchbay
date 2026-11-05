@@ -5,7 +5,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import dev.patchbay.core.boot.Bootstrap
+import dev.patchbay.core.boot.DesktopBootstrap
 import dev.patchbay.core.home.LiveHome
 import dev.patchbay.simulators.DemoHome
 import java.io.File
@@ -24,7 +24,7 @@ import dev.patchbay.ui.screens.DesktopApp
 fun main() {
     // Bootstrap once, at process start. Data lives under %LOCALAPPDATA%\Patchbay (per-user).
     val root = System.getenv("LOCALAPPDATA")?.let { File(it, "Patchbay") } ?: File(System.getProperty("user.home"), ".patchbay")
-    val services = Bootstrap.start("windows", root)
+    val services = DesktopBootstrap.start("windows", root)
     Runtime.getRuntime().addShutdownHook(Thread { services.close() })
     app(services.home)
 }

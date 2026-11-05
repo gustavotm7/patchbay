@@ -63,4 +63,7 @@ dependencies {
     implementation(project(":ui"))
     implementation(project(":simulators"))
     implementation(libs.androidx.activity.compose)
+    // Encrypted storage (ADR 0003)
+    implementation(libs.sqldelight.android.driver)
+    implementation(libs.sqlcipher.android)
 }

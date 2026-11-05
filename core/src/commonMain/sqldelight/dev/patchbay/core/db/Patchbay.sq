@@ -1,0 +1,64 @@
+-- Patchbay local database. Always opened encrypted (ADR 0003). Schema changes need a migration file.
+
+CREATE TABLE device (
+  id TEXT NOT NULL PRIMARY KEY,
+  adapter TEXT NOT NULL,
+  adapter_key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  vendor TEXT,
+  model TEXT,
+  address TEXT NOT NULL,
+  port INTEGER,
+  control_path TEXT NOT NULL,
+  room_id TEXT,
+  first_seen INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL
+);
+
+-- Secrets live only here (never in logs or settings). The whole DB is encrypted.
+CREATE TABLE pairing (
+  device_id TEXT NOT NULL PRIMARY KEY,
+  secret BLOB NOT NULL,
+  pinned_sha256 TEXT,
+  paired_at INTEGER NOT NULL
+);
+
+CREATE TABLE setting (
+  key TEXT NOT NULL PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+allDevices:
+SELECT * FROM device ORDER BY name;
+
+device:
+SELECT * FROM device WHERE id = ?;
+
+-- Keeps first_seen and room assignment from the existing row.
+upsertDevice:
+INSERT OR REPLACE INTO device(id, adapter, adapter_key, name, kind, vendor, model, address, port, control_path, room_id, first_seen, last_seen)
+VALUES (
+  :id, :adapter, :adapter_key, :name, :kind, :vendor, :model, :address, :port, :control_path,
+  (SELECT room_id FROM device WHERE id = :id),
+  COALESCE((SELECT first_seen FROM device WHERE id = :id), :now),
+  :now
+);
+
+forgetDevice:
+DELETE FROM device WHERE id = ?;
+
+pairingFor:
+SELECT * FROM pairing WHERE device_id = ?;
+
+savePairing:
+INSERT OR REPLACE INTO pairing(device_id, secret, pinned_sha256, paired_at) VALUES (?, ?, ?, ?);
+
+deletePairing:
+DELETE FROM pairing WHERE device_id = ?;
+
+setting:
+SELECT value FROM setting WHERE key = ?;
+
+putSetting:
+INSERT OR REPLACE INTO setting(key, value) VALUES (?, ?);

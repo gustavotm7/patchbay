@@ -15,6 +15,8 @@ import dev.patchbay.core.net.NetGuard
 import dev.patchbay.core.net.NetGuardStats
 import dev.patchbay.core.result.PatchbayError
 import dev.patchbay.core.result.PatchbayResult
+import dev.patchbay.core.store.HomeStore
+import dev.patchbay.core.store.StoredDevice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +32,7 @@ public class LanHome(
     private val adapters: List<DeviceAdapter>,
     private val scope: CoroutineScope,
     private val log: SessionLog?,
+    private val store: HomeStore? = null,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : LiveHome {
 
@@ -43,6 +46,31 @@ public class LanHome(
 
     private val owners = ConcurrentHashMap<DeviceId, DeviceAdapter>()
     private val observers = ConcurrentHashMap<DeviceId, Job>()
+
+    init {
+        restoreSaved()
+    }
+
+    /** Devices saved by earlier sessions appear immediately and are polled; no scan needed. */
+    private fun restoreSaved() {
+        val saved = store?.devices() ?: return
+        for (sd in saved) {
+            val adapter = adapters.firstOrNull { it.id.value == sd.adapter } ?: continue
+            if (adapter.restore(sd.id, sd.address) is PatchbayResult.Err) continue
+            val device = Device(
+                id = sd.id, name = sd.name, kind = sd.kind, vendor = sd.vendor, model = sd.model, roomId = sd.roomId,
+                placement = null, controlPath = sd.controlPath, capabilities = adapter.capabilities(sd.id), adapter = adapter.id,
+            )
+            track(adapter, device)
+        }
+        if (saved.isNotEmpty()) log?.info("home", "restored ${_devices.value.size} saved device(s)")
+    }
+
+    private fun track(adapter: DeviceAdapter, device: Device) {
+        owners[device.id] = adapter
+        _devices.update { it + LiveDevice(device, null) }
+        observers[device.id] = scope.launch { adapter.observe(device.id).collect { snap -> updateSnapshot(snap) } }
+    }
 
     override suspend fun scan(): PatchbayResult<Int> {
         _scan.value = ScanState.SCANNING
@@ -63,18 +91,26 @@ public class LanHome(
 
     private fun add(adapter: DeviceAdapter, found: DiscoveredDevice) {
         val id = adapter.deviceId(found)
-        if (_devices.value.any { it.device.id == id }) return
-        val sameModel = _devices.value.count { it.device.model == found.model }
-        val device = Device(
-            id = id,
-            name = listOfNotNull(found.vendor, found.model).joinToString(" ") + if (sameModel > 0) " ${sameModel + 1}" else "",
-            kind = found.kind, vendor = found.vendor, model = found.model, roomId = null, placement = null,
-            controlPath = found.controlPath, capabilities = adapter.capabilities(id), adapter = adapter.id,
+        val existing = _devices.value.firstOrNull { it.device.id == id }
+        if (existing == null) {
+            val sameModel = _devices.value.count { it.device.model == found.model }
+            val device = Device(
+                id = id,
+                name = listOfNotNull(found.vendor, found.model).joinToString(" ") + if (sameModel > 0) " ${sameModel + 1}" else "",
+                kind = found.kind, vendor = found.vendor, model = found.model, roomId = null, placement = null,
+                controlPath = found.controlPath, capabilities = adapter.capabilities(id), adapter = adapter.id,
+            )
+            track(adapter, device)
+            log?.info("home", "found ${device.name} at ${found.address}")
+        }
+        val d = (existing?.device ?: _devices.value.first { it.device.id == id }.device)
+        store?.saveDevice(
+            StoredDevice(
+                d.id, adapter.id.value, found.key, d.name, d.kind, d.vendor, d.model, found.address, found.port,
+                d.controlPath, d.roomId, 0, 0,
+            ),
+            now = clock(),
         )
-        owners[id] = adapter
-        _devices.update { it + LiveDevice(device, null) }
-        log?.info("home", "found ${device.name} at ${found.address}")
-        observers[id] = scope.launch { adapter.observe(id).collect { snap -> updateSnapshot(snap) } }
     }
 
     private fun updateSnapshot(snap: DeviceSnapshot) {

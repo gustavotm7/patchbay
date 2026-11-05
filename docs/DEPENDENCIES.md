@@ -20,13 +20,21 @@ authoritative transitive list.
 | `org.jetbrains.skiko:skiko-awt-runtime-*` | (via Compose) | app-windows, ui tests | Skia rendering natives | Apache-2.0 | No |
 | `androidx.*` (collection, annotation, lifecycle, savedstate, compose.* on Android) | (via Compose) | ui, app-android | Transitive Jetpack libraries; from Google Maven | Apache-2.0 | No |
 | `androidx.activity:activity-compose` | 1.11.0 | app-android | `setContent` for `ComponentActivity` | Apache-2.0 | No |
+| `app.cash.sqldelight:runtime` | 2.4.1 | core | Typesafe SQL (ADR 0003) | Apache-2.0 | No |
+| `app.cash.sqldelight:sqlite-driver` (xerial `sqlite-jdbc` **excluded**) | 2.4.1 | core (jvm) | JDBC driver glue | Apache-2.0 | No |
+| `io.github.willena:sqlite-jdbc` (sqlite-jdbc-crypt) | 3.53.4.0 | core (jvm) | Encrypted SQLite (SQLite3MultipleCiphers, SQLCipher-4 format) with bundled natives | Apache-2.0 | No |
+| `net.java.dev.jna:jna-platform` | 5.19.1 | core (jvm) | Windows DPAPI (`Crypt32Util`) for key wrapping | Apache-2.0 / LGPL-2.1 (dual) | No |
+| `app.cash.sqldelight:android-driver` (+ `androidx.sqlite`) | 2.4.1 | app-android | SQLDelight on Android | Apache-2.0 | No |
+| `net.zetetic:sqlcipher-android` | 4.20.0 | app-android | SQLCipher (encrypted SQLite) | BSD-style (Zetetic) | No |
 | IBM Plex Sans / Mono (TTF, vendored) | upstream commit `48e8676` | ui, app-android | Typeface (ADR 0004) | OFL-1.1 (RFN "Plex") | No |
 
-Planned for Phase 1/2, not yet added. Each needs this table updated and verification metadata regenerated:
-SQLDelight (+ `androidx.sqlite`), `net.zetetic:sqlcipher-android`, `io.github.willena:sqlite-jdbc`,
+Planned, not yet added. Each needs this table updated and verification metadata regenerated:
 `org.bouncycastle:bcprov-jdk18on` (X25519, Ed25519, ChaCha20-Poly1305, HKDF, SRP-6a for HAP and Noise),
-`net.java.dev.jna:jna-platform` (DPAPI, Windows Hello bridge), `androidx.biometric`, `androidx.glance`,
-Jazzer (test).
+`androidx.biometric`, `androidx.glance`, Jazzer (test).
+
+Build-only transitive tooling seen in the verification metadata, not shipped (absent from the runtime SBOM):
+`io.ktor:ktor-server-*` and `io.modelcontextprotocol:kotlin-sdk-*` (Compose hot-reload / IDE tooling plugins),
+`org.tensorflow:tensorflow-lite-metadata` (AGP's ML model binding).
 
 ## Test only
 

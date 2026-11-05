@@ -14,7 +14,8 @@ Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bo
 | **Session log** | `patchbay_<platform>_<YYYYMMDD-HHMMSS>.log`, redacted, size-rotated, retention | 8 tests |
 | **Govee LAN** | Discover, power, brightness, colour temperature, RGB; strict parser; anti-spoofing; pacing and back-off | 10 codec tests + 8 contract tests vs simulator + 2 LanHome tests |
 | **Live control in the apps** | Phone: "This network" tab. Desktop: Inventory section. Scan → list → light panel (2D brightness × K pad, hue strip) | Compiles in CI. **Not yet tried on your real lights** |
-| Bootstrap | paths → NetGuard → logger → adapters (in the brief's order) | Used by both apps |
+| Bootstrap | paths → wrapped key → encrypted DB → NetGuard → logger → adapters | `BootstrapTest` |
+| **Encrypted storage** | SQLDelight; desktop: sqlite-jdbc-crypt (SQLCipher 4) + DPAPI; Android: SQLCipher + Keystore (StrongBox if present). Discovered devices persist and are polled at startup without a scan | Desktop: 3 storage tests + persistence test. Android: CI compile only |
 
 ## Get the builds
 
@@ -27,8 +28,7 @@ Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1
 
 ## Not done yet (Phase 1 remainder, in the order I'd do it)
 
-1. **Encrypted storage** (ADR 0003: SQLDelight + SQLCipher / sqlite-jdbc-crypt) and keystore/DPAPI key wrapping.
-   Until then **nothing persists**: devices are rediscovered each launch, and there are no rooms for live devices.
+1. ~~Encrypted storage~~ done. Next: rooms for live devices (the schema has `room_id`; the UI to assign is missing).
 2. App lock (BiometricPrompt / Windows Hello or PIN).
 3. Inventory census: mDNS/SSDP browsing, OUI vendor lookup, polite port probe (opt-in). Then the Exposure Map.
 4. Adapters: LG webOS (SSAP/WSS + TOFU pin), Cast v2 / Android TV Remote v2, Bambu H2D (MQTT/TLS,

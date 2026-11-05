@@ -34,6 +34,9 @@ public interface DeviceAdapter {
 
     public fun capabilities(device: DeviceId): List<Capability>
 
+    /** Re-registers a device known from storage at [address], without a scan. */
+    public fun restore(device: DeviceId, address: String): PatchbayResult<Unit>
+
     /** Hot flow of state for a paired device. Reconnects with back-off; never hammers. */
     public fun observe(device: DeviceId): Flow<DeviceSnapshot>
 
