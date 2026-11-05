@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -138,10 +139,9 @@ fun LightPanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifie
             HueStrip(onPick = { onCommand(Command.SetColour(it)) }, modifier = Modifier.fillMaxWidth().height(40.dp))
         }
         VSpace(Space.m)
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
             listOf(10, 40, 100).forEach { b ->
                 PButton("$b %", { onCommand(Command.SetBrightness(Percent(b.toDouble()))) }, Modifier.weight(1f), ButtonKind.SECONDARY)
-                HSpace(Space.s)
             }
         }
     }
@@ -218,6 +218,7 @@ fun LightPad(
             val stops = (0..8).map { i -> DeviceViews.kelvinToColor(warmest + (coolest - warmest) * i / 8) }
             drawRect(Brush.horizontalGradient(stops))
             drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = if (c.isDark) 0.85f else 0.7f))))
+            if (c.name == "night") drawRect(c.background.copy(alpha = 0.55f)) // keep a dark bedroom dark
             if (!enabled) drawRect(c.background.copy(alpha = 0.6f))
             if (showMarker || local != null) {
                 val center = Offset(shown.first * size.width, shown.second * size.height)
@@ -240,6 +241,7 @@ fun HueStrip(onPick: (Rgb) -> Unit, modifier: Modifier = Modifier) {
             },
         ) {
             drawRect(Brush.horizontalGradient((0..12).map { i -> hue(i / 12f).let { Color(it.r, it.g, it.b) } }))
+            if (c.name == "night") drawRect(c.background.copy(alpha = 0.55f))
         }
     }
 }
