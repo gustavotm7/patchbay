@@ -94,3 +94,26 @@ public class SqlHomeStore(private val db: PatchbayDb) : HomeStore {
         q.putSetting(key, value)
     }
 }
+
+/**
+ * Used only when the encrypted database can't be opened. Nothing is written to disk (so invariant 4 still
+ * holds), and the UI says that nothing will be saved this session.
+ */
+public class InMemoryHomeStore : HomeStore {
+    private val devices = LinkedHashMap<DeviceId, StoredDevice>()
+    private val pairings = LinkedHashMap<DeviceId, StoredPairing>()
+    private val settings = LinkedHashMap<String, String>()
+
+    override fun devices(): List<StoredDevice> = devices.values.sortedBy { it.name }
+    override fun saveDevice(d: StoredDevice, now: Long) {
+        val old = devices[d.id]
+        devices[d.id] = d.copy(roomId = old?.roomId ?: d.roomId, firstSeen = old?.firstSeen ?: now, lastSeen = now)
+    }
+    override fun forget(id: DeviceId) {
+        devices.remove(id); pairings.remove(id)
+    }
+    override fun pairing(id: DeviceId): StoredPairing? = pairings[id]
+    override fun savePairing(p: StoredPairing) { pairings[p.deviceId] = p }
+    override fun setting(key: String): String? = settings[key]
+    override fun putSetting(key: String, value: String) { settings[key] = value }
+}

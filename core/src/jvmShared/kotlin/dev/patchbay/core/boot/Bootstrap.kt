@@ -6,6 +6,7 @@ import dev.patchbay.core.db.PatchbayDb
 import dev.patchbay.core.discovery.NetworkCensus
 import dev.patchbay.core.store.DataKey
 import dev.patchbay.core.store.HomeStore
+import dev.patchbay.core.store.InMemoryHomeStore
 import dev.patchbay.core.store.KeyWrapper
 import dev.patchbay.core.store.SqlHomeStore
 import dev.patchbay.core.adapter.govee.GoveeLanAdapter
@@ -25,7 +26,7 @@ public class Services internal constructor(
     public val paths: Paths,
     public val store: HomeStore,
     public val keyKind: String,
-    private val driver: SqlDriver,
+    private val driver: SqlDriver?,
     public val netGuard: NetGuard,
     public val log: SessionLog,
     public val adapters: List<DeviceAdapter>,
@@ -35,7 +36,7 @@ public class Services internal constructor(
     override fun close() {
         adapters.forEach { (it as? AutoCloseable)?.close() }
         scope.cancel()
-        driver.close()
+        driver?.close()
         log.info("boot", "shutdown")
         log.close()
     }
@@ -69,20 +70,27 @@ public object Bootstrap {
         val paths = Paths(root)
         paths.logs.mkdirs()
         paths.data.mkdirs()
-        // 2. keys
-        val key = DataKey.loadOrCreate(paths.data, keyWrapper)
-        // 3. encrypted storage
-        val driver = try {
-            openDb(File(paths.data, "patchbay.db"), key)
-        } finally {
-            DataKey.zeroise(key)
+        // 2–3. keys, then encrypted storage. If either fails we never fall back to plaintext: the session
+        // runs with an in-memory store and the UI says nothing will be saved.
+        var storageProblem: String? = null
+        val driver: SqlDriver? = try {
+            val key = DataKey.loadOrCreate(paths.data, keyWrapper)
+            try {
+                openDb(File(paths.data, "patchbay.db"), key).also { d -> SqlHomeStore(PatchbayDb(d)).setting("probe") }
+            } finally {
+                DataKey.zeroise(key)
+            }
+        } catch (e: Exception) {
+            storageProblem = "Encrypted storage unavailable (${e.javaClass.simpleName}); nothing will be saved this session."
+            null
         }
-        val store = SqlHomeStore(PatchbayDb(driver))
+        val store: HomeStore = driver?.let { SqlHomeStore(PatchbayDb(it)) } ?: InMemoryHomeStore()
         // 4. NetGuard
         val netGuard = NetGuard()
         // 5. logger
         val log = SessionLog.start(paths.logs, platform)
         log.info("boot", "patchbay starting on $platform; key=${keyWrapper.kind}" + if (keyWrapper.osProtected) "" else " (NOT OS-protected)")
+        storageProblem?.let { log.error("boot", it) }
         // 6. adapters
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val govee = GoveeLanAdapter(netGuard, scope)
@@ -90,6 +98,7 @@ public object Bootstrap {
         val adapters = listOf<DeviceAdapter>(govee)
         val home = LanHome(netGuard, adapters, scope, log, store, NetworkCensus(netGuard))
         if (started is PatchbayResult.Err) home.reportStartupProblem(started.error.message)
+        storageProblem?.let(home::reportStartupProblem)
         log.info("boot", "ready: ${adapters.size} adapter(s)")
         return Services(paths, store, keyWrapper.kind, driver, netGuard, log, adapters, home, scope)
     }
