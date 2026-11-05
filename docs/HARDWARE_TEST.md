@@ -67,3 +67,22 @@ Please report:
 - Rough response times.
 - Anything that appeared in the log: `Android/data/…` isn't accessible, so on Windows look in
   `%LOCALAPPDATA%\Patchbay\logs\`.
+
+## Phase 1 — LG webOS TV
+
+Prerequisite: the TV is on, on the same network, and Settings → General → Devices → External Devices →
+"LG Connect Apps" (or "Mobile TV On") is enabled. Names vary by webOS version.
+
+| # | Step | Expected |
+|---|---|---|
+| T1.1 | Scan | The TV appears as "LG WebOS/…", with a **Pair** button |
+| T1.2 | Tap **Pair** | A "Check LG's key" panel with a fingerprint (8 groups of hex). Tap **Trust** |
+| T1.3 | Look at the TV | A prompt asks to allow "Patchbay". Accept with the remote. Patchbay's panel then disappears, and within about 5 s the TV shows "On" with its volume |
+| T1.4 | Open the TV → volume ±1 / ±5, Mute | The TV follows immediately |
+| T1.5 | Tap an input (e.g. HDMI 2) | The TV switches input |
+| T1.6 | Turn off | The TV goes to standby. Patchbay shows "No reply", then "Offline" (turning on from Patchbay isn't supported yet) |
+| T1.7 | Restart Patchbay with the TV on | The TV reconnects **without** a new prompt (stored key, same pin) |
+| T1.8 | (If the TV's firmware updates and its key changes) | Patchbay shows a trust warning rather than silently reconnecting. Re-pair to accept the new key |
+
+Please report: the TV model and webOS version; whether T1.3's prompt appeared; any step that failed, with the
+time it happened (for the log).

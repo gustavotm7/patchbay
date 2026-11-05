@@ -60,6 +60,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
     val stats by live.netStats.collectAsState()
     val problem by live.problem.collectAsState()
     val scope = rememberCoroutineScope()
+    val pairing = remember { PairingDialogState() }
 
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -99,6 +100,8 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
             }
         }
         VSpace(Space.l)
+        PairingPanel(pairing)
+        if (pairing.step != null) VSpace(Space.m)
         Panel(Modifier.fillMaxWidth(), padding = Space.m) {
             Legend("Devices")
             VSpace(Space.s)
@@ -111,14 +114,22 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
             }
             devices.forEachIndexed { i, d ->
                 if (i > 0) Hairline()
-                LiveRow(d, d.device.id == selected) { onSelect(d.device.id) }
+                LiveRow(
+                    d, d.device.id == selected,
+                    onPair = {
+                        scope.launch {
+                            val r = live.pair(d.device.id, pairing)
+                            pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.message)
+                        }
+                    },
+                ) { onSelect(d.device.id) }
             }
         }
         CensusPanel(live)
         ExposurePanel(live)
         VSpace(Space.s)
         PText(
-            "Supported now: Govee LAN. LG TV, Cast, Bambu, ESPHome and ecobee arrive in later Phase 1/2 builds.",
+            "Supported now: Govee lights (LAN) and LG webOS TVs. Cast, Bambu, ESPHome, eufy RTSP and ecobee come next.",
             Patchbay.type.caption, c.textTertiary,
         )
     }
@@ -213,7 +224,7 @@ private fun ExposurePanel(live: LiveHome) {
 }
 
 @Composable
-private fun LiveRow(d: LiveDevice, selected: Boolean, onClick: () -> Unit) {
+private fun LiveRow(d: LiveDevice, selected: Boolean, onPair: () -> Unit, onClick: () -> Unit) {
     val c = Patchbay.colors
     val s = d.snapshot
     Row(
@@ -229,6 +240,10 @@ private fun LiveRow(d: LiveDevice, selected: Boolean, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             PText(d.device.name, Patchbay.type.bodyStrong)
             PText(DeviceViews.controlPathLabel(d.device.controlPath), Patchbay.type.caption, c.textSecondary)
+        }
+        if (d.needsPairing) {
+            PButton("Pair", onPair, kind = ButtonKind.PRIMARY)
+            return@Row
         }
         when (s?.reachability) {
             Reachability.OFFLINE -> StatusTag("Offline", Tone.ALARM)
@@ -249,8 +264,11 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
     val devices by live.devices.collectAsState()
     val scope = rememberCoroutineScope()
     val d = devices.firstOrNull { it.device.id == id } ?: return
+    val send: (dev.patchbay.core.model.Command) -> Unit = { cmd -> scope.launch { live.send(id, cmd) } }
     if (d.device.kind == DeviceKind.LIGHT) {
-        LightPanel(d, onCommand = { cmd -> scope.launch { live.send(id, cmd) } }, modifier = modifier)
+        LightPanel(d, onCommand = send, modifier = modifier)
+    } else if (d.device.kind == DeviceKind.TV) {
+        TvPanel(d, onCommand = send, modifier = modifier)
     } else {
         Column(modifier) { PText(d.device.name, Patchbay.type.title) }
     }

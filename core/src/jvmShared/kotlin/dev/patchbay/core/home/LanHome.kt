@@ -166,7 +166,14 @@ public class LanHome(
     }
 
     private fun updateSnapshot(snap: DeviceSnapshot) {
-        _devices.update { list -> list.map { if (it.device.id == snap.deviceId) it.copy(snapshot = merge(it.snapshot, snap)) else it } }
+        // Capabilities can grow once a device is connected (e.g. a TV's input list), so refresh them too.
+        val caps = owners[snap.deviceId]?.capabilities(snap.deviceId)
+        _devices.update { list ->
+            list.map {
+                if (it.device.id != snap.deviceId) it
+                else it.copy(snapshot = merge(it.snapshot, snap), device = if (caps != null && caps != it.device.capabilities) it.device.copy(capabilities = caps) else it.device)
+            }
+        }
     }
 
     /** An unreachable poll keeps the last known values, marked with the new reachability. */
