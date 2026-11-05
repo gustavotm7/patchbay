@@ -27,6 +27,7 @@ import dev.patchbay.core.model.PrintStage
 import dev.patchbay.core.model.Reachability
 import dev.patchbay.core.model.RectM
 import dev.patchbay.core.model.Rgb
+import dev.patchbay.core.model.StreamProtocol
 import dev.patchbay.core.model.Room
 import dev.patchbay.core.model.RoomId
 import dev.patchbay.core.model.Trend
@@ -69,6 +70,8 @@ public object DemoHome {
         public val SMOKE_ALARM: DeviceId = DeviceId("kidde-hall")
         public val WASHER: DeviceId = DeviceId("lg-thinq-washer")
         public val UNKNOWN_ESP: DeviceId = DeviceId("unknown-192-168-1-47")
+        public val CAMERA: DeviceId = DeviceId("eufy-indoor-cam")
+        public val DOOR_LOCK: DeviceId = DeviceId("eufy-lock")
     }
 
     public val floorPlan: FloorPlan = FloorPlan(
@@ -172,6 +175,14 @@ public object DemoHome {
             ControlPath.CLOUD_ONLY, emptyList(), adapter = null,
         ),
         Device(
+            Ids.CAMERA, "Living room camera", DeviceKind.CAMERA, "eufy", "Indoor Cam (RTSP on)", Ids.LIVING, Placement(5.3, 4.1),
+            ControlPath.LOCAL_AFTER_SETUP, listOf(Capability.CameraStream(StreamProtocol.RTSP)), adapter = AdapterId("rtsp"),
+        ),
+        Device(
+            Ids.DOOR_LOCK, "Front door lock", DeviceKind.LOCK, "eufy", "Smart Lock", Ids.HALL, Placement(4.0, 5.6),
+            ControlPath.CLOUD_ONLY, listOf(Capability.LockStatus), adapter = null,
+        ),
+        Device(
             Ids.UNKNOWN_ESP, "192.168.1.47", DeviceKind.UNKNOWN, "Espressif (OUI)", null, roomId = null, placement = null,
             ControlPath.UNKNOWN, emptyList(), adapter = null,
         ),
@@ -235,6 +246,8 @@ public object DemoHome {
         DeviceSnapshot(Ids.SMOKE_ALARM, Reachability.NEVER_CONNECTED, emptyList(), now),
         DeviceSnapshot(Ids.WASHER, Reachability.NEVER_CONNECTED, emptyList(), now),
         DeviceSnapshot(Ids.UNKNOWN_ESP, Reachability.ONLINE, emptyList(), now),
+        snap(Ids.CAMERA, now, CapabilityState.StreamState(available = true, resolution = "1080p")),
+        DeviceSnapshot(Ids.DOOR_LOCK, Reachability.NEVER_CONNECTED, emptyList(), now),
     )
 
     /** Deterministic recent history for sparklines. */

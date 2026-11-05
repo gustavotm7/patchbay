@@ -122,6 +122,20 @@ fun DeviceGlyph(
                     line(p, 0.72f, p, 0.88f, strokeColor)
                 }
             }
+            DeviceKind.CAMERA -> {
+                rect(0.12f, 0.3f, 0.56f, 0.4f)
+                // lens housing on the right
+                val p = Path().apply {
+                    moveTo(o.x + 0.68f * s, o.y + 0.42f * s); lineTo(o.x + 0.88f * s, o.y + 0.32f * s)
+                    lineTo(o.x + 0.88f * s, o.y + 0.68f * s); lineTo(o.x + 0.68f * s, o.y + 0.58f * s); close()
+                }
+                drawPath(p, strokeColor, style = stroke)
+            }
+            DeviceKind.LOCK -> {
+                rect(0.22f, 0.44f, 0.56f, 0.44f)
+                // shackle
+                drawArc(strokeColor, 180f, 180f, false, o + Offset(0.32f * s, 0.18f * s), Size(0.36f * s, 0.5f * s), style = stroke)
+            }
             DeviceKind.NETWORK_INFRA, DeviceKind.UNKNOWN -> {
                 val p = Path().apply {
                     moveTo(o.x + 0.5f * s, o.y + 0.12f * s)

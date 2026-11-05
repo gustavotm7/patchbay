@@ -28,7 +28,7 @@ class BootstrapTest {
     fun brokenStorageFallsBackToMemoryNeverPlaintext() {
         val root: File = Files.createTempDirectory("pbboot2").toFile()
         val wrapper = dev.patchbay.core.store.FileKeyWrapper(root)
-        Bootstrap.start("hub", root, wrapper) { _, _ -> error("SQLCipher missing") }.use { s ->
+        Bootstrap.start("hub", root, wrapper, openDb = { _, _ -> error("SQLCipher missing") }).use { s ->
             s.store.putSetting("k", "v")
             assertEquals("v", s.store.setting("k"))
             assertTrue(s.home.problem.value!!.contains("nothing will be saved"))

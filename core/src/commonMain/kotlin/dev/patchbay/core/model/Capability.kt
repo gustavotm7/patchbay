@@ -74,6 +74,18 @@ public sealed interface Capability {
     /** Filament slots (e.g. Bambu AMS units). Read-only. */
     public data class FilamentSlots(val units: Int, val slotsPerUnit: Int) : Capability
 
+    /**
+     * A local video stream (e.g. RTSP on Eufy cameras with "RTSP stream" enabled). The URL credentials are a
+     * secret: stored in the encrypted DB, never logged, never shown in full.
+     */
+    public data class CameraStream(val protocol: StreamProtocol) : Capability
+
+    /**
+     * A door lock, **read-only** (docs/protocols/eufy.md). There's deliberately no lock/unlock command in
+     * [Command]: remote unlocking is security-critical and needs an ADR plus your approval first.
+     */
+    public data object LockStatus : Capability
+
     /** A secondary light on a device, such as a printer's chamber light. */
     public data class AuxLight(val lightName: String) : Capability
 }
@@ -85,3 +97,5 @@ public enum class HvacAction { IDLE, HEATING, COOLING, FAN_ONLY }
 public enum class MediaAction { PLAY, PAUSE, STOP, NEXT, PREVIOUS, SEEK }
 
 public enum class PrintAction { PAUSE, RESUME, STOP }
+
+public enum class StreamProtocol { RTSP, RTSPS }

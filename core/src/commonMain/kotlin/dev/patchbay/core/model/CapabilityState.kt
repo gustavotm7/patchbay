@@ -63,7 +63,14 @@ public sealed interface CapabilityState {
     public data class FilamentSlotsState(val slots: List<FilamentSlot>) : CapabilityState
 
     public data class AuxLightState(val lightName: String, val on: Boolean) : CapabilityState
+
+    public data class LockState(val state: LockPosition, val battery: Percent?) : CapabilityState
+
+    /** Whether a local stream is reachable right now. The URL is never part of state. */
+    public data class StreamState(val available: Boolean, val resolution: String?) : CapabilityState
 }
+
+public enum class LockPosition { LOCKED, UNLOCKED, JAMMED, UNKNOWN }
 
 public enum class PlaybackStatus { PLAYING, PAUSED, BUFFERING, IDLE }
 

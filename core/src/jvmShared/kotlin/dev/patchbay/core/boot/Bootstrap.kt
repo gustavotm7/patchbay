@@ -9,7 +9,9 @@ import dev.patchbay.core.store.HomeStore
 import dev.patchbay.core.store.InMemoryHomeStore
 import dev.patchbay.core.store.KeyWrapper
 import dev.patchbay.core.store.SqlHomeStore
-import dev.patchbay.core.adapter.govee.GoveeLanAdapter
+import dev.patchbay.core.adapter.AdapterContext
+import dev.patchbay.core.adapter.AdapterFactory
+import dev.patchbay.core.adapter.AdapterRegistry
 import dev.patchbay.core.home.LanHome
 import dev.patchbay.core.home.LiveHome
 import dev.patchbay.core.log.SessionLog
@@ -65,7 +67,13 @@ public object Bootstrap {
      * @param keyWrapper OS protection for the data key (Keystore, DPAPI, or the hub's file fallback).
      * @param openDb opens the encrypted database file with the raw 256-bit key (SQLCipher / sqlite-jdbc-crypt).
      */
-    public fun start(platform: String, root: File, keyWrapper: KeyWrapper, openDb: (File, ByteArray) -> SqlDriver): Services {
+    public fun start(
+        platform: String,
+        root: File,
+        keyWrapper: KeyWrapper,
+        openDb: (File, ByteArray) -> SqlDriver,
+        adapters: List<AdapterFactory> = AdapterRegistry.LOCAL,
+    ): Services {
         // 1. paths
         val paths = Paths(root)
         paths.logs.mkdirs()
@@ -93,13 +101,13 @@ public object Bootstrap {
         storageProblem?.let { log.error("boot", it) }
         // 6. adapters
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val govee = GoveeLanAdapter(netGuard, scope)
-        val started = govee.start()
-        val adapters = listOf<DeviceAdapter>(govee)
-        val home = LanHome(netGuard, adapters, scope, log, store, NetworkCensus(netGuard))
-        if (started is PatchbayResult.Err) home.reportStartupProblem(started.error.message)
+        val problems = ArrayList<String>()
+        val ctx = AdapterContext(netGuard, scope, log) { msg -> problems += msg; log.warn("boot", msg) }
+        val built = adapters.map { it.create(ctx) }
+        val home = LanHome(netGuard, built, scope, log, store, NetworkCensus(netGuard))
+        problems.forEach(home::reportStartupProblem)
         storageProblem?.let(home::reportStartupProblem)
-        log.info("boot", "ready: ${adapters.size} adapter(s)")
-        return Services(paths, store, keyWrapper.kind, driver, netGuard, log, adapters, home, scope)
+        log.info("boot", "ready: ${built.size} adapter(s)")
+        return Services(paths, store, keyWrapper.kind, driver, netGuard, log, built, home, scope)
     }
 }

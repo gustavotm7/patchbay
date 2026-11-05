@@ -36,6 +36,17 @@ Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1
 5. Rooms and floor-plan editor for live devices.
 6. Jazzer fuzzing in CI. Parsers currently run a seeded 20 000-input mutation test on every build instead.
 
+## Adding systems (eufy and later ones)
+
+- `docs/ADDING_AN_ADAPTER.md` is the step-by-step path every new system follows.
+- `docs/protocols/eufy.md`:
+  - **eufy cameras:** local via RTSP once you enable it per camera. An RTSP adapter is planned.
+  - **HomeBase P2P:** needs a cloud login, so not in v1.
+  - **eufy lock:** cloud-only unless your model has Matter, and **read-only** until an ADR approves
+    lock/unlock.
+- The model already has `Capability.CameraStream` and a read-only `Capability.LockStatus`. The demo home
+  shows a eufy camera and lock.
+
 ## Decisions still waiting on you (from `docs/PHASE0_REPORT.md` §5)
 
 ADR approvals (0001–0006), FLAG_SECURE scope, Windows title bar, repo licence, `applicationId`, and the

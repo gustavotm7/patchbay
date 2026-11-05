@@ -13,7 +13,7 @@ No real devices are contacted in Phase 0. The apps only render simulator data.
 |---|---|---|
 | A0.1 | Download the `patchbay-android` artifact from the latest green CI run. Install `app-android-debug.apk` (or sign the release APK per `docs/RELEASE.md`) | Installs. GrapheneOS shows no Play Services prompt |
 | A0.2 | Settings → Apps → Patchbay → Permissions | On Android 17+, only "Nearby devices" (local network) is listed, and it isn't granted yet (requesting it arrives with real discovery in Phase 1). **No location, camera, microphone or contacts** |
-| A0.3 | Open the app | Demo home floor plan, "Demo" tag, exposure strip "9 local · 3 cloud-only · 1 unknown". Dark or light follows the system theme |
+| A0.3 | Open the app | Demo home floor plan, "Demo" tag, exposure strip "10 local · 4 cloud-only · 1 unknown". Dark or light follows the system theme |
 | A0.4 | Take a screenshot; open Recents | The screenshot is blocked or black, and the Recents thumbnail is blank (FLAG_SECURE) |
 | A0.5 | Tap "Workshop" on the plan, then "H2D" | Printer panel: layer stack, 47 %, two nozzle readouts, AMS swatches, Pause / Stop… |
 | A0.6 | Tap "Stop…" | It changes to "Confirm stop" with a warning line. Nothing else happens (demo) |
