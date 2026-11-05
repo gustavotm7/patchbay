@@ -63,6 +63,8 @@ dependencies {
     implementation(project(":ui"))
     implementation(project(":simulators"))
     implementation(libs.androidx.activity.compose)
+    // App lock (BiometricPrompt: strong biometric or device PIN/pattern). Local only.
+    implementation(libs.androidx.biometric)
     // Encrypted storage (ADR 0003)
     implementation(libs.sqldelight.android.driver)
     implementation(libs.sqlcipher.android)

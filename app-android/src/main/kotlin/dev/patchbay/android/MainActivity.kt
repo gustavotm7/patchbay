@@ -5,7 +5,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.text.font.Font
@@ -17,13 +17,14 @@ import dev.patchbay.ui.designsystem.Fmt
 import dev.patchbay.ui.designsystem.PatchbayPalettes
 import dev.patchbay.ui.designsystem.PatchbayTheme
 import dev.patchbay.ui.designsystem.PatchbayTypefaces
+import dev.patchbay.ui.screens.LockGate
 import dev.patchbay.ui.screens.PhoneApp
 
 /**
  * Android shell. Services come from [PatchbayApplication] (Bootstrap at process start). Shows live LAN
- * devices plus the demo home. App lock arrives later in Phase 1.
+ * devices plus the demo home, behind the app lock (BiometricPrompt via [AndroidLock]).
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private var multicastLock: WifiManager.MulticastLock? = null
 
@@ -48,13 +49,14 @@ class MainActivity : ComponentActivity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
 
         requestLocalNetworkIfNeeded()
-        val live = (application as PatchbayApplication).services.home
+        val app = application as PatchbayApplication
+        val live = app.services.home
         val home = DemoHome.home()
         val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
         setContent {
             val palette = if (isSystemInDarkTheme()) PatchbayPalettes.Dark else PatchbayPalettes.Light
             PatchbayTheme(palette, typefaces, FormFactor.PHONE) {
-                PhoneApp(home, DemoHome.trends, now, live)
+                LockGate(app.lock) { PhoneApp(home, DemoHome.trends, now, live) }
             }
         }
     }
@@ -69,6 +71,7 @@ class MainActivity : ComponentActivity() {
     // Multicast (discovery) only while the app is visible. Holding the lock costs battery.
     override fun onStart() {
         super.onStart()
+        (application as PatchbayApplication).lock.let { it.attach(this); it.lock.onForeground() }
         val wifi = applicationContext.getSystemService(WifiManager::class.java) ?: return
         multicastLock = wifi.createMulticastLock("patchbay-discovery").apply {
             setReferenceCounted(false)
@@ -77,6 +80,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        (application as PatchbayApplication).lock.let { it.lock.onBackground(); it.detach(this) }
         multicastLock?.release()
         multicastLock = null
         super.onStop()
@@ -85,4 +89,5 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val PERMISSION_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
     }
+
 }

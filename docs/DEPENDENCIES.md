@@ -20,6 +20,7 @@ authoritative transitive list.
 | `org.jetbrains.skiko:skiko-awt-runtime-*` | (via Compose) | app-windows, ui tests | Skia rendering natives | Apache-2.0 | No |
 | `androidx.*` (collection, annotation, lifecycle, savedstate, compose.* on Android) | (via Compose) | ui, app-android | Transitive Jetpack libraries; from Google Maven | Apache-2.0 | No |
 | `androidx.activity:activity-compose` | 1.11.0 | app-android | `setContent` for `ComponentActivity` | Apache-2.0 | No |
+| `androidx.biometric:biometric` (+ `androidx.fragment`) | 1.1.0 | app-android | App lock via BiometricPrompt (strong biometric or device credential) | Apache-2.0 | No |
 | `app.cash.sqldelight:runtime` | 2.4.1 | core | Typesafe SQL (ADR 0003) | Apache-2.0 | No |
 | `app.cash.sqldelight:sqlite-driver` (xerial `sqlite-jdbc` **excluded**) | 2.4.1 | core (jvm) | JDBC driver glue | Apache-2.0 | No |
 | `io.github.willena:sqlite-jdbc` (sqlite-jdbc-crypt) | 3.53.4.0 | core (jvm) | Encrypted SQLite (SQLite3MultipleCiphers, SQLCipher-4 format) with bundled natives | Apache-2.0 | No |
