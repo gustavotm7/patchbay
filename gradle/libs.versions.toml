@@ -1,0 +1,42 @@
+# Every version is pinned. Adding or changing an entry requires:
+#   1. a docs/DEPENDENCIES.md entry (purpose, licence, network behaviour), and
+#   2. regenerating gradle/verification-metadata.xml (see docs/SUPPLY_CHAIN.md).
+
+[versions]
+kotlin = "2.4.21"
+agp = "9.4.1"
+compose-multiplatform = "1.12.2"
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization = "1.12.0"
+androidx-activity = "1.11.0"
+cyclonedx = "3.5.1"
+
+# Android SDK levels
+android-compileSdk = "37"
+android-targetSdk = "37"
+# Android 12. Gives Keystore/StrongBox, BiometricPrompt with DEVICE_CREDENTIAL, and SplashScreen.
+android-minSdk = "31"
+
+[libraries]
+android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
+
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedx" }
+# Android plugins are put on the root buildscript classpath (see root build.gradle.kts) and applied
+# by id without a version, so they are only resolved when Android modules are part of the build.
