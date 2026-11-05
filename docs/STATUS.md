@@ -57,8 +57,15 @@ Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1
 
 ## Decisions still waiting on you (from `docs/PHASE0_REPORT.md` §5)
 
-ADR approvals (0001–0006), FLAG_SECURE scope, Windows title bar, repo licence, `applicationId`, and the
-MY DEVICES block (brief §12).
+Decided 2026-11-05:
+- `applicationId` stays `dev.patchbay`.
+- Windows uses the **native title bar**.
+- `FLAG_SECURE` applies to the **whole app**, for now.
+
+Deferred by you, to review later: ADRs 0001–0006 (still "Proposed") and the repo licence.
+
+Still open: the MY DEVICES block (brief §12), the eufy camera and lock models, and whether you're OK
+enabling RTSP.
 
 ## Notes for the next session
 

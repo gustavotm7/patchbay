@@ -97,14 +97,9 @@ with a ▲ marker.
 - **Desktop:** multi-pane. Navigation rail (208 dp) | floor plan with device names | 408 dp inspector.
   Keyboard-first: every target is focusable, with a 2 dp primary-colour focus ring, and a Ctrl+K command
   bar (Phase 2). The rail footer always shows **"NetGuard: LAN only · 0 internet connections"**.
-- **Custom title bar (open decision, Phase 1).** An undecorated AWT window loses native resize and
-  Windows 11 snap layouts. Two options:
-  1. Run on the **JetBrains Runtime** (JBR) and use its custom-title-bar API. That gives native snap,
-     but bundles JBR instead of Temurin.
-  2. Keep native decorations, themed via DWM dark mode.
-
-  Phase 0 keeps native decorations. Recommendation: option 2 unless you want the custom bar enough to
-  accept JBR.
+- **Title bar — decided 2026-11-05: native Windows decorations.** This keeps native resize and Windows 11 snap
+  layouts, and the app keeps bundling Temurin. Follow-up: theme the native bar dark via DWM when the app is
+  in a dark theme. The JetBrains Runtime custom-title-bar option is not pursued.
 
 ## 8. Motion
 

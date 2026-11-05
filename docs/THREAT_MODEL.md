@@ -88,6 +88,6 @@ It's recorded as an accepted risk for automations, which are never security-crit
 
 ## 7. Open questions for review
 
-1. Should `FLAG_SECURE` stay whole-app (current) or move to secret screens only? Whole-app also blocks
-   your own screenshots.
+1. ~~FLAG_SECURE scope~~ **Decided 2026-11-05: whole app, for now.** This also blocks your own screenshots
+   and the Recents thumbnail. Revisit when app lock lands.
 2. Is the hub's "key file readable only by the service user" acceptable until a TPM option exists?

@@ -18,8 +18,7 @@ import dev.patchbay.ui.screens.DesktopApp
 
 /**
  * Phase 0 shell: renders the demo home in the desktop multi-pane layout.
- * Native window decorations are kept for now (resize, snap layouts). The custom title bar is
- * Phase 1 and needs a decision on the JetBrains Runtime (docs/design/DESIGN_SPEC.md §7).
+ * Native window decorations (decided 2026-11-05; DESIGN_SPEC §7): native resize and Windows 11 snap layouts.
  */
 fun main() {
     // Bootstrap once, at process start. Data lives under %LOCALAPPDATA%\Patchbay (per-user).

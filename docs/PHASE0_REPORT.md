@@ -101,6 +101,13 @@ exported to the apps. But no compiler has seen this code.
 
 **Decisions (please answer in a batch):**
 
+> Answered 2026-11-05:
+> - 4: whole-app `FLAG_SECURE` for now.
+> - 5: native title bar.
+> - 7: `dev.patchbay` is fine.
+>
+> Deferred: 3 (ADRs) and 6 (licence).
+
 3. Approve or amend ADRs 0001–0006. The notable ones:
    - 0002: Noise over mTLS, plus a 6-digit confirmation code at pairing.
    - 0004: IBM Plex.
