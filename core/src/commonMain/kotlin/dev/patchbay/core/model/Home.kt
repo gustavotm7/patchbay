@@ -19,6 +19,9 @@ public data class RectM(val x: Double, val y: Double, val width: Double, val hei
     public operator fun contains(p: Placement): Boolean = p.x in x..right && p.y in y..bottom
 }
 
+/** A line segment in metres on the floor plan. */
+public data class Segment(val x1: Double, val y1: Double, val x2: Double, val y2: Double)
+
 public data class Room(
     val id: RoomId,
     val name: String,
@@ -27,6 +30,43 @@ public data class Room(
 ) {
     init {
         require(shapes.isNotEmpty()) { "room needs at least one rectangle" }
+    }
+
+    /**
+     * The room's outline as axis-aligned segments: every rectangle edge minus the parts shared with
+     * another rectangle of the same room. An L-shape made of two rectangles has no line through it.
+     */
+    public fun outline(): List<Segment> {
+        val out = ArrayList<Segment>()
+        for (r in shapes) {
+            // top, bottom: horizontal; left, right: vertical. For each, which side is "outside".
+            out += subtract(Segment(r.x, r.y, r.right, r.y)) { o, a -> o.x <= a && a <= o.right && o.y < r.y && r.y <= o.bottom }
+            out += subtract(Segment(r.x, r.bottom, r.right, r.bottom)) { o, a -> o.x <= a && a <= o.right && o.y <= r.bottom && r.bottom < o.bottom }
+            out += subtract(Segment(r.x, r.y, r.x, r.bottom)) { o, a -> o.y <= a && a <= o.bottom && o.x < r.x && r.x <= o.right }
+            out += subtract(Segment(r.right, r.y, r.right, r.bottom)) { o, a -> o.y <= a && a <= o.bottom && o.x <= r.right && r.right < o.right }
+        }
+        return out
+    }
+
+    /** Removes the parts of [edge] whose outside neighbourhood is covered by another shape. */
+    private fun subtract(edge: Segment, covers: (RectM, Double) -> Boolean): List<Segment> {
+        val horizontal = edge.y1 == edge.y2
+        val lo = if (horizontal) edge.x1 else edge.y1
+        val hi = if (horizontal) edge.x2 else edge.y2
+        // Interval arithmetic over the edge, using the other shapes' extents along it.
+        var free = listOf(lo to hi)
+        for (o in shapes) {
+            val (a, b) = if (horizontal) o.x to o.right else o.y to o.bottom
+            val mid = (maxOf(a, lo) + minOf(b, hi)) / 2
+            if (minOf(b, hi) - maxOf(a, lo) <= 1e-9 || !covers(o, mid)) continue
+            free = free.flatMap { (f0, f1) ->
+                listOfNotNull(
+                    (f0 to minOf(f1, a)).takeIf { it.second - it.first > 1e-9 },
+                    (maxOf(f0, b) to f1).takeIf { it.second - it.first > 1e-9 },
+                )
+            }
+        }
+        return free.map { (a, b) -> if (horizontal) Segment(a, edge.y1, b, edge.y1) else Segment(edge.x1, a, edge.x1, b) }
     }
 
     val bounds: RectM

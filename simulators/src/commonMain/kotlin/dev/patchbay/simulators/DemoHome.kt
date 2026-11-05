@@ -154,7 +154,7 @@ public object DemoHome {
         ),
         Device(
             Ids.BENCH_SENSOR, "Bench sensor", DeviceKind.MICROCONTROLLER, "ESPHome", "ESP32-C3", Ids.WORKSHOP,
-            Placement(6.5, 6.5), ControlPath.LOCAL,
+            Placement(6.8, 7.6), ControlPath.LOCAL,
             listOf(Capability.TemperatureSensor, Capability.HumiditySensor),
             esphomeAdapter,
             firmware = "ESPHome 2026.10",

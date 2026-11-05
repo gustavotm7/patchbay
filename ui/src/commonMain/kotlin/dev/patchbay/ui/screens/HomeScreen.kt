@@ -87,24 +87,21 @@ fun FloorPlanView(
                     drawRect(if (isSel) c.raised else c.surface, o, s)
                 }
             }
+            fun seg(g: dev.patchbay.core.model.Segment) = Pair(
+                Offset(((g.x1 - bounds.x) * px).toFloat(), ((g.y1 - bounds.y) * px).toFloat()),
+                Offset(((g.x2 - bounds.x) * px).toFloat(), ((g.y2 - bounds.y) * px).toFloat()),
+            )
+            // Outlines are the union boundary of each room's rectangles: L-shapes have no seam.
             for (room in plan.rooms) {
-                for (shape in room.shapes) {
-                    val (o, s) = r(shape)
-                    drawRect(c.outline, o, s, style = Stroke(wall))
-                }
-                // Erase seams between rectangles of the same room so L-shapes read as one room.
-                for ((i, a) in room.shapes.withIndex()) for (b in room.shapes.drop(i + 1)) {
-                    seam(a, b)?.let { seamRect ->
-                        val (o, s) = r(seamRect)
-                        val fill = if (room.id == selectedRoom) c.raised else c.surface
-                        drawRect(fill, o + Offset(wall, wall), Size((s.width - 2 * wall).coerceAtLeast(wall), (s.height - 2 * wall).coerceAtLeast(wall)))
-                    }
+                for (g in room.outline()) {
+                    val (a, b) = seg(g)
+                    drawLine(c.outline, a, b, wall)
                 }
             }
             selectedRoom?.let { id ->
-                plan.rooms.firstOrNull { it.id == id }?.shapes?.forEach { shape ->
-                    val (o, s) = r(shape)
-                    drawRect(c.text, o, s, style = Stroke(2.dp.toPx()))
+                plan.rooms.firstOrNull { it.id == id }?.outline()?.forEach { g ->
+                    val (a, b) = seg(g)
+                    drawLine(c.text, a, b, 2.dp.toPx())
                 }
             }
         }
@@ -150,28 +147,6 @@ fun FloorPlanView(
                 )
             }
         }
-    }
-}
-
-/** If two axis-aligned rectangles share an edge segment, returns that segment as a thin rect. */
-private fun seam(a: RectM, b: RectM): RectM? {
-    val eps = 1e-6
-    fun overlap(a0: Double, a1: Double, b0: Double, b1: Double): Pair<Double, Double>? {
-        val lo = maxOf(a0, b0)
-        val hi = minOf(a1, b1)
-        return if (hi - lo > eps) lo to hi else null
-    }
-    val t = 0.02
-    return when {
-        kotlin.math.abs(a.right - b.x) < eps || kotlin.math.abs(b.right - a.x) < eps -> {
-            val xEdge = if (kotlin.math.abs(a.right - b.x) < eps) a.right else a.x
-            overlap(a.y, a.bottom, b.y, b.bottom)?.let { (lo, hi) -> RectM(xEdge - t, lo, 2 * t, hi - lo) }
-        }
-        kotlin.math.abs(a.bottom - b.y) < eps || kotlin.math.abs(b.bottom - a.y) < eps -> {
-            val yEdge = if (kotlin.math.abs(a.bottom - b.y) < eps) a.bottom else a.y
-            overlap(a.x, a.right, b.x, b.right)?.let { (lo, hi) -> RectM(lo, yEdge - t, hi - lo, 2 * t) }
-        }
-        else -> null
     }
 }
 

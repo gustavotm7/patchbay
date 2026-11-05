@@ -125,6 +125,24 @@ class UnitsTest {
     }
 
     @Test
+    fun outlineOfLShapeHasNoInternalSeam() {
+        // 4×2 on top, 2×2 below-left: the shared edge y=2, x 0..2 must not be drawn.
+        val l = Room(RoomId("l"), "L", listOf(RectM(0.0, 0.0, 4.0, 2.0), RectM(0.0, 2.0, 2.0, 2.0)))
+        val segs = l.outline()
+        assertTrue(segs.none { it.y1 == 2.0 && it.y2 == 2.0 && it.x1 < 2.0 }, "seam drawn: $segs")
+        // The exposed part of the top rect's bottom edge (x 2..4) is drawn.
+        assertTrue(segs.any { it.y1 == 2.0 && it.y2 == 2.0 && it.x1 == 2.0 && it.x2 == 4.0 })
+        // Total perimeter of the L = 4 + 2 + 2 + 2 + 2 + 4 = 16.
+        assertEquals(16.0, segs.sumOf { kotlin.math.abs(it.x2 - it.x1) + kotlin.math.abs(it.y2 - it.y1) }, 1e-9)
+    }
+
+    @Test
+    fun outlineOfSingleRectIsItsPerimeter() {
+        val r = Room(RoomId("r"), "R", listOf(RectM(1.0, 1.0, 3.0, 2.0)))
+        assertEquals(4, r.outline().size)
+    }
+
+    @Test
     fun roomBoundsAndHitTest() {
         val l = Room(RoomId("l"), "L", listOf(RectM(0.0, 0.0, 4.0, 2.0), RectM(0.0, 2.0, 2.0, 2.0)))
         assertEquals(RectM(0.0, 0.0, 4.0, 4.0), l.bounds)

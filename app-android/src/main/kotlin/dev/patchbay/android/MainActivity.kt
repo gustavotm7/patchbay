@@ -1,5 +1,8 @@
 package dev.patchbay.android
 
+import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -17,10 +20,12 @@ import dev.patchbay.ui.designsystem.PatchbayTypefaces
 import dev.patchbay.ui.screens.PhoneApp
 
 /**
- * Phase 0 shell: renders the demo home. Bootstrap (paths → encrypted storage → keys → NetGuard →
- * logger → adapters) and app lock arrive in Phase 1.
+ * Android shell. Services come from [PatchbayApplication] (Bootstrap at process start). Shows live LAN
+ * devices plus the demo home. App lock arrives later in Phase 1.
  */
 class MainActivity : ComponentActivity() {
+
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     private val typefaces by lazy {
         PatchbayTypefaces(
@@ -42,13 +47,42 @@ class MainActivity : ComponentActivity() {
         // screenshots and the recents thumbnail. A per-screen opt-out may come with app lock (Phase 1).
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
 
+        requestLocalNetworkIfNeeded()
+        val live = (application as PatchbayApplication).services.home
         val home = DemoHome.home()
         val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
         setContent {
             val palette = if (isSystemInDarkTheme()) PatchbayPalettes.Dark else PatchbayPalettes.Light
             PatchbayTheme(palette, typefaces, FormFactor.PHONE) {
-                PhoneApp(home, DemoHome.trends, now)
+                PhoneApp(home, DemoHome.trends, now, live)
             }
         }
+    }
+
+    /** Android 17 (API 37) local network protection: runtime permission in the Nearby devices group. */
+    private fun requestLocalNetworkIfNeeded() {
+        if (Build.VERSION.SDK_INT < 37) return
+        if (checkSelfPermission(PERMISSION_LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED) return
+        requestPermissions(arrayOf(PERMISSION_LOCAL_NETWORK), 1)
+    }
+
+    // Multicast (discovery) only while the app is visible. Holding the lock costs battery.
+    override fun onStart() {
+        super.onStart()
+        val wifi = applicationContext.getSystemService(WifiManager::class.java) ?: return
+        multicastLock = wifi.createMulticastLock("patchbay-discovery").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    override fun onStop() {
+        multicastLock?.release()
+        multicastLock = null
+        super.onStop()
+    }
+
+    private companion object {
+        const val PERMISSION_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
     }
 }

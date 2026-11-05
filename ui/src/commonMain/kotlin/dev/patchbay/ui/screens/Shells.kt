@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.patchbay.core.home.LiveHome
 import dev.patchbay.core.model.CapabilityState
 import dev.patchbay.core.model.DeviceId
 import dev.patchbay.core.model.Home
@@ -40,6 +41,7 @@ import dev.patchbay.ui.designsystem.PText
 import dev.patchbay.ui.designsystem.Panel
 import dev.patchbay.ui.designsystem.Patchbay
 import dev.patchbay.ui.designsystem.Space
+import dev.patchbay.ui.designsystem.Segmented
 import dev.patchbay.ui.designsystem.StatusTag
 import dev.patchbay.ui.designsystem.Tone
 import dev.patchbay.ui.designsystem.ToneMarker
@@ -68,6 +70,7 @@ fun DesktopShell(
     section: Section = Section.HOME,
     onFocus: (Focus) -> Unit = {},
     onSection: (Section) -> Unit = {},
+    live: LiveHome? = null,
 ) {
     val c = Patchbay.colors
     val selectedRoom = when (focus) {
@@ -83,11 +86,15 @@ fun DesktopShell(
                 HSpace(Space.xl)
                 ExposureStrip(home)
                 Fill()
-                StatusTag("Demo home", Tone.NEUTRAL)
+                StatusTag(if (section == Section.INVENTORY && live != null) "Live" else "Demo home", Tone.NEUTRAL)
                 HSpace(Space.l)
                 PText(nowLabel, Patchbay.type.valueS, c.textSecondary)
             }
             Hairline()
+            if (section == Section.INVENTORY && live != null) {
+                LiveScreenDesktop(live)
+                return@Column
+            }
             Row(Modifier.fillMaxSize().padding(Space.xl)) {
                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopStart) {
                     // Loose constraints so the plan keeps its aspect ratio and fits either dimension.
@@ -236,15 +243,32 @@ fun DeviceScreenPhone(home: Home, trends: TrendSource, device: DeviceId, onBack:
 
 /** Desktop entry point: owns navigation state for the multi-pane shell. */
 @Composable
-fun DesktopApp(home: Home, trends: TrendSource, nowLabel: String) {
+fun DesktopApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? = null) {
     var focus by remember { mutableStateOf<Focus>(Focus.RoomFocus(home.floorPlan.rooms.first().id)) }
-    var section by remember { mutableStateOf(Section.HOME) }
-    DesktopShell(home, trends, focus, nowLabel, section = section, onFocus = { focus = it }, onSection = { section = it })
+    var section by remember { mutableStateOf(if (live != null) Section.INVENTORY else Section.HOME) }
+    DesktopShell(home, trends, focus, nowLabel, section = section, onFocus = { focus = it }, onSection = { section = it }, live = live)
 }
 
 /** Phone entry point: floor plan → room → device, one pane at a time. */
 @Composable
-fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String) {
+fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? = null) {
+    var showLive by remember { mutableStateOf(live != null) }
+    val c = Patchbay.colors
+    if (live == null) {
+        DemoPhone(home, trends, nowLabel)
+        return
+    }
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        Segmented(
+            listOf(true, false), showLive, { if (it) "This network" else "Demo home" }, { showLive = it },
+            Modifier.fillMaxWidth().padding(horizontal = Space.l, vertical = Space.s),
+        )
+        if (showLive) LiveScreenPhone(live) else DemoPhone(home, trends, nowLabel)
+    }
+}
+
+@Composable
+private fun DemoPhone(home: Home, trends: TrendSource, nowLabel: String) {
     var focus by remember { mutableStateOf<Focus?>(null) }
     val c = Patchbay.colors
     when (val f = focus) {

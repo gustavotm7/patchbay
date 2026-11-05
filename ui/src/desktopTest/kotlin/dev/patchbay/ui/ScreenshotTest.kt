@@ -14,6 +14,14 @@ import dev.patchbay.ui.screens.DesktopShell
 import dev.patchbay.ui.screens.DeviceScreenPhone
 import dev.patchbay.ui.screens.Focus
 import dev.patchbay.ui.screens.HomeScreenPhone
+import dev.patchbay.ui.screens.LightPanel
+import dev.patchbay.core.home.LiveDevice
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import java.io.File
@@ -63,6 +71,12 @@ class ScreenshotTest {
                 DesktopShell(home, trends, Focus.DeviceFocus(DemoHome.Ids.PRINTER), now)
             }
             shot("designsystem_$t", sheet, palette, FormFactor.DESKTOP) { DesignSheet() }
+            shot("light_phone_$t", phone, palette, FormFactor.PHONE) {
+                val lamp = home.device(DemoHome.Ids.FLOOR_LAMP)!!
+                Column(Modifier.fillMaxSize().background(palette.background).padding(16.dp)) {
+                    LightPanel(LiveDevice(lamp, home.snapshot(lamp.id)), onCommand = {})
+                }
+            }
         }
         // Above-the-fold phone render (what you see without scrolling).
         shot("home_phone_dark_fold", phone, PatchbayPalettes.Dark, FormFactor.PHONE) { HomeScreenPhone(home, now) }

@@ -348,7 +348,7 @@ fun SetpointScale(
         // Scale labels (every 2 °C), skipping the one under the current-temperature marker.
         var t = lo
         while (t <= hi + 1e-9) {
-            if (kotlin.math.abs(t - current.value) > 0.6) {
+            if (kotlin.math.abs(t - current.value) > 1.4) {
                 Box(Modifier.offset(x = 0.dp, y = yOf(t) - 8.dp).width(spineX - 26.dp), contentAlignment = Alignment.CenterEnd) {
                     PText(Fmt.fixed(t, 0), Patchbay.type.caption, c.textTertiary)
                 }
