@@ -21,9 +21,11 @@ kotlin {
         jvmMain.get().dependsOn(jvmShared)
         commonMain.dependencies {
             api(project(":core"))
+            implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
