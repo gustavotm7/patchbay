@@ -44,3 +44,24 @@ jobs:
         with:
           name: verification-metadata
           path: gradle/verification-metadata.xml
+
+  # Renders the design screenshots and prints them (tar.gz+base64) to the log, so they can be reviewed and
+  # committed as goldens from environments without an Actions token.
+  export-screens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Render
+        run: ./gradlew :ui:recordScreens
+      - name: Print screens
+        run: |
+          tar -C docs/design/screens -czf screens.tgz $(cd docs/design/screens && ls *.png)
+          ls -la docs/design/screens
+          echo "PB-SCREENS-BEGIN"
+          base64 -w 0 screens.tgz
+          echo
+          echo "PB-SCREENS-END"
+          sha256sum screens.tgz
