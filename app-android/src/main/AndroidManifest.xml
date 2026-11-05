@@ -7,6 +7,7 @@
   CHANGE_WIFI_MULTICAST_STATE  WifiManager.MulticastLock for mDNS/SSDP/Govee discovery.
   ACCESS_LOCAL_NETWORK         Android 17+ (targetSdk 37) local network protection.
                                Runtime permission in the NEARBY_DEVICES group.
+  USE_BIOMETRIC                app lock (BiometricPrompt). Normal install-time permission, no user data.
   No location permission: home presence is inferred from LAN identity, never from the SSID.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -21,6 +22,8 @@
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove" />
+    <!-- Legacy pre-API-28 permission merged in by androidx.biometric; redundant at minSdk 31. -->
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
 
     <application
         android:name=".PatchbayApplication"
