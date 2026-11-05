@@ -51,6 +51,8 @@ user-owned WireGuard), **anything that controls the Kidde smoke/CO alarm**, prin
 - **Tests.** Unit tests for core logic. Contract tests for every adapter against its simulator. A fuzz test
   for every parser. Screenshot tests for UI (`ui` desktopTest → `docs/design/screens/`).
   A phase is done only when CI is green.
+- **Coroutine tests.** Write `fun name(): Unit = runBlocking { … }`. A test body that ends in an expression
+  returns a value, and JUnit silently skips non-void test methods.
 - **Commits.** Small, focused, conventional-commit messages. Write an ADR for every non-obvious decision.
 - **No new dependency without a `docs/DEPENDENCIES.md` entry** (purpose, licence, makes network calls?)
   and a verification-metadata update (`./gradlew --write-verification-metadata sha256 help`).
@@ -75,6 +77,8 @@ Build commands:
 - `tools/check-policy.sh` — the NetGuard / trust-all / banned-SDK policy checks.
 
 ## Environment notes
+
+Current status and the next steps are in `docs/STATUS.md`. Keep it updated at the end of every session.
 
 Cloud sessions cannot reach the home LAN. Every adapter ships a simulator.
 After each phase, update `docs/HARDWARE_TEST.md` with checks for the user to run on real devices.

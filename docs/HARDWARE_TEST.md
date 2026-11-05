@@ -39,3 +39,26 @@ No real devices are contacted in Phase 0. The apps only render simulator data.
 - Do the screens in `docs/design/screens/` (or the `design-screens` CI artifact) match your taste? The
   Control Room direction, the Plex typeface, and the night palette specifically.
 - Anything that feels like a generic AI-made app.
+
+## Phase 1 — Govee LAN (first real-device test)
+
+Prerequisite: in the Govee Home app, open each light → Settings → turn on **LAN Control**. Not every model has it.
+Phone and laptop must be on the same Wi-Fi/VLAN as the lights. Multicast must not be blocked; "AP/client
+isolation" on guest networks breaks it.
+
+| # | Step | Expected |
+|---|---|---|
+| G1.1 | Android: open Patchbay → "This network" tab | On Android 17+, a "Nearby devices" permission prompt. Allow it |
+| G1.2 | Tap **Scan** | Within about 2 s, each LAN-enabled Govee light appears as "Govee H…", with On/Off or % |
+| G1.3 | Tap a light → toggle Power | The light switches within about 0.5 s. The list updates within 5 s |
+| G1.4 | Drag on the pad (left = warm 2000 K, right = cool 9000 K, top = bright) | The light follows. Readouts show % and K |
+| G1.5 | Tap the hue strip (RGB models) | The light shows that colour; the readout switches to RGB |
+| G1.6 | Unplug the light, wait about 20 s | Status goes "No reply", then "Offline". Replug: it recovers by itself (polling back-off ≤ 60 s) |
+| G1.7 | Windows: open Patchbay (Inventory is the start page) → Scan | Windows Firewall may ask about Patchbay. Allow **Private networks only**. The same lights appear |
+| G1.8 | Run Home Assistant's Govee LAN integration on the same PC | Patchbay shows "Govee needs UDP port 4002…" (only one app per machine can listen) |
+
+Please report:
+- Your Govee model numbers, and which ones didn't appear.
+- Rough response times.
+- Anything that appeared in the log: `Android/data/…` isn't accessible, so on Windows look in
+  `%LOCALAPPDATA%\Patchbay\logs\`.
