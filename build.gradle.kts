@@ -45,7 +45,7 @@ subprojects {
 }
 
 // Runs the repository policy checks (NetGuard bypass, trust-all TLS, banned SDKs) as part of `check`.
-val checkPolicy by tasks.registering(Exec::class) {
+val checkPolicy = tasks.register<Exec>("checkPolicy") {
     group = "verification"
     description = "Fails if code bypasses NetGuard, disables TLS verification or adds a banned SDK."
     commandLine("bash", "${rootDir}/tools/check-policy.sh")
@@ -54,4 +54,22 @@ val checkPolicy by tasks.registering(Exec::class) {
 tasks.register("check") {
     group = "verification"
     dependsOn(checkPolicy)
+}
+
+// Resolves every resolvable configuration in every project without compiling anything. Used by the
+// verification-bootstrap workflow so checksums cover the whole graph even if a compile step fails.
+tasks.register("resolveAllDependencies") {
+    group = "help"
+    description = "Resolves all configurations (for --write-verification-metadata)."
+    notCompatibleWithConfigurationCache("walks all configurations at execution time")
+    doLast {
+        allprojects.forEach { p ->
+            p.configurations.filter { it.isCanBeResolved }.forEach { c ->
+                runCatching { c.incoming.artifactView { lenient(true) }.files.files }
+            }
+            p.buildscript.configurations.filter { it.isCanBeResolved }.forEach { c ->
+                runCatching { c.incoming.artifactView { lenient(true) }.files.files }
+            }
+        }
+    }
 }

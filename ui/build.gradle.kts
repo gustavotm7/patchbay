@@ -31,10 +31,10 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
-        val desktopMain by getting {
+        named("desktopMain") {
             resources.srcDir("src/fonts")
         }
-        val desktopTest by getting {
+        named("desktopTest") {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(project(":simulators"))
