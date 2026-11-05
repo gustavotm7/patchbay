@@ -1,0 +1,41 @@
+# Hardware test checklist
+
+Run these on your real phone and laptop. Each phase appends a section. Report failures with the step number
+and, if possible, the session log (`patchbay_<platform>_<timestamp>.log`; logging arrives in Phase 1).
+
+## Phase 0 — shells install and render the demo home
+
+No real devices are contacted in Phase 0. The apps only render simulator data.
+
+### Android (your phone)
+
+| # | Step | Expected |
+|---|---|---|
+| A0.1 | Download the `patchbay-android` artifact from the latest green CI run. Install `app-android-debug.apk` (or sign the release APK per `docs/RELEASE.md`) | Installs. GrapheneOS shows no Play Services prompt |
+| A0.2 | Settings → Apps → Patchbay → Permissions | On Android 17+, only "Nearby devices" (local network) is listed, and it isn't granted yet (requesting it arrives with real discovery in Phase 1). **No location, camera, microphone or contacts** |
+| A0.3 | Open the app | Demo home floor plan, "Demo" tag, exposure strip "9 local · 3 cloud-only · 1 unknown". Dark or light follows the system theme |
+| A0.4 | Take a screenshot; open Recents | The screenshot is blocked or black, and the Recents thumbnail is blank (FLAG_SECURE) |
+| A0.5 | Tap "Workshop" on the plan, then "H2D" | Printer panel: layer stack, 47 %, two nozzle readouts, AMS swatches, Pause / Stop… |
+| A0.6 | Tap "Stop…" | It changes to "Confirm stop" with a warning line. Nothing else happens (demo) |
+| A0.7 | Back, back; open Hall → Thermostat; drag the heat handle up past the cool handle in Auto | The heat handle stops 2.0 °C below cool (deadband enforced) |
+| A0.8 | Enable TalkBack; swipe through the plan | Each device reads as "<name>, on/off, Local…", and readouts include units ("degrees Celsius") |
+| A0.9 | Settings → Accessibility → largest font size | Text scales; nothing overlaps badly. Note any clipping with a screenshot from a non-secure screen, or a description |
+| A0.10 | Airplane mode with Wi-Fi off, then reopen | The app works identically (no network needed for demo) |
+
+### Windows (your laptop)
+
+| # | Step | Expected |
+|---|---|---|
+| W0.1 | Download `patchbay-windows-msi` and run the MSI | Per-user install, no admin prompt. SmartScreen may warn (unsigned) |
+| W0.2 | Start Menu → Patchbay | Window opens at 1440 × 900 with nav rail, floor plan with device names, and Workshop inspector |
+| W0.3 | Press Tab repeatedly | A visible 2 dp focus ring moves through the rail items, rooms and buttons |
+| W0.4 | Click Hall → Thermostat in the inspector | Thermostat panel with vertical scale and setpoints |
+| W0.5 | Windows Settings → Personalisation → Colours: switch light/dark, then restart the app | The theme follows the system setting |
+| W0.6 | (Optional) Resource Monitor → Network | Patchbay.exe has **no** TCP connections |
+| W0.7 | Uninstall via Settings → Apps | Removes cleanly. No leftover service, scheduled task or updater |
+
+### Please also tell me
+
+- Do the screens in `docs/design/screens/` (or the `design-screens` CI artifact) match your taste? The
+  Control Room direction, the Plex typeface, and the night palette specifically.
+- Anything that feels like a generic AI-made app.

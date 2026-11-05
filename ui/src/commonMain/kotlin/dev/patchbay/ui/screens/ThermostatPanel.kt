@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -248,9 +249,13 @@ fun SetpointScale(
     onChange: (Celsius?, Celsius?) -> Unit,
 ) {
     val c = Patchbay.colors
-    val values = listOfNotNull(current.value, heat?.value, cool?.value)
-    val lo = floor((values.min() - 3.0) / 2.0) * 2.0
-    val hi = ceil((values.max() + 3.0) / 2.0) * 2.0
+    // The visible window depends only on the current temperature and the device's ranges, so it stays
+    // still while a handle is dragged. (A window that followed the setpoints would shift under the finger.)
+    val lo = maxOf(floor((current.value - 7.0) / 2.0) * 2.0, floor(cap.heatRange.start.value / 2.0) * 2.0)
+    val hi = minOf(ceil((current.value + 7.0) / 2.0) * 2.0, ceil(cap.coolRange.endInclusive.value / 2.0) * 2.0)
+    val latestHeat by rememberUpdatedState(heat)
+    val latestCool by rememberUpdatedState(cool)
+    val latestOnChange by rememberUpdatedState(onChange)
     val mode = when {
         heatActive && coolActive -> HvacMode.AUTO
         heatActive -> HvacMode.HEAT
@@ -274,14 +279,14 @@ fun SetpointScale(
         fun yOf(t: Double): Dp = pad + (h - pad * 2) * ((hi - t) / (hi - lo)).toFloat()
 
         Canvas(
-            Modifier.fillMaxSize().pointerInput(heat, cool, lo, hi, mode) {
+            Modifier.fillMaxSize().pointerInput(lo, hi, mode) {
                 var target = 0 // 1 heat, 2 cool
                 fun tempAt(y: Float): Double = hi - ((y - pad.toPx()) / (size.height - 2 * pad.toPx())).toDouble() * (hi - lo)
                 detectVerticalDragGestures(
                     onDragStart = { o ->
                         val t = tempAt(o.y)
-                        val dh = heat?.let { kotlin.math.abs(it.value - t) } ?: Double.MAX_VALUE
-                        val dc = cool?.let { kotlin.math.abs(it.value - t) } ?: Double.MAX_VALUE
+                        val dh = latestHeat?.let { kotlin.math.abs(it.value - t) } ?: Double.MAX_VALUE
+                        val dc = latestCool?.let { kotlin.math.abs(it.value - t) } ?: Double.MAX_VALUE
                         target = when {
                             heatActive && (dh <= dc || !coolActive) -> 1
                             coolActive -> 2
@@ -289,10 +294,11 @@ fun SetpointScale(
                         }
                     },
                     onVerticalDrag = { change, _ ->
-                        val t = tempAt(change.position.y)
+                        change.consume()
+                        val t = tempAt(change.position.y).coerceIn(lo, hi)
                         when (target) {
-                            1 -> onChange(clampHeat(t, cool, cap, mode), cool)
-                            2 -> onChange(heat, clampCool(t, heat, cap, mode))
+                            1 -> latestOnChange(clampHeat(t, latestCool, cap, mode), latestCool)
+                            2 -> latestOnChange(latestHeat, clampCool(t, latestHeat, cap, mode))
                         }
                     },
                 )
@@ -304,7 +310,8 @@ fun SetpointScale(
 
             // Deadband (only meaningful in AUTO).
             if (heat != null && cool != null && heatActive && coolActive) {
-                drawRect(c.band, Offset(spine, y(cool.value)), Size(size.width - spine, y(heat.value) - y(cool.value)))
+                val top = y(cool.value.coerceIn(lo, hi))
+                drawRect(c.band, Offset(spine, top), Size(size.width - spine, y(heat.value.coerceIn(lo, hi)) - top))
             }
             // Spine and ticks every 0.5 °C, longer every 2 °C.
             drawLine(c.outline, Offset(spine, y(hi)), Offset(spine, y(lo)), hair)
@@ -326,8 +333,8 @@ fun SetpointScale(
                 }
                 drawPath(p, col)
             }
-            heat?.let { handle(it.value, heatActive, c.heat) }
-            cool?.let { handle(it.value, coolActive, c.cool) }
+            heat?.let { handle(it.value.coerceIn(lo, hi), heatActive, c.heat) }
+            cool?.let { handle(it.value.coerceIn(lo, hi), coolActive, c.cool) }
 
             // Current temperature: a solid marker pointing at the spine from the left.
             val cy = y(current.value)

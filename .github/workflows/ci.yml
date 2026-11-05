@@ -102,8 +102,19 @@ jobs:
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with: { distribution: temurin, java-version: "${{ env.JAVA_VERSION }}" }
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      # The Compose plugin would download WiX itself without checksum verification. Fetch it here,
+      # verify the pinned SHA-256, and point the plugin at it instead.
+      - name: Fetch and verify WiX 3.11.2
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\wix311-binaries.zip"
+          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile $zip
+          $h = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne "2c1888d5d1dba377fc7fa14444cf556963747ff9a0a289a3599cf09da03b9e2e") { throw "WiX checksum mismatch: $h" }
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\wix"
+          "WIX_PATH=$env:RUNNER_TEMP\wix" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Package MSI
-        run: ./gradlew :app-windows:packageMsi
+        run: ./gradlew "-Pcompose.desktop.application.downloadWix=false" :app-windows:packageMsi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: patchbay-windows-msi

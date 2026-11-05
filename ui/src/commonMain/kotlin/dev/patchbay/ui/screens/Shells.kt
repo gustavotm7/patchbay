@@ -90,8 +90,9 @@ fun DesktopShell(
             Hairline()
             Row(Modifier.fillMaxSize().padding(Space.xl)) {
                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopStart) {
+                    // Loose constraints so the plan keeps its aspect ratio and fits either dimension.
                     FloorPlanView(
-                        home, Modifier.fillMaxSize(), selectedRoom = selectedRoom,
+                        home, Modifier, selectedRoom = selectedRoom,
                         onRoomClick = { onFocus(Focus.RoomFocus(it)) }, showDeviceNames = true,
                     )
                 }

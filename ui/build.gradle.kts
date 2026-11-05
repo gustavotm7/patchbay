@@ -23,9 +23,10 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":core"))
-            implementation(libs.compose.runtime)
-            implementation(libs.compose.foundation)
-            implementation(libs.compose.ui)
+            // api: ui's public functions take and return Compose types (Modifier, Color, TextStyle).
+            api(libs.compose.runtime)
+            api(libs.compose.foundation)
+            api(libs.compose.ui)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
