@@ -16,7 +16,7 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
   - Branch `ci/verification-bootstrap`: all work so far, ~50 commits.
   - `main`: Phase 0 baseline only. No PR is open; open one when you want to review or merge.
 - **CI** (GitHub Actions `ci`, 7 jobs): every push to the branch ran green up to `560fc88` (Bambu).
-  `441b015` (Windows PIN lock) was building when this was written. **Check it first.** If it's red, the
+  `441b015` (Windows PIN lock) is green too. If a later commit is red, the
   likely cause is the new UI in `ui/.../screens/Lock.kt` or `app-windows/.../Main.kt`; read the job log and
   fix.
 - **Installable builds:** Actions → ci → latest green run → Artifacts `patchbay-android` (APK) and
@@ -44,7 +44,7 @@ ecobee, Phase 2) waits until the MVP is solid on real hardware.
 MVP checklist:
 - [x] Govee, LG webOS and Bambu adapters plus pairing UI (simulator-tested; CI green at `560fc88`)
 - [x] Encrypted storage, census, exposure report
-- [x] Windows PIN lock (`441b015` — confirm CI is green)
+- [x] Windows PIN lock (CI green at `441b015`)
 - [ ] Android app lock (step 1 below)
 - [ ] Owner runs `docs/HARDWARE_TEST.md` G1.x / T1.x / B1.x on real devices; fix what breaks (step 2)
 - [ ] Bambu manual add, *only if* SSDP discovery fails on the real H2D (step 3)
