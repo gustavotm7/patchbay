@@ -8,6 +8,7 @@ import dev.patchbay.core.model.DeviceId
 import dev.patchbay.core.model.DeviceKind
 import dev.patchbay.core.model.DeviceSnapshot
 import dev.patchbay.core.model.EpochMillis
+import dev.patchbay.core.result.PatchbayError
 import dev.patchbay.core.result.PatchbayResult
 import kotlinx.coroutines.flow.Flow
 
@@ -21,6 +22,16 @@ public interface DeviceAdapter {
 
     /** True when a device must be paired (TV prompt, access code, TOFU) before [observe]/[command] work. */
     public val requiresPairing: Boolean get() = false
+
+    /** Non-null when a device can be added by typing its address, for networks where discovery fails. */
+    public val manualAdd: ManualAdd? get() = null
+
+    /**
+     * Builds the [DiscoveredDevice] for a manual add: the LAN [address] and an adapter-specific [key]
+     * (a serial number, say). Validates both; opens no connection. Pairing proceeds as for a scanned device.
+     */
+    public fun manualDevice(address: String, key: String): PatchbayResult<DiscoveredDevice> =
+        PatchbayResult.Err(PatchbayError.Unsupported("this system can't be added by address"))
 
     /** Finds candidate devices on the LAN. The flow completes when the scan window ends. */
     public fun discover(): Flow<DiscoveredDevice>
@@ -102,3 +113,6 @@ public data class AdapterHealth(
 )
 
 public enum class HealthState { OK, DEGRADED, UNREACHABLE, UNPAIRED, TRUST_CHANGED }
+
+/** What the UI asks for to add a device by address: a title and the label of the adapter-specific key field. */
+public data class ManualAdd(val adapter: AdapterId, val title: String, val keyLabel: String)

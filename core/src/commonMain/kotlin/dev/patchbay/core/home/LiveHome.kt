@@ -1,6 +1,8 @@
 package dev.patchbay.core.home
 
+import dev.patchbay.core.adapter.ManualAdd
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.discovery.Finding
 import dev.patchbay.core.model.Command
 import dev.patchbay.core.model.Device
@@ -35,6 +37,12 @@ public interface LiveHome {
 
     /** Last problem worth showing the user (redacted), e.g. "Govee needs UDP port 4002". */
     public val problem: StateFlow<String?>
+
+    /** Systems that can be added by typing an address when discovery doesn't find them. */
+    public val manualAdd: List<ManualAdd>
+
+    /** Adds a device by LAN address and adapter-specific key, then it pairs like a scanned one. */
+    public suspend fun addManually(adapter: AdapterId, address: String, key: String): PatchbayResult<DeviceId>
 
     /** Runs discovery on every adapter and the network census. Returns the number of managed devices afterwards. */
     public suspend fun scan(): PatchbayResult<Int>

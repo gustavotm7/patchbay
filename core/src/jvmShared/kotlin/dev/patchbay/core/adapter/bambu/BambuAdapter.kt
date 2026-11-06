@@ -120,6 +120,26 @@ public class BambuAdapter(
         notify?.let { n -> launch { n.use { listen(it) } } }
     }
 
+    override val manualAdd: dev.patchbay.core.adapter.ManualAdd =
+        dev.patchbay.core.adapter.ManualAdd(ID, "Bambu printer", "Serial number (printer screen → Settings → Device)")
+
+    /** For when SSDP is blocked (VLANs, client isolation). The serial must be well-formed; the address must be on the LAN. */
+    override fun manualDevice(address: String, key: String): PatchbayResult<DiscoveredDevice> {
+        val a = when (val r = netGuard.address(address)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> return r
+        }
+        val serial = key.trim().uppercase()
+        if (!BambuReport.isSerial(serial)) return PatchbayResult.Err(PatchbayError.InvalidArgument("That doesn't look like a Bambu serial number"))
+        return PatchbayResult.Ok(
+            DiscoveredDevice(
+                adapter = ID, key = serial, address = a.literal, port = config.mqttPort, kind = DeviceKind.PRINTER_3D,
+                vendor = "Bambu Lab", model = "printer", displayName = null,
+                controlPath = ControlPath.LOCAL_AFTER_SETUP, seenAt = EpochMillis(clock()),
+            ),
+        )
+    }
+
     override fun deviceId(found: DiscoveredDevice): DeviceId = DeviceId("bambu-${found.key.lowercase()}")
 
     override fun capabilities(device: DeviceId): List<Capability> {

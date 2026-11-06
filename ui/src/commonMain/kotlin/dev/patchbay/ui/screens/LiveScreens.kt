@@ -1,7 +1,9 @@
 package dev.patchbay.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -43,6 +46,7 @@ import dev.patchbay.ui.designsystem.Legend
 import dev.patchbay.ui.designsystem.PButton
 import dev.patchbay.ui.designsystem.PText
 import dev.patchbay.ui.designsystem.Panel
+import dev.patchbay.ui.designsystem.Shapes
 import dev.patchbay.ui.designsystem.Patchbay
 import dev.patchbay.ui.designsystem.Space
 import dev.patchbay.ui.designsystem.StatusTag
@@ -125,11 +129,12 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                 ) { onSelect(d.device.id) }
             }
         }
+        ManualAddPanel(live)
         CensusPanel(live)
         ExposurePanel(live)
         VSpace(Space.s)
         PText(
-            "Supported now: Govee lights (LAN), LG webOS TVs, Bambu Lab printers (monitoring + pause/resume/stop). Cast, ESPHome, eufy RTSP and ecobee come next.",
+            "Supported now: Govee lights (LAN), TP-Link Kasa plugs, LG webOS TVs, Bambu Lab printers (monitoring + pause/resume/stop). Cast, ESPHome, eufy RTSP and ecobee come next.",
             Patchbay.type.caption, c.textTertiary,
         )
     }
@@ -331,6 +336,76 @@ fun LiveScreenDesktop(live: LiveHome, modifier: Modifier = Modifier) {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 selected?.let { LiveDetail(live, it) } ?: PText("Select a device", Patchbay.type.body, Patchbay.colors.textSecondary)
             }
+        }
+    }
+}
+
+/**
+ * Add a device by address, for networks where discovery can't see it (VLANs, client isolation).
+ * Only shown when an adapter offers it. The device then pairs like a scanned one (Pair button).
+ */
+@Composable
+private fun ManualAddPanel(live: LiveHome) {
+    val options = live.manualAdd
+    if (options.isEmpty()) return
+    val c = Patchbay.colors
+    val scope = rememberCoroutineScope()
+    var open by remember { mutableStateOf(false) }
+    var address by remember { mutableStateOf("") }
+    var key by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    val option = options.first()
+    VSpace(Space.m)
+    Panel(Modifier.fillMaxWidth(), padding = Space.m) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Legend("Add by address")
+                if (!open) PText("If a scan can't find your ${option.title}.", Patchbay.type.caption, c.textSecondary)
+            }
+            PButton(if (open) "Close" else "Add…", { open = !open })
+        }
+        if (open) {
+            VSpace(Space.s)
+            PText("IP address on your network", Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            BasicTextField(
+                value = address,
+                onValueChange = { v -> address = v.filter { it.isLetterOrDigit() || it == '.' || it == ':' }.take(45) },
+                singleLine = true,
+                textStyle = Patchbay.type.valueM.copy(color = c.text),
+                modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.s),
+            )
+            VSpace(Space.s)
+            PText(option.keyLabel, Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            BasicTextField(
+                value = key,
+                onValueChange = { v -> key = v.filter { it.isLetterOrDigit() }.take(24) },
+                singleLine = true,
+                textStyle = Patchbay.type.valueM.copy(color = c.text),
+                modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.s),
+            )
+            error?.let {
+                VSpace(Space.xs)
+                PText(it, Patchbay.type.caption, c.alarm)
+            }
+            VSpace(Space.s)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                PButton(
+                    "Add", {
+                        scope.launch {
+                            when (val r = live.addManually(option.adapter, address, key)) {
+                                is dev.patchbay.core.result.PatchbayResult.Ok -> { error = null; open = false; address = ""; key = "" }
+                                is dev.patchbay.core.result.PatchbayResult.Err -> error = r.error.message
+                            }
+                        }
+                    },
+                    Modifier.weight(1f), ButtonKind.PRIMARY, enabled = address.isNotBlank() && key.isNotBlank(),
+                )
+                PButton("Cancel", { open = false; error = null }, Modifier.weight(1f))
+            }
+            VSpace(Space.xs)
+            PText("Then tap Pair on the new entry, as for a scanned device. No address ever leaves your network.", Patchbay.type.caption, c.textTertiary)
         }
     }
 }

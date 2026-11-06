@@ -76,7 +76,7 @@ capabilities, so most additions need no new screens.
 2. **Fix whatever the owner's hardware tests reveal.** Firmware differences are the main risk: webOS power
    and volume shapes, Bambu discovery, Govee model quirks. Ask for the session log
    (`%LOCALAPPDATA%\Patchbay\logs\` on Windows) and add the failing case to the simulator *first*, then fix.
-3. **Bambu manual add** (IP + serial), only if discovery fails on the real printer.
+3. ~~Bambu manual add~~ done ("Add by address" on the network screen; HARDWARE_TEST B1.8).
 4. ~~Remember the TV's MAC across restarts~~ done: it's learned at pairing and stored encrypted with the client key. TVs paired before this change learn it on the first connection of each session.
 
 **After the MVP:**

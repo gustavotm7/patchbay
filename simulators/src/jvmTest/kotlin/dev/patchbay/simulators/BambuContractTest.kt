@@ -77,6 +77,26 @@ class BambuContractTest {
     }
 
     @Test
+    fun manualAddPairsWithoutAnyScan(): Unit = runBlocking {
+        val d = adapter.manualDevice("127.0.0.20", " 0948ad4a0b00001 ").getOrNull()!!
+        assertEquals("0948AD4A0B00001", d.key)
+        assertEquals("bambu-0948ad4a0b00001", adapter.deviceId(d).value)
+        assertEquals(adapter.manualAdd.adapter, adapter.id)
+        val p = adapter.pair(d, Prompt("12345678")).getOrNull()!! // fingerprint + code, exactly like a scanned device
+        adapter.restore(p.deviceId, d.address, p)
+        val snap = withTimeout(5_000) { adapter.observe(p.deviceId).first { it.reachability == Reachability.ONLINE } }
+        assertEquals(47.0, snap.state<CapabilityState.PrintJobState>()!!.progress.value)
+    }
+
+    @Test
+    fun manualAddRejectsBadSerialsAndNonLanAddresses() {
+        assertIs<PatchbayError.InvalidArgument>(adapter.manualDevice("127.0.0.20", "not a serial!").errorOrNull())
+        assertIs<PatchbayError.InvalidArgument>(adapter.manualDevice("127.0.0.20", "").errorOrNull())
+        assertIs<PatchbayError.NetGuardDenied>(adapter.manualDevice("8.8.8.8", "0948AD4A0B00001").errorOrNull())
+        assertTrue(adapter.manualDevice("printer.example.com", "0948AD4A0B00001") is PatchbayResult.Err) // no DNS, ever
+    }
+
+    @Test
     fun wrongAccessCodeIsUnauthorized(): Unit = runBlocking {
         val d = adapter.discover().toList().single()
         val prompt = Prompt("00000000")

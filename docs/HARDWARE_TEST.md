@@ -101,6 +101,7 @@ Prerequisite: LAN Only Mode + Developer Mode on (see `docs/protocols/bambu.md`),
 | B1.5 | Chamber light toggle | Both chamber lights switch |
 | B1.6 | Stop… → Confirm stop (only on a print you're willing to cancel) | The print is cancelled |
 | B1.7 | Restart Patchbay | The printer reconnects without asking for the code again |
+| B1.8 | Only if B1.1 failed: **Add by address** (on the network screen) → the printer's IP and serial number → Add → Pair | The printer appears with a Pair button and pairs as in B1.2 |
 
 ## Phase 1 — App lock
 
