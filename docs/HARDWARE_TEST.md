@@ -142,6 +142,11 @@ Not every model has RTSP; HomeBase-connected cameras expose it on the HomeBase's
 | E1.4 | Open `rtsp://<ip>/live0` in VLC and sign in | The camera's video plays (this checks the path and login outside Patchbay) |
 | E1.5 | Unplug the camera, wait about 1 min | "No reply", then "Offline". Replug: it recovers by itself |
 | E1.6 | Restart Patchbay | The camera is listed with its status and no new login prompt |
+| E1.7 | Android: open the camera → **Watch** | Live video appears in the panel within a few seconds. **Stop** ends it. Windows has no in-app video yet |
+| E1.8 | While watching, open Settings → Apps → Patchbay → data usage, or look at your router's client list | Traffic goes only to the camera's LAN address, over one TCP connection (video is carried inside it) |
+| E1.9 | Screenshot, then Recents while video is up | Blocked or blank (whole-app screenshot blocking) |
+
+If Watch shows a black picture or an error, tell me the camera model: a camera that only streams RTSP over UDP won't play (TCP only, ADR 0008).
 
 Please report: camera and HomeBase models, whether the stream path was `live0`, and any error text.
 If the path differs, tell me the path VLC needed.
