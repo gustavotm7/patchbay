@@ -6,9 +6,10 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
 
 - Work branch `ci/verification-bootstrap` holds everything. The last commits are the Android app lock (androidx.biometric added,
   verification metadata bootstrapped) and permission-allowlist updates.
-- **CI: all 7 jobs green at `2ebd7c5`** (and at `e5a4a84`), which includes the Android app lock. (`5df65a6` failed once in the SBOM job on a transient plugin-resolution error; a re-run was green.) That run's APK/MSI artifacts are the MVP
+- **CI: all 7 jobs green at `898e727`** (the latest), which adds TP-Link Kasa, eufy RTSP cameras, Bambu manual add and committed screenshot goldens. Earlier green: `2ebd7c5`, `e5a4a84`. (`5df65a6` failed once in the SBOM job on a transient plugin-resolution error; a re-run was green.) That run's APK/MSI artifacts are the MVP
   builds to install.
-- Next for the MVP: the owner tests on real devices (`docs/HARDWARE_TEST.md`), then fix what breaks.
+- Next for the MVP: the owner tests on real devices (`docs/HARDWARE_TEST.md`: G1, T1, B1, L1, plus K1 Kasa and E1 eufy), then fix what breaks.
+- Waiting on the owner: Lepro LampUX and Lefant vacuum model numbers + approval of ADR 0007 (`docs/protocols/tuya.md`).
 
 ## Paste this to start a new session
 
@@ -55,7 +56,7 @@ MVP checklist:
 - [x] Windows PIN lock (CI green at `441b015`)
 - [x] Android app lock: BiometricPrompt (strong biometric or device PIN), auto-lock after 1 min in background (`AndroidLock.kt`)
 - [ ] Owner runs `docs/HARDWARE_TEST.md` G1.x / T1.x / B1.x on real devices; fix what breaks (step 2)
-- [ ] Bambu manual add, *only if* SSDP discovery fails on the real H2D (step 3)
+- [x] Bambu manual add ("Add by address"); test it only if SSDP discovery fails on the real H2D (B1.8)
 - [ ] Merge `ci/verification-bootstrap` → `main` via a PR once the above are green
 
 Keep it easy to build on: every new system follows `docs/ADDING_AN_ADAPTER.md`, and the UI renders from
@@ -108,8 +109,9 @@ capabilities, so most additions need no new screens.
 
   For a job's log, use `…/actions/jobs/<id>/logs`.
 - Screenshots: the bootstrap workflow also prints all PNGs (a tarball between `PB-SCREENS-BEGIN/END`), so you
-  can decode and look at them. They aren't committed as goldens yet. Record them with
-  `./gradlew :ui:recordScreens` (in CI) when you're happy with the design.
+  can decode and look at them. The 25 goldens are committed in `docs/design/screens/` (recorded 2026-11-06); CI fails on drift. To re-record after an intentional UI
+  change: push to a `ci/verification-bootstrap*` branch, decode the PNGs from the `export-screens` job log, check the sha256 the job prints, review the images, commit them.
+  Note `ci` ignores docs-only pushes, so touch a non-doc file (or the workflow) to get CI to check a docs-only change.
 - Gotchas we hit:
   - Kotlin KDoc containing `/*` (e.g. `font/*.ttf`) opens a nested comment.
   - `fun test() = runBlocking { … }` is silently skipped by JUnit; write `: Unit =`.
