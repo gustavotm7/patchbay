@@ -122,6 +122,7 @@ jobs:
           path: app-windows/build/compose/binaries/main/msi/*.msi
           retention-days: 30
 
+  # Plugin resolution from Gradle Central can fail transiently (seen once at 5df65a6); re-run the job before debugging.
   sbom:
     name: CycloneDX SBOM
     runs-on: ubuntu-latest
