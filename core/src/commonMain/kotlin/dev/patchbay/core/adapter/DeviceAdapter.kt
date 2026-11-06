@@ -116,3 +116,16 @@ public enum class HealthState { OK, DEGRADED, UNREACHABLE, UNPAIRED, TRUST_CHANG
 
 /** What the UI asks for to add a device by address: a title and the label of the adapter-specific key field. */
 public data class ManualAdd(val adapter: AdapterId, val title: String, val keyLabel: String)
+
+/**
+ * A short-lived, in-memory handle for playing a device's stream. [url] may carry credentials, so it is held only
+ * while the user is watching, never logged, never persisted, never displayed. [toString] redacts it.
+ */
+public class StreamLease(public val url: String, public val protocol: dev.patchbay.core.model.StreamProtocol) {
+    override fun toString(): String = "StreamLease(protocol=$protocol, url=<redacted>)"
+}
+
+/** Implemented by adapters whose devices can be watched (ADR 0008). */
+public interface StreamProvider {
+    public fun streamLease(device: DeviceId): PatchbayResult<StreamLease>
+}

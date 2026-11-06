@@ -125,6 +125,13 @@ public class LanHome(
         return PatchbayResult.Ok(a.deviceId(found))
     }
 
+    override suspend fun streamLease(device: DeviceId): PatchbayResult<dev.patchbay.core.adapter.StreamLease> {
+        val provider = owners[device] as? dev.patchbay.core.adapter.StreamProvider
+            ?: return PatchbayResult.Err(PatchbayError.Unsupported("this device has no stream"))
+        if (pendingPairing.containsKey(device)) return PatchbayResult.Err(PatchbayError.Unauthorized("pair this device first"))
+        return provider.streamLease(device).also { if (it is PatchbayResult.Ok) log?.info("home", "stream opened for a camera") }
+    }
+
     override suspend fun scan(): PatchbayResult<Int> {
         _scan.value = ScanState.SCANNING
         try {

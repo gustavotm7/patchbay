@@ -11,7 +11,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Code allowed to touch raw networking: NetGuard itself, and the simulators (loopback-only fakes).
-NET_ALLOWED='^(core/src/[^/]+/kotlin/dev/patchbay/core/net/|simulators/src/)'
+# ADR 0008: one Android file may hand the player a NetGuard-backed SocketFactory; it opens no sockets itself.
+NET_ALLOWED='^(core/src/[^/]+/kotlin/dev/patchbay/core/net/|simulators/src/|app-android/src/main/kotlin/dev/patchbay/android/GuardedPlayer\.kt$)'
 # The only place a custom X509TrustManager may exist: the pinned-TOFU implementation.
 TLS_ALLOWED='^core/src/[^/]+/kotlin/dev/patchbay/core/net/tls/'
 

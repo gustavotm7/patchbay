@@ -23,5 +23,5 @@ Status: Proposed · Date: YYYY-MM-DD
 ## Consequences
 ## Verification / follow-ups
 ```
-| [0007](0007-tuya-local-keys.md) | Tuya-based devices: user-supplied local keys, no Tuya contact (Lepro, Lefant) | Proposed |
-| [0008](0008-camera-playback-guarded-sockets.md) | In-app camera playback with NetGuard-backed sockets (Media3 RTSP) | Proposed |
+| [0007](0007-tuya-local-keys.md) | Tuya-based devices: user-supplied local keys, no Tuya contact (Lepro, Lefant) | Accepted |
+| [0008](0008-camera-playback-guarded-sockets.md) | In-app camera playback with NetGuard-backed sockets (Media3 RTSP) | Accepted |

@@ -48,7 +48,7 @@ public class RtspCameraAdapter(
     private val netGuard: NetGuard,
     private val config: Config = Config(),
     private val clock: () -> Long = { System.currentTimeMillis() },
-) : DeviceAdapter {
+) : DeviceAdapter, dev.patchbay.core.adapter.StreamProvider {
 
     public data class Config(
         val port: Int = RtspProtocol.PORT,
@@ -151,6 +151,16 @@ public class RtspCameraAdapter(
             }
             delay(if (failures == 0) config.pollIntervalMs else backoff)
         }
+    }
+
+    /** The playable URL with the login in its user-info, percent-encoded. Only for paired cameras. */
+    override fun streamLease(device: DeviceId): PatchbayResult<dev.patchbay.core.adapter.StreamLease> {
+        val k = known[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown camera"))
+        val c = k.credentials ?: return PatchbayResult.Err(PatchbayError.Unauthorized("enter the camera's login first"))
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+        val host = if (':' in k.address.literal) "[${k.address.literal}]" else k.address.literal
+        val url = "rtsp://${enc(c.user)}:${enc(c.password)}@$host:${config.port}/${config.path}"
+        return PatchbayResult.Ok(dev.patchbay.core.adapter.StreamLease(url, StreamProtocol.RTSP))
     }
 
     override suspend fun command(device: DeviceId, command: Command): PatchbayResult<Unit> =

@@ -295,6 +295,7 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
             if (pairing.step != null) VSpace(Space.m)
             CameraPanel(
                 d,
+                onWatch = { live.streamLease(id) },
                 onPair = {
                     scope.launch {
                         val r = live.pair(id, pairing)

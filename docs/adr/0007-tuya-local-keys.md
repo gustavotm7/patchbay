@@ -1,6 +1,6 @@
 # 0007 — Tuya-based devices: user-supplied local keys
 
-Status: Proposed · Date: 2026-11-06
+Status: Accepted (owner approved 2026-11-06) · Date: 2026-11-06
 
 ## Context
 

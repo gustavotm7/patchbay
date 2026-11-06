@@ -65,6 +65,10 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     // App lock (BiometricPrompt: strong biometric or device PIN/pattern). Local only.
     implementation(libs.androidx.biometric)
+    // Camera playback (ADR 0008). Sockets only through GuardedSocketFactory; see GuardedPlayer.kt.
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.exoplayer.rtsp)
+    implementation(libs.androidx.media3.ui)
     // Encrypted storage (ADR 0003)
     implementation(libs.sqldelight.android.driver)
     implementation(libs.sqlcipher.android)

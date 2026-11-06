@@ -2,6 +2,7 @@ package dev.patchbay.core.home
 
 import dev.patchbay.core.adapter.ManualAdd
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.StreamLease
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.discovery.Finding
 import dev.patchbay.core.model.Command
@@ -49,6 +50,9 @@ public interface LiveHome {
 
     /** Runs the adapter's pairing flow through [prompt]; on success the secret and pin are stored encrypted. */
     public suspend fun pair(device: DeviceId, prompt: PairingPrompt): PatchbayResult<Unit>
+
+    /** A handle for playing a camera's stream, issued when the user opens it (ADR 0008). Holds credentials in memory only. */
+    public suspend fun streamLease(device: DeviceId): PatchbayResult<StreamLease>
 
     /** Validates against the device's capabilities, then sends. */
     public suspend fun send(device: DeviceId, command: Command): PatchbayResult<Unit>

@@ -20,6 +20,7 @@ authoritative transitive list.
 | `org.jetbrains.skiko:skiko-awt-runtime-*` | (via Compose) | app-windows, ui tests | Skia rendering natives | Apache-2.0 | No |
 | `androidx.*` (collection, annotation, lifecycle, savedstate, compose.* on Android) | (via Compose) | ui, app-android | Transitive Jetpack libraries; from Google Maven | Apache-2.0 | No |
 | `androidx.activity:activity-compose` | 1.11.0 | app-android | `setContent` for `ComponentActivity` | Apache-2.0 | No |
+| `androidx.media3:media3-exoplayer`, `media3-exoplayer-rtsp`, `media3-ui` (and the `media3-*` libraries they pull in, plus Guava) | 1.8.0 | app-android | In-app RTSP camera playback (ADR 0008): TCP-interleaved RTSP with a NetGuard-backed SocketFactory | Apache-2.0 | Only the media URL we hand it, through the guarded factory. No analytics, no Play Services |
 | `androidx.biometric:biometric` (+ `androidx.fragment`) | 1.1.0 | app-android | App lock via BiometricPrompt (strong biometric or device credential) | Apache-2.0 | No |
 | `app.cash.sqldelight:runtime` | 2.4.1 | core | Typesafe SQL (ADR 0003) | Apache-2.0 | No |
 | `app.cash.sqldelight:sqlite-driver` (xerial `sqlite-jdbc` **excluded**) | 2.4.1 | core (jvm) | JDBC driver glue | Apache-2.0 | No |
@@ -31,7 +32,7 @@ authoritative transitive list.
 
 Planned, not yet added. Each needs this table updated and verification metadata regenerated:
 `org.bouncycastle:bcprov-jdk18on` (X25519, Ed25519, ChaCha20-Poly1305, HKDF, SRP-6a for HAP and Noise),
-`androidx.biometric`, `androidx.glance`, Jazzer (test).
+`androidx.glance`, Jazzer (test).
 
 Build-only transitive tooling seen in the verification metadata, not shipped (absent from the runtime SBOM):
 `io.ktor:ktor-server-*` and `io.modelcontextprotocol:kotlin-sdk-*` (Compose hot-reload / IDE tooling plugins),

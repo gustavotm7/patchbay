@@ -1,6 +1,6 @@
 # 0008 — In-app camera playback with guarded sockets
 
-Status: Proposed · Date: 2026-11-06
+Status: Accepted (owner approved 2026-11-06) · Date: 2026-11-06
 
 ## Context
 
@@ -14,6 +14,8 @@ source, so a library could silently connect anywhere it's handed a URL.
   entry and refreshed verification metadata.
 - Give it a **NetGuard-backed `SocketFactory`** (`RtspMediaSource.Factory.setSocketFactory`). The factory refuses every address `AddressPolicy`
   refuses and counts connections in NetGuard's stats. Playback of a non-LAN URL fails, and a unit test proves it.
+- **TCP only.** The player is told to carry media interleaved on the RTSP TCP connection (`setForceUseRtpTcp(true)`), because UDP media sockets
+  are created by the player, not by the factory, and couldn't be guarded. A camera that only streams over UDP won't play. That's an accepted limit.
 - Credentials: the adapter hands the player a URL **only at the moment the user opens the camera**, held in memory, never logged, never persisted
   outside the encrypted store, never shown. The panel keeps showing the credential-free address.
 - Whole-app `FLAG_SECURE` already blocks screenshots and recents thumbnails of the video.

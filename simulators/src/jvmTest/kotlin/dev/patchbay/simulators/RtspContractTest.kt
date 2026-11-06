@@ -144,6 +144,44 @@ class RtspContractTest {
     }
 
     @Test
+    fun streamLeaseCarriesTheLoginInTheUrlButNeverInTheText(): Unit = runBlocking {
+        val p = adapter.pair(found(), Prompt("patch", "s3cret!pw")).getOrNull()!!
+        val lease = adapter.streamLease(p.deviceId).getOrNull()!!
+        val uri = java.net.URI(lease.url)
+        assertEquals("rtsp", uri.scheme)
+        assertEquals("127.0.0.30", uri.host)
+        assertEquals(cam.port, uri.port)
+        assertEquals("/live0", uri.path)
+        assertEquals("patch:s3cret!pw", uri.userInfo) // decoded: '!' survived percent-encoding round trip
+        assertFalse(lease.toString().contains("s3cret"))
+        assertFalse(lease.toString().contains("patch:"))
+    }
+
+    @Test
+    fun specialCharactersInPasswordsAreEncodedInTheUrl(): Unit = runBlocking {
+        val tricky = "p@ss:w/rd?#%+"
+        val cam2 = RtspSimulator("127.0.0.31", "u", tricky)
+        try {
+            val a = RtspCameraAdapter(NetGuard(), RtspCameraAdapter.Config(port = cam2.port, connectTimeoutMs = 800))
+            val d = a.manualDevice("127.0.0.31", "Tricky").getOrNull()!!
+            val p = a.pair(d, Prompt("u", tricky)).getOrNull()!!
+            val uri = java.net.URI(a.streamLease(p.deviceId).getOrNull()!!.url)
+            assertEquals("u:$tricky", uri.userInfo)
+            assertEquals("127.0.0.31", uri.host)
+        } finally {
+            cam2.close()
+        }
+    }
+
+    @Test
+    fun noStreamBeforeTheLoginIsKnown(): Unit = runBlocking {
+        val d = found()
+        adapter.restore(adapter.deviceId(d), "127.0.0.30", null)
+        assertIs<PatchbayError.Unauthorized>(adapter.streamLease(adapter.deviceId(d)).errorOrNull())
+        assertIs<PatchbayError.Unreachable>(adapter.streamLease(dev.patchbay.core.model.DeviceId("rtsp-unknown")).errorOrNull())
+    }
+
+    @Test
     fun camerasAreViewOnly(): Unit = runBlocking {
         val p = adapter.pair(found(), Prompt("patch", "s3cret!pw")).getOrNull()!!
         assertIs<PatchbayError.Unsupported>(adapter.command(p.deviceId, Command.SetPower(true)).errorOrNull())
