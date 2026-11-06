@@ -15,7 +15,24 @@ import dev.patchbay.ui.screens.DeviceScreenPhone
 import dev.patchbay.ui.screens.Focus
 import dev.patchbay.ui.screens.HomeScreenPhone
 import dev.patchbay.ui.screens.LightPanel
+import dev.patchbay.core.adapter.ManualAdd
+import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.StreamLease
+import dev.patchbay.core.discovery.Finding
 import dev.patchbay.core.home.LiveDevice
+import dev.patchbay.core.home.LiveHome
+import dev.patchbay.core.home.ScanState
+import dev.patchbay.core.model.AdapterId
+import dev.patchbay.core.model.Command
+import dev.patchbay.core.model.DeviceId
+import dev.patchbay.core.model.Reachability
+import dev.patchbay.core.net.NetGuardStats
+import dev.patchbay.core.result.PatchbayError
+import dev.patchbay.core.result.PatchbayResult
+import dev.patchbay.ui.screens.PhoneApp
+import dev.patchbay.ui.screens.Section
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,6 +71,39 @@ class ScreenshotTest {
 
     private val failures = mutableListOf<String>()
 
+    /** A fixed set of live devices for the tile screens: lights on and off, a plug, a TV, a printer, a camera, an unreachable one, one to pair. */
+    private class FakeLiveHome(home: dev.patchbay.core.model.Home) : LiveHome {
+        private fun live(id: DeviceId, reach: Reachability? = null, pair: Boolean = false, name: String? = null, addr: String = "192.168.1.${20 + id.value.length}"): LiveDevice {
+            val d = home.device(id)!!.let { if (name != null) it.copy(name = name) else it }
+            val snap = home.snapshot(id)?.let { sn -> if (reach != null) sn.copy(reachability = reach, states = emptyList()) else sn }
+            return LiveDevice(d, if (pair) null else snap, addr, needsPairing = pair)
+        }
+
+        override val devices: StateFlow<List<LiveDevice>> = MutableStateFlow(
+            listOf(
+                live(DemoHome.Ids.FLOOR_LAMP, name = "Floor lamp"),
+                live(DemoHome.Ids.SHELF_STRIP, name = "Shelf strip"),
+                live(DemoHome.Ids.BEDSIDE, name = "Bedside"),
+                live(DemoHome.Ids.TV, name = "LG OLED"),
+                live(DemoHome.Ids.PRINTER, name = "Workshop H2D"),
+                live(DemoHome.Ids.CAMERA, name = "Front door", pair = true),
+                live(DemoHome.Ids.THERMOSTAT, name = "Hall thermostat"),
+                live(DemoHome.Ids.PURIFIER, reach = Reachability.OFFLINE, name = "Air purifier"),
+            ),
+        )
+        override val scanState: StateFlow<ScanState> = MutableStateFlow(ScanState.DONE)
+        override val netStats: StateFlow<NetGuardStats> = MutableStateFlow(NetGuardStats(allowed = 214, denied = 0))
+        override val census: StateFlow<List<Finding>> = MutableStateFlow(emptyList())
+        override val problem: StateFlow<String?> = MutableStateFlow(null)
+        override val manualAdd: List<ManualAdd> = listOf(ManualAdd(AdapterId("rtsp"), "RTSP camera", "Name"))
+        override suspend fun addManually(adapter: AdapterId, address: String, key: String, choice: String?): PatchbayResult<DeviceId> =
+            PatchbayResult.Err(PatchbayError.Unsupported("screenshot fake"))
+        override suspend fun scan(): PatchbayResult<Int> = PatchbayResult.Ok(devices.value.size)
+        override suspend fun pair(device: DeviceId, prompt: PairingPrompt): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override suspend fun streamLease(device: DeviceId): PatchbayResult<StreamLease> = PatchbayResult.Err(PatchbayError.Unsupported("screenshot fake"))
+        override suspend fun send(device: DeviceId, command: Command): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+    }
+
     @Test
     fun renderAll() {
         for (palette in PatchbayPalettes.all) {
@@ -71,12 +121,16 @@ class ScreenshotTest {
                 DesktopShell(home, trends, Focus.DeviceFocus(DemoHome.Ids.PRINTER), now)
             }
             shot("designsystem_$t", sheet, palette, FormFactor.DESKTOP) { DesignSheet() }
+            shot("live_phone_$t", phone, palette, FormFactor.PHONE) { PhoneApp(home, trends, now, FakeLiveHome(home)) }
             shot("light_phone_$t", phone, palette, FormFactor.PHONE) {
                 val lamp = home.device(DemoHome.Ids.FLOOR_LAMP)!!
                 Column(Modifier.fillMaxSize().background(palette.background).padding(16.dp)) {
                     LightPanel(LiveDevice(lamp, home.snapshot(lamp.id)), onCommand = {})
                 }
             }
+        }
+        shot("live_desktop_dark", desktop, PatchbayPalettes.Dark, FormFactor.DESKTOP) {
+            DesktopShell(home, trends, Focus.RoomFocus(DemoHome.Ids.WORKSHOP), now, section = Section.INVENTORY, live = FakeLiveHome(home))
         }
         // Above-the-fold phone render (what you see without scrolling).
         shot("home_phone_dark_fold", phone, PatchbayPalettes.Dark, FormFactor.PHONE) { HomeScreenPhone(home, now) }

@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -179,6 +180,7 @@ fun LightPad(
 
     Box(
         modifier
+            .clip(Shapes.control)
             .border(Space.hair, c.outline, Shapes.control)
             .semantics {
                 contentDescription = "Brightness and colour temperature pad"
@@ -234,7 +236,7 @@ fun LightPad(
 fun HueStrip(onPick: (Rgb) -> Unit, modifier: Modifier = Modifier) {
     val c = Patchbay.colors
     val latest by rememberUpdatedState(onPick)
-    Box(modifier.border(Space.hair, c.outline, Shapes.control).semantics { contentDescription = "Colour picker" }) {
+    Box(modifier.clip(Shapes.control).border(Space.hair, c.outline, Shapes.control).semantics { contentDescription = "Colour picker" }) {
         Canvas(
             Modifier.matchParentSize().pointerInput(Unit) {
                 detectTapGestures { p -> latest(hue(p.x / size.width)) }
