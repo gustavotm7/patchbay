@@ -82,7 +82,7 @@ capabilities, so most additions need no new screens.
 
 **After the MVP:**
 
-5. **eufy RTSP cameras**: status adapter done (HARDWARE_TEST E1.x). Still to do: in-app viewing, which needs a player (Media3 on Android; desktop TBD). TP-Link Kasa plugs are done too (K1.x). Lepro and Lefant wait on ADR 0007 and model numbers (`docs/protocols/tuya.md`).
+5. **eufy RTSP cameras**: status adapter done (HARDWARE_TEST E1.x). Still to do: in-app viewing, which needs a player and ADR 0008 (proposed: guarded sockets) (Media3 on Android; desktop TBD). TP-Link Kasa plugs are done too (K1.x). Lepro and Lefant wait on ADR 0007 and model numbers (`docs/protocols/tuya.md`).
 6. **Cast / Google TV.** Research done (`docs/protocols/cast.md`): pin the TLS leaf, skip the device-auth chain. No new trust design
    needed; the amendment to ADR 0005 is only a note. Build it after the LG and Bambu hardware tests confirm the TOFU flow.
 7. Rooms for live devices (the schema has `room_id`), the floor-plan editor, Jazzer fuzzing in CI, then
