@@ -300,6 +300,7 @@ private fun BottomBar(selected: PhoneTab, onSelect: (PhoneTab) -> Unit) {
 /** Plain geometric tab icons (no icon font): tiles, a signal ring, a floor plan. Filled when selected. */
 @Composable
 private fun TabIcon(tab: PhoneTab, selected: Boolean, color: androidx.compose.ui.graphics.Color, modifier: Modifier) {
+    val cutout = Patchbay.colors.surface
     androidx.compose.foundation.Canvas(modifier) {
         val sw = 1.75.dp.toPx()
         val st = androidx.compose.ui.graphics.drawscope.Stroke(sw)
@@ -320,7 +321,7 @@ private fun TabIcon(tab: PhoneTab, selected: Boolean, color: androidx.compose.ui
                 val sz = androidx.compose.ui.geometry.Size(s * 0.8f, s * 0.72f)
                 val r = androidx.compose.ui.geometry.CornerRadius(s * 0.08f)
                 if (selected) drawRoundRect(color, tl, sz, r) else drawRoundRect(color, tl, sz, r, style = st)
-                val line = if (selected) Patchbay.colors.surface else color
+                val line = if (selected) cutout else color
                 drawLine(line, androidx.compose.ui.geometry.Offset(s * 0.42f, s * 0.14f), androidx.compose.ui.geometry.Offset(s * 0.42f, s * 0.86f), sw)
                 drawLine(line, androidx.compose.ui.geometry.Offset(s * 0.42f, s * 0.5f), androidx.compose.ui.geometry.Offset(s * 0.9f, s * 0.5f), sw)
             }
