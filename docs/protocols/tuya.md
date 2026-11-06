@@ -1,6 +1,9 @@
 # Tuya-based devices (Lepro LampUX bulbs, Lefant robot vacuum — to be confirmed)
 
-Status: research note, 2026-11-06. **No adapter.** Waiting for model numbers and a decision on ADR 0007.
+Status: 2026-11-06. ADR 0007 **accepted**. **Bulb adapter built** (`core/.../adapter/tuya/`): protocol **3.3** only, added by address,
+user-supplied local key (`docs/TUYA_KEYS.md`), two allowlisted layouts ("standard" data points 20 to 24, "older" 1 to 5). **Not built:**
+protocol 3.4/3.5, and the **vacuum**: its data points differ per model, so it needs the model number and its data-point list (from the tinytuya
+wizard) before any command is allowed. The Kelvin range (2700 to 6500) is an assumption to calibrate on the real bulb.
 
 ## Why these two are grouped
 

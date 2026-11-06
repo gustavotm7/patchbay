@@ -124,7 +124,7 @@ public class BambuAdapter(
         dev.patchbay.core.adapter.ManualAdd(ID, "Bambu printer", "Serial number (printer screen → Settings → Device)")
 
     /** For when SSDP is blocked (VLANs, client isolation). The serial must be well-formed; the address must be on the LAN. */
-    override fun manualDevice(address: String, key: String): PatchbayResult<DiscoveredDevice> {
+    override fun manualDevice(address: String, key: String, choice: String?): PatchbayResult<DiscoveredDevice> {
         val a = when (val r = netGuard.address(address)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r

@@ -114,9 +114,9 @@ public class LanHome(
 
     override val manualAdd: List<dev.patchbay.core.adapter.ManualAdd> = adapters.mapNotNull { it.manualAdd }
 
-    override suspend fun addManually(adapter: dev.patchbay.core.model.AdapterId, address: String, key: String): PatchbayResult<DeviceId> {
+    override suspend fun addManually(adapter: dev.patchbay.core.model.AdapterId, address: String, key: String, choice: String?): PatchbayResult<DeviceId> {
         val a = adapters.firstOrNull { it.id == adapter } ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown system"))
-        val found = when (val r = a.manualDevice(address.trim(), key.trim())) {
+        val found = when (val r = a.manualDevice(address.trim(), key.trim(), choice)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> { report(r.error.message); return r }
         }

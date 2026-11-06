@@ -134,7 +134,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
         ExposurePanel(live)
         VSpace(Space.s)
         PText(
-            "Supported now: Govee lights (LAN), TP-Link Kasa plugs, LG webOS TVs, Bambu Lab printers (monitoring + pause/resume/stop). Cast, ESPHome, eufy RTSP and ecobee come next.",
+            "Supported now: Govee lights (LAN), TP-Link Kasa plugs, Tuya bulbs (by address), eufy RTSP cameras, LG webOS TVs, Bambu Lab printers (monitoring + pause/resume/stop). Cast, ESPHome, eufy RTSP and ecobee come next.",
             Patchbay.type.caption, c.textTertiary,
         )
     }
@@ -371,6 +371,7 @@ private fun ManualAddPanel(live: LiveHome) {
     var key by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var chosen by remember { mutableStateOf(0) }
+    var profile by remember { mutableStateOf(0) }
     val option = options[chosen.coerceIn(0, options.lastIndex)]
     VSpace(Space.m)
     Panel(Modifier.fillMaxWidth(), padding = Space.m) {
@@ -387,6 +388,14 @@ private fun ManualAddPanel(live: LiveHome) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                     options.forEachIndexed { i, o ->
                         PButton(o.title, { chosen = i; error = null }, Modifier.weight(1f), if (i == chosen) ButtonKind.PRIMARY else ButtonKind.SECONDARY)
+                    }
+                }
+            }
+            if (option.choices.isNotEmpty()) {
+                VSpace(Space.s)
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    option.choices.forEachIndexed { i, label ->
+                        PButton(label, { profile = i }, Modifier.weight(1f), if (i == profile) ButtonKind.PRIMARY else ButtonKind.SECONDARY)
                     }
                 }
             }
@@ -419,7 +428,7 @@ private fun ManualAddPanel(live: LiveHome) {
                 PButton(
                     "Add", {
                         scope.launch {
-                            when (val r = live.addManually(option.adapter, address, key)) {
+                            when (val r = live.addManually(option.adapter, address, key, option.choices.getOrNull(profile))) {
                                 is dev.patchbay.core.result.PatchbayResult.Ok -> { error = null; open = false; address = ""; key = "" }
                                 is dev.patchbay.core.result.PatchbayResult.Err -> error = r.error.message
                             }

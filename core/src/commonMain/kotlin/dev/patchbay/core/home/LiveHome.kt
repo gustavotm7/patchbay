@@ -43,7 +43,7 @@ public interface LiveHome {
     public val manualAdd: List<ManualAdd>
 
     /** Adds a device by LAN address and adapter-specific key, then it pairs like a scanned one. */
-    public suspend fun addManually(adapter: AdapterId, address: String, key: String): PatchbayResult<DeviceId>
+    public suspend fun addManually(adapter: AdapterId, address: String, key: String, choice: String? = null): PatchbayResult<DeviceId>
 
     /** Runs discovery on every adapter and the network census. Returns the number of managed devices afterwards. */
     public suspend fun scan(): PatchbayResult<Int>

@@ -128,6 +128,23 @@ legacy protocol and won't appear. That's expected for now; tell me the model if 
 
 Please report: plug models and firmware versions (Kasa app → device settings → device info), and which ones didn't appear.
 
+## Phase 1 — Tuya bulbs (Lepro LampUX and others)
+
+Prerequisite: the bulb's device ID, local key, IP and protocol version (3.3 only): follow `docs/TUYA_KEYS.md`.
+
+| # | Step | Expected |
+|---|---|---|
+| U1.1 | Network screen → **Add by address** → "Tuya bulb" → **Bulb (standard)** → IP + device ID → Add | A "Tuya bulb-v2" entry with a Pair button |
+| U1.2 | Open it → **Pair** → paste the local key | Pairing completes; within about 6 s the bulb shows its on/off state |
+| U1.3 | Wrong key (one character off) | "the device didn't accept the local key" |
+| U1.4 | Toggle power, drag brightness | The bulb follows within about 1 s |
+| U1.5 | Colour temperature pad: warmest and coolest ends | The bulb goes from warm to cool white. Tell me the real range if it looks different from 2700 to 6500 K |
+| U1.6 | Colour: pick red, green, blue | The bulb shows them. If not, say what happens (and whether "Bulb (older)" behaves differently) |
+| U1.7 | Change the bulb from its own app | Patchbay follows within about 6 s |
+| U1.8 | Restart Patchbay | The bulb is listed and works without asking for the key again |
+
+Please report: bulb model, protocol version (from `tinytuya scan`), and which steps differed.
+
 ## Phase 1 — eufy cameras (RTSP)
 
 Prerequisite: in the eufy app, open the camera → Settings → turn on **RTSP stream** (also called NAS/RTSP) and set a

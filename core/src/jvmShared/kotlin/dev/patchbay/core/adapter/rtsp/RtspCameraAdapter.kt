@@ -79,7 +79,7 @@ public class RtspCameraAdapter(
 
     override fun discover(): Flow<DiscoveredDevice> = emptyFlow() // RTSP isn't discoverable: add by address
 
-    override fun manualDevice(address: String, key: String): PatchbayResult<DiscoveredDevice> {
+    override fun manualDevice(address: String, key: String, choice: String?): PatchbayResult<DiscoveredDevice> {
         val a = when (val r = netGuard.address(address)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r

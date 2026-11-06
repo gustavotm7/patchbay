@@ -4,6 +4,7 @@ import dev.patchbay.core.adapter.bambu.BambuAdapter
 import dev.patchbay.core.adapter.govee.GoveeLanAdapter
 import dev.patchbay.core.adapter.kasa.KasaAdapter
 import dev.patchbay.core.adapter.rtsp.RtspCameraAdapter
+import dev.patchbay.core.adapter.tuya.TuyaLocalAdapter
 import dev.patchbay.core.adapter.webos.WebOsAdapter
 import dev.patchbay.core.log.SessionLog
 import dev.patchbay.core.net.NetGuard
@@ -46,6 +47,9 @@ public object AdapterRegistry {
     /** RTSP cameras (eufy with RTSP switched on): added by address, view-only, status check. */
     public val RTSP_CAMERA: AdapterFactory = AdapterFactory { ctx -> RtspCameraAdapter(ctx.netGuard) }
 
+    /** Tuya bulbs (Lepro and others) on local protocol 3.3, added by address with a user-supplied local key (ADR 0007). */
+    public val TUYA_LOCAL: AdapterFactory = AdapterFactory { ctx -> TuyaLocalAdapter(ctx.netGuard) }
+
     /** Local adapters enabled by default, in discovery order. */
-    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, KASA, RTSP_CAMERA)
+    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, KASA, RTSP_CAMERA, TUYA_LOCAL)
 }

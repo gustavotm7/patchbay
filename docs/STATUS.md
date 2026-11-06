@@ -27,6 +27,7 @@ Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bo
 | **TP-Link Kasa** | Legacy local protocol (TCP/UDP 9999): discover, power on/off, state. KLAP-only firmware isn't found | 10 codec tests (incl. 25 000-input mutation) + 7 contract tests vs a simulated plug. **Not yet tried on your plugs** (HARDWARE_TEST K1.x) |
 | **eufy cameras (RTSP)** | Add by address, RTSP login pairing, Digest/Basic status check, view-only. No in-app video yet | 8 codec tests + RFC 2617 digest vector + 12 contract tests vs a simulated camera. **Not yet tried on your cameras** (HARDWARE_TEST E1.x) |
 | **Camera playback (Android)** | Watch button plays the RTSP stream in the camera panel through Media3, TCP only, over a NetGuard-backed SocketFactory (ADR 0008). Windows: no player yet | 3 `GuardedSocketFactory` tests (public IPs, hostnames, unresolved addresses refused; LAN counted) + 3 stream-lease tests. APK builds in CI, no new permissions. **Not yet tried on a real camera** (E1.7) |
+| **Tuya bulbs (Lepro and others)** | Local protocol 3.3, add by address, user-supplied local key (never sent anywhere), allowlisted data points: power, brightness, colour temperature, colour. 3.4/3.5 and the vacuum are not built | 12 codec tests (independent frame vector, 25 000-input mutation) + 12 contract tests vs a simulated bulb. **Not yet tried on your bulbs** (HARDWARE_TEST U1.x) |
 | Add by address | Network screen panel: Bambu printer (IP + serial), RTSP camera (IP + name) | Bambu contract tests; UI compiles in CI |
 | Pairing UI | Inline panel: fingerprint → Trust/Cancel, on-device prompt, masked code entry; "Pair" on devices that need it | Compiles in CI |
 | Adapter registry | Adding a system = factory + adapter + simulator + contract tests (`docs/ADDING_AN_ADAPTER.md`) | Used by Bootstrap |
@@ -40,10 +41,10 @@ GitHub → Actions → **ci** → the latest green run on `ci/verification-boots
 
 Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1.1–G1.8).
 
-## Waiting on you: Lepro and Lefant
+## Waiting on you: Lefant vacuum
 
-Both look like Tuya devices, which need a per-device local key from Tuya's cloud. See `docs/protocols/tuya.md` and ADR 0007 (proposed).
-I need the model numbers and your go-ahead before writing an adapter.
+ADR 0007 is accepted and the Tuya **bulb** adapter exists (Lepro). The **vacuum** needs its model number and its data-point list (tinytuya wizard)
+before any command is allowed; see `docs/protocols/tuya.md` and `docs/TUYA_KEYS.md`.
 
 ## Not done yet (Phase 1 remainder, in the order I'd do it)
 

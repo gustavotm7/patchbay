@@ -30,7 +30,7 @@ public interface DeviceAdapter {
      * Builds the [DiscoveredDevice] for a manual add: the LAN [address] and an adapter-specific [key]
      * (a serial number, say). Validates both; opens no connection. Pairing proceeds as for a scanned device.
      */
-    public fun manualDevice(address: String, key: String): PatchbayResult<DiscoveredDevice> =
+    public fun manualDevice(address: String, key: String, choice: String? = null): PatchbayResult<DiscoveredDevice> =
         PatchbayResult.Err(PatchbayError.Unsupported("this system can't be added by address"))
 
     /** Finds candidate devices on the LAN. The flow completes when the scan window ends. */
@@ -115,7 +115,13 @@ public data class AdapterHealth(
 public enum class HealthState { OK, DEGRADED, UNREACHABLE, UNPAIRED, TRUST_CHANGED }
 
 /** What the UI asks for to add a device by address: a title and the label of the adapter-specific key field. */
-public data class ManualAdd(val adapter: AdapterId, val title: String, val keyLabel: String)
+public data class ManualAdd(
+    val adapter: AdapterId,
+    val title: String,
+    val keyLabel: String,
+    /** When not empty, the user picks one (for example a device profile) and it is passed to [DeviceAdapter.manualDevice]. */
+    val choices: List<String> = emptyList(),
+)
 
 /**
  * A short-lived, in-memory handle for playing a device's stream. [url] may carry credentials, so it is held only
