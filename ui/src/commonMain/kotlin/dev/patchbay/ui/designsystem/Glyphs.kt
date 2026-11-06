@@ -71,6 +71,11 @@ fun DeviceGlyph(
                 circle(0.5f, 0.5f, 0.32f)
                 if (filled) drawCircle(fillColor.copy(alpha = 0.25f), 0.48f * s, o + Offset(0.5f * s, 0.5f * s))
             }
+            DeviceKind.PLUG -> {
+                rect(0.2f, 0.14f, 0.6f, 0.52f, r = 0.1f * s)
+                line(0.38f, 0.66f, 0.38f, 0.88f, strokeColor)
+                line(0.62f, 0.66f, 0.62f, 0.88f, strokeColor)
+            }
             DeviceKind.TV -> {
                 rect(0.08f, 0.2f, 0.84f, 0.52f)
                 line(0.35f, 0.86f, 0.65f, 0.86f, strokeColor)

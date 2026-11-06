@@ -110,3 +110,19 @@ Prerequisite: LAN Only Mode + Developer Mode on (see `docs/protocols/bambu.md`),
 | L1.2 | Android: switch away for more than 1 min, come back | Locked again. Under a minute: still unlocked |
 | L1.3 | Windows: first start | "Create a PIN (4–12 digits)", then confirm it |
 | L1.4 | Windows: restart, or leave the window unfocused for more than 1 min | Enter your PIN. Three wrong attempts → a growing wait |
+
+## Phase 1 — TP-Link Kasa plugs
+
+Prerequisite: the plug is set up in the Kasa app and on the same Wi-Fi. Plugs on newer firmware (KLAP) don't answer the
+legacy protocol and won't appear. That's expected for now; tell me the model if so.
+
+| # | Step | Expected |
+|---|---|---|
+| K1.1 | Scan | Each legacy-firmware plug appears as "TP-Link <model>" (kind: plug) with its Kasa name |
+| K1.2 | Open a plug → **Turn on**, then **Turn off** | The relay clicks within about 1 s. The tag follows within 5 s |
+| K1.3 | Switch the plug with its physical button or the Kasa app | Patchbay shows the new state within about 5 s |
+| K1.4 | Unplug it, wait about 20 s | "No reply", then "Offline". Replug: it recovers by itself |
+| K1.5 | Restart Patchbay without scanning | The plug is listed immediately and shows its state within about 5 s |
+| K1.6 | A plug missing from the scan | Look in "Everything else that answered" for TP-Link; send me the model and firmware version |
+
+Please report: plug models and firmware versions (Kasa app → device settings → device info), and which ones didn't appear.

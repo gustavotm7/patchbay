@@ -283,6 +283,8 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
                 onLight = { send(dev.patchbay.core.model.Command.SetAuxLight("Chamber light", it)) },
             )
         }
+    } else if (d.device.kind == DeviceKind.PLUG || d.device.capability<dev.patchbay.core.model.Capability.Power>() != null) {
+        PlugPanel(d, onCommand = send, modifier = modifier)
     } else {
         Column(modifier) { PText(d.device.name, Patchbay.type.title) }
     }
