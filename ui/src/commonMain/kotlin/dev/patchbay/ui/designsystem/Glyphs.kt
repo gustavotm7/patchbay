@@ -41,6 +41,8 @@ fun DeviceGlyph(
     modifier: Modifier = Modifier,
     emitted: Color? = null,
     tint: Color = Patchbay.colors.text,
+    /** Colour of the detail lines drawn on top of a filled glyph (must contrast with the fill). */
+    onFill: Color = Patchbay.colors.onSignal,
 ) {
     val c = Patchbay.colors
     Canvas(modifier) {
@@ -63,7 +65,7 @@ fun DeviceGlyph(
             drawCircle(strokeColor, r * s, o + Offset(cx * s, cy * s), style = stroke)
         }
 
-        fun line(x1: Float, y1: Float, x2: Float, y2: Float, color: Color = if (filled) c.onSignal else strokeColor) =
+        fun line(x1: Float, y1: Float, x2: Float, y2: Float, color: Color = if (filled) onFill else strokeColor) =
             drawLine(color, o + Offset(x1 * s, y1 * s), o + Offset(x2 * s, y2 * s), sw)
 
         when (kind) {

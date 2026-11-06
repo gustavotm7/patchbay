@@ -54,11 +54,13 @@ internal class FocusAndPressIndication(private val colors: PatchbayColors) : Ind
 
         override fun ContentDrawScope.draw() {
             drawContent()
-            if (pressed > 0) drawRect(colors.text.copy(alpha = 0.12f))
-            else if (hovered > 0) drawRect(colors.text.copy(alpha = 0.06f))
+            // Rounded like the controls: a pill for short elements, a 22 dp card radius for tall ones.
+            val r = androidx.compose.ui.geometry.CornerRadius(minOf(size.minDimension / 2f, 22.dp.toPx()))
+            if (pressed > 0) drawRoundRect(colors.text.copy(alpha = 0.12f), cornerRadius = r)
+            else if (hovered > 0) drawRoundRect(colors.text.copy(alpha = 0.06f), cornerRadius = r)
             if (focused > 0) {
                 val w = 2.dp.toPx()
-                drawRect(colors.text, topLeft = Offset(w / 2, w / 2), size = Size(size.width - w, size.height - w), style = Stroke(w))
+                drawRoundRect(colors.text, topLeft = Offset(w / 2, w / 2), size = Size(size.width - w, size.height - w), cornerRadius = r, style = Stroke(w))
             }
         }
     }

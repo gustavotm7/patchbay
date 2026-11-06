@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -57,13 +58,13 @@ fun PText(
     )
 }
 
-/** Uppercase instrument legend. Marked as a heading for TalkBack/Narrator navigation. */
+/** Quiet section label in sentence case. Marked as a heading for TalkBack/Narrator navigation. */
 @Composable
 fun Legend(text: String, modifier: Modifier = Modifier, color: Color = Patchbay.colors.textSecondary) {
-    PText(text.uppercase(), Patchbay.type.legend, color, modifier.semantics { heading() })
+    PText(text, Patchbay.type.legend, color, modifier.semantics { heading() })
 }
 
-/** A flat panel with a hairline outline. No shadows, no blur, no gradients. */
+/** A card: one tonal layer above the page, large radius. No border, no shadow, no blur, no gradient. */
 @Composable
 fun Panel(
     modifier: Modifier = Modifier,
@@ -74,7 +75,6 @@ fun Panel(
     Column(
         modifier
             .background(c.surface, Shapes.panel)
-            .border(Space.hair, c.divider, Shapes.panel)
             .padding(padding),
         content = content,
     )
@@ -173,20 +173,20 @@ fun Sparkline(trend: Trend, modifier: Modifier = Modifier, color: Color = Patchb
     }
 }
 
-/** A compact status tag: text + a shape marker, so it doesn't rely on colour alone. */
+/** A compact status pill: a tinted fill, a shape marker and text, so it doesn't rely on colour alone. */
 @Composable
 fun StatusTag(text: String, tone: Tone, modifier: Modifier = Modifier) {
     val c = Patchbay.colors
     val color = tone.color(c)
     Row(
         modifier
-            .border(Space.hair, if (tone == Tone.NEUTRAL) c.outline else color, Shapes.chip)
-            .padding(horizontal = Space.s, vertical = Space.xxs),
+            .background(if (tone == Tone.NEUTRAL) c.raised else color.copy(alpha = 0.16f), Shapes.pill)
+            .padding(horizontal = Space.m, vertical = Space.xs + Space.xxs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ToneMarker(tone, Modifier.size(8.dp))
-        Spacer(Modifier.width(Space.xs + Space.xxs))
-        PText(text.uppercase(), Patchbay.type.legend, if (tone == Tone.NEUTRAL) c.textSecondary else color)
+        Spacer(Modifier.width(Space.s))
+        PText(text, Patchbay.type.legend, if (tone == Tone.NEUTRAL) c.textSecondary else color)
     }
 }
 
@@ -226,8 +226,8 @@ fun ToneMarker(tone: Tone, modifier: Modifier = Modifier) {
 }
 
 /**
- * Segmented selector for modes (Off/Heat/Cool/Auto). The selected segment is filled with the
- * raised colour and carries a 2 dp underline in its tone; unselected segments are outline-only.
+ * Segmented selector for modes (Off/Heat/Cool/Auto). A pill track in the raised layer; the selected segment is a pill
+ * in the inverse colour, or in its tone colour when it carries meaning (heat, cool).
  */
 @Composable
 fun <T> Segmented(
@@ -239,36 +239,35 @@ fun <T> Segmented(
     tone: (T) -> Tone = { Tone.NEUTRAL },
 ) {
     val c = Patchbay.colors
-    val height = if (Patchbay.formFactor == FormFactor.PHONE) Space.touchTarget else 36.dp
-    Row(modifier.border(Space.hair, c.outline, Shapes.control)) {
-        options.forEachIndexed { i, opt ->
+    val height = if (Patchbay.formFactor == FormFactor.PHONE) Space.touchTarget else 40.dp
+    Row(modifier.background(c.raised, Shapes.pill).padding(Space.xs)) {
+        options.forEach { opt ->
             val isSel = opt == selected
+            val t = tone(opt)
+            val fill = if (!isSel) null else if (t == Tone.NEUTRAL) c.inverse else t.color(c)
+            val fg = if (!isSel) c.textSecondary else if (t == Tone.NEUTRAL) c.onInverse else c.onSignal
             Box(
                 Modifier
                     .weight(1f)
-                    .height(height)
-                    .background(if (isSel) c.raised else c.surface)
+                    .height(height - Space.s)
+                    .clip(Shapes.pill)
+                    .then(if (fill != null) Modifier.background(fill, Shapes.pill) else Modifier)
                     .semantics { this.selected = isSel; stateDescription = if (isSel) "selected" else "" }
                     .clickable(role = Role.Tab) { onSelect(opt) },
                 contentAlignment = Alignment.Center,
             ) {
-                PText(label(opt), Patchbay.type.bodyStrong, if (isSel) c.text else c.textSecondary)
-                if (isSel) {
-                    val t = tone(opt)
-                    Box(
-                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp)
-                            .background(if (t == Tone.NEUTRAL) c.text else t.color(c)),
-                    )
-                }
+                PText(label(opt), Patchbay.type.bodyStrong, fg)
             }
-            if (i < options.lastIndex) Box(Modifier.width(Space.hair).height(height).background(c.outline))
         }
     }
 }
 
 enum class ButtonKind { PRIMARY, SECONDARY, DESTRUCTIVE }
 
-/** Instrument-style button: rectangular, outlined, label in medium weight. */
+/**
+ * Pill button, no outline. Primary is the inverse pair (a light pill with dark text on dark themes), secondary is a
+ * raised pill, destructive is a raised pill with alarm-coloured text.
+ */
 @Composable
 fun PButton(
     text: String,
@@ -278,56 +277,54 @@ fun PButton(
     enabled: Boolean = true,
 ) {
     val c = Patchbay.colors
+    val fill = when {
+        !enabled -> c.raised.copy(alpha = 0.6f)
+        kind == ButtonKind.PRIMARY -> c.inverse
+        else -> c.raised
+    }
     val fg = when {
         !enabled -> c.textTertiary
+        kind == ButtonKind.PRIMARY -> c.onInverse
         kind == ButtonKind.DESTRUCTIVE -> c.alarm
         else -> c.text
     }
-    val border = when (kind) {
-        ButtonKind.PRIMARY -> c.text
-        ButtonKind.SECONDARY -> c.outline
-        ButtonKind.DESTRUCTIVE -> c.alarm
-    }
-    val minH = if (Patchbay.formFactor == FormFactor.PHONE) Space.touchTarget else 36.dp
+    val minH = if (Patchbay.formFactor == FormFactor.PHONE) Space.touchTarget else 40.dp
     Box(
         modifier
             .defaultMinSize(minWidth = 88.dp, minHeight = minH)
-            .background(if (kind == ButtonKind.PRIMARY) c.raised else c.surface, Shapes.control)
-            .border(Space.hair, border, Shapes.control)
+            .clip(Shapes.pill)
+            .background(fill, Shapes.pill)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = Space.l),
+            .padding(horizontal = Space.xl),
         contentAlignment = Alignment.Center,
     ) {
         PText(text, Patchbay.type.bodyStrong, fg)
     }
 }
 
-/** A labelled on/off switch drawn as a two-position toggle, with the state spelled out. */
+/** A labelled switch in the familiar rounded style. The state is in the knob position and the semantics, not colour alone. */
 @Composable
 fun PToggle(label: String, on: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val c = Patchbay.colors
-    val minH = if (Patchbay.formFactor == FormFactor.PHONE) Space.touchTarget else 32.dp
+    val minH = if (Patchbay.formFactor == FormFactor.PHONE) Space.touchTarget else 40.dp
     Row(
         modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = minH)
+            .clip(Shapes.control)
             .clickable(role = Role.Switch) { onChange(!on) }
             .semantics { stateDescription = if (on) "on" else "off" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        PText(label, Patchbay.type.body, c.textSecondary)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PText(if (on) "ON" else "OFF", Patchbay.type.legend, if (on) c.active else c.textTertiary)
-            Spacer(Modifier.width(Space.s))
-            Box(
-                Modifier.size(width = 36.dp, height = 20.dp)
-                    .border(Space.hair, if (on) c.active else c.outline, Shapes.chip)
-                    .padding(3.dp),
-                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-            ) {
-                Box(Modifier.size(14.dp).background(if (on) c.active else c.outline, Shapes.chip))
-            }
+        PText(label, Patchbay.type.body, c.text)
+        Box(
+            Modifier.size(width = 52.dp, height = 32.dp)
+                .background(if (on) c.active else c.raised, Shapes.pill)
+                .padding(3.dp),
+            contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+        ) {
+            Box(Modifier.size(26.dp).background(if (on) c.onSignal else c.outline, Shapes.pill))
         }
     }
 }

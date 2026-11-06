@@ -30,6 +30,18 @@ class ContrastTest {
     }
 
     @Test
+    fun textOnFillsMeetsAA() {
+        for (p in PatchbayPalettes.all) {
+            for ((n, fill) in mapOf("active" to p.active, "heat" to p.heat, "cool" to p.cool, "attention" to p.attention, "alarm" to p.alarm)) {
+                val r = Contrast.ratio(p.onSignal, fill)
+                assertTrue(r >= 4.5, "${p.name}: onSignal on $n is $r (< 4.5)")
+            }
+            val r = Contrast.ratio(p.onInverse, p.inverse)
+            assertTrue(r >= 4.5, "${p.name}: onInverse on inverse is $r (< 4.5)")
+        }
+    }
+
+    @Test
     fun formatting() {
         assertEquals("20.6", Fmt.celsius(20.6))
         assertEquals("−2.5", Fmt.fixed(-2.5, 1))

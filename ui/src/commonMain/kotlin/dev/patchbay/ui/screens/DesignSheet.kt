@@ -174,6 +174,7 @@ private fun roles(c: PatchbayColors): List<Triple<String, Color, String>> = list
     Triple("cool", c.cool, "cooling demand"),
     Triple("attention", c.attention, "needs a look"),
     Triple("alarm", c.alarm, "fault / abnormal"),
+    Triple("inverse", c.inverse, "primary, on, selected"),
 )
 
 @Composable

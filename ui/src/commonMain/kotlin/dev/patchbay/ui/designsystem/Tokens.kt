@@ -31,9 +31,11 @@ data class PatchbayType(
     val valueS: TextStyle,
     /** Unit suffix next to a value ("°C", "%", "K"). */
     val unit: TextStyle,
+    /** Page titles on phone and desktop ("Home", a device's name on its page). */
+    val largeTitle: TextStyle,
     /** Panel titles ("Thermostat", "H2D"). */
     val title: TextStyle,
-    /** Uppercase section legends ("SETPOINTS", "AMS"). */
+    /** Section labels ("Setpoints", "AMS"): sentence case, quiet. */
     val legend: TextStyle,
     val body: TextStyle,
     val bodyStrong: TextStyle,
@@ -45,13 +47,14 @@ data class PatchbayType(
         private const val TNUM = "tnum, lnum"
 
         fun from(t: PatchbayTypefaces): PatchbayType = PatchbayType(
-            valueXL = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Medium, fontSize = 44.sp, lineHeight = 48.sp, letterSpacing = (-0.01).em, fontFeatureSettings = TNUM),
-            valueL = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Medium, fontSize = 28.sp, lineHeight = 32.sp, fontFeatureSettings = TNUM),
+            valueXL = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Normal, fontSize = 52.sp, lineHeight = 56.sp, letterSpacing = (-0.02).em, fontFeatureSettings = TNUM),
+            valueL = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 36.sp, letterSpacing = (-0.01).em, fontFeatureSettings = TNUM),
             valueM = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Medium, fontSize = 17.sp, lineHeight = 22.sp, fontFeatureSettings = TNUM),
             valueS = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 16.sp, fontFeatureSettings = TNUM),
             unit = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 16.sp, fontFeatureSettings = TNUM),
-            title = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 24.sp),
-            legend = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.09.em),
+            largeTitle = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, lineHeight = 38.sp, letterSpacing = (-0.02).em),
+            title = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.01).em),
+            legend = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp),
             body = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp),
             bodyStrong = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
             caption = TextStyle(fontFamily = t.sans, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp),
@@ -77,11 +80,16 @@ object Space {
     val pointerTarget: Dp = 32.dp
 }
 
-/** Shapes: small radii, instrument-panel squareness. No pill-shaped cards. */
+/**
+ * Shapes (ADR 0009): generous, consistent radii. Cards and tiles are large rounded rectangles, controls are pills
+ * or softly rounded fields, and small marks (swatches, PIN dots) use [chip].
+ */
 object Shapes {
-    val panel: RoundedCornerShape = RoundedCornerShape(4.dp)
-    val control: RoundedCornerShape = RoundedCornerShape(3.dp)
-    val chip: RoundedCornerShape = RoundedCornerShape(2.dp)
+    val panel: RoundedCornerShape = RoundedCornerShape(20.dp)
+    val tile: RoundedCornerShape = RoundedCornerShape(22.dp)
+    val control: RoundedCornerShape = RoundedCornerShape(14.dp)
+    val chip: RoundedCornerShape = RoundedCornerShape(8.dp)
+    val pill: RoundedCornerShape = RoundedCornerShape(percent = 50)
 }
 
 /**

@@ -7,6 +7,15 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.Modifier
+import dev.patchbay.ui.designsystem.Patchbay
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.font.Font
@@ -45,6 +54,7 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         // The whole app shows home layout, presence and (later) pairing codes: keep it out of
         // screenshots and the recents thumbnail. A per-screen opt-out may come with app lock (Phase 1).
@@ -59,8 +69,11 @@ class MainActivity : FragmentActivity() {
         setContent {
             val palette = if (isSystemInDarkTheme()) PatchbayPalettes.Dark else PatchbayPalettes.Light
             PatchbayTheme(palette, typefaces, FormFactor.PHONE) {
-                CompositionLocalProvider(LocalCameraPlayer provides cameraPlayer) {
-                    LockGate(app.lock) { PhoneApp(home, DemoHome.trends, now, live) }
+                // Edge-to-edge is enforced on current Android: keep content clear of the status bar, gesture bar and cutouts.
+                Box(Modifier.fillMaxSize().background(Patchbay.colors.background).windowInsetsPadding(WindowInsets.safeDrawing)) {
+                    CompositionLocalProvider(LocalCameraPlayer provides cameraPlayer) {
+                        LockGate(app.lock) { PhoneApp(home, DemoHome.trends, now, live) }
+                    }
                 }
             }
         }

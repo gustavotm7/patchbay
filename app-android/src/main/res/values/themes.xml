@@ -7,7 +7,7 @@
         <item name="android:navigationBarColor">@color/pb_background</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
-    <color name="pb_background">#FFE3E5E8</color>
+    <color name="pb_background">#FFF2F3F5</color>
     <color name="pb_icon_bg">#FF181B1E</color>
     <color name="pb_icon_fg">#FFE7E9EB</color>
 </resources>

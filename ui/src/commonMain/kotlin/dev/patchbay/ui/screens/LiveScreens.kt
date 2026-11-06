@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -55,13 +57,12 @@ import dev.patchbay.ui.designsystem.ToneMarker
 import dev.patchbay.ui.designsystem.VSpace
 import kotlinx.coroutines.launch
 
-/** Header + scan control + NetGuard line + the list of devices found on this network. */
+/** The home: a large title, a Scan button, and one tile per device found on this network. */
 @Composable
 fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> Unit, modifier: Modifier = Modifier) {
     val c = Patchbay.colors
     val devices by live.devices.collectAsState()
     val scan by live.scanState.collectAsState()
-    val stats by live.netStats.collectAsState()
     val problem by live.problem.collectAsState()
     val scope = rememberCoroutineScope()
     val pairing = remember { PairingDialogState() }
@@ -69,15 +70,15 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                PText("On this network", Patchbay.type.title)
+                PText("Home", Patchbay.type.largeTitle)
                 PText(
                     when (scan) {
-                        ScanState.IDLE -> "Not scanned yet"
-                        ScanState.SCANNING -> "Scanning…"
-                        ScanState.DONE -> "${devices.size} found"
+                        ScanState.IDLE -> if (devices.isEmpty()) "Scan to find your devices" else "${devices.size} devices"
+                        ScanState.SCANNING -> "Scanning your network…"
+                        ScanState.DONE -> "${devices.size} devices"
                         ScanState.FAILED -> "Scan failed"
                     },
-                    Patchbay.type.caption, c.textSecondary,
+                    Patchbay.type.body, c.textSecondary,
                 )
             }
             PButton(
@@ -85,19 +86,9 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                 kind = ButtonKind.PRIMARY, enabled = scan != ScanState.SCANNING,
             )
         }
-        VSpace(Space.s)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ToneMarker(if (stats.denied > 0) Tone.ATTENTION else Tone.NEUTRAL, Modifier.size(8.dp))
-            HSpace(Space.s)
-            PText(
-                "NetGuard: LAN only · ${stats.allowed} local · ${stats.denied} refused" +
-                    if (stats.droppedInbound > 0) " · ${stats.droppedInbound} dropped" else "",
-                Patchbay.type.caption, c.textSecondary,
-            )
-        }
         problem?.let {
-            VSpace(Space.s)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            VSpace(Space.m)
+            Row(Modifier.fillMaxWidth().background(c.attention.copy(alpha = 0.16f), Shapes.control).padding(Space.m), verticalAlignment = Alignment.CenterVertically) {
                 ToneMarker(Tone.ATTENTION, Modifier.size(8.dp))
                 HSpace(Space.s)
                 PText(it, Patchbay.type.caption, c.attention)
@@ -106,35 +97,74 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
         VSpace(Space.l)
         PairingPanel(pairing)
         if (pairing.step != null) VSpace(Space.m)
-        Panel(Modifier.fillMaxWidth(), padding = Space.m) {
-            Legend("Devices")
-            VSpace(Space.s)
-            if (devices.isEmpty()) {
+        if (devices.isEmpty()) {
+            Panel(Modifier.fillMaxWidth()) {
                 PText(
-                    if (scan == ScanState.DONE) "Nothing answered. Govee lights need “LAN Control” switched on in the Govee app."
+                    if (scan == ScanState.DONE) "Nothing answered" else "No devices yet",
+                    Patchbay.type.title,
+                )
+                VSpace(Space.xs)
+                PText(
+                    if (scan == ScanState.DONE) "Govee lights need “LAN Control” switched on in the Govee app. Cameras, Tuya bulbs and printers can also be added by address below."
                     else "Tap Scan to look for devices on your Wi-Fi.",
                     Patchbay.type.body, c.textSecondary,
                 )
             }
-            devices.forEachIndexed { i, d ->
-                if (i > 0) Hairline()
-                LiveRow(
+        } else {
+            TileGrid(devices) { d, m ->
+                val toggles = tileToggles(d)
+                DeviceTile(
                     d, d.device.id == selected,
-                    onPair = {
-                        scope.launch {
-                            val r = live.pair(d.device.id, pairing)
-                            pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.message)
+                    onPrimary = {
+                        when {
+                            d.needsPairing -> scope.launch {
+                                val r = live.pair(d.device.id, pairing)
+                                pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.message)
+                            }
+                            toggles -> scope.launch {
+                                val on = d.snapshot?.state<CapabilityState.PowerState>()?.on == true
+                                live.send(d.device.id, dev.patchbay.core.model.Command.SetPower(!on))
+                            }
+                            else -> onSelect(d.device.id)
                         }
                     },
-                ) { onSelect(d.device.id) }
+                    onDetails = if (toggles) ({ onSelect(d.device.id) }) else null,
+                    modifier = m,
+                )
             }
         }
         ManualAddPanel(live)
+    }
+}
+
+/** What Patchbay can see and what it keeps to itself: the NetGuard counters, everything else that answered, the exposure report. */
+@Composable
+fun NetworkScreen(live: LiveHome, modifier: Modifier = Modifier) {
+    val c = Patchbay.colors
+    val stats by live.netStats.collectAsState()
+    Column(modifier) {
+        PText("Network", Patchbay.type.largeTitle)
+        PText("Patchbay talks only to devices on your home network.", Patchbay.type.body, c.textSecondary)
+        VSpace(Space.l)
+        Panel(Modifier.fillMaxWidth()) {
+            Legend("Privacy")
+            VSpace(Space.s)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ToneMarker(if (stats.denied > 0) Tone.ATTENTION else Tone.NEUTRAL, Modifier.size(8.dp))
+                HSpace(Space.s)
+                PText("LAN only", Patchbay.type.bodyStrong)
+            }
+            VSpace(Space.xs)
+            PText(
+                "${stats.allowed} local connections · ${stats.denied} refused" + if (stats.droppedInbound > 0) " · ${stats.droppedInbound} dropped" else "",
+                Patchbay.type.caption, c.textSecondary,
+            )
+        }
         CensusPanel(live)
         ExposurePanel(live)
-        VSpace(Space.s)
+        VSpace(Space.m)
         PText(
-            "Supported now: Govee lights (LAN), TP-Link Kasa plugs, Tuya bulbs (by address), eufy RTSP cameras, LG webOS TVs, Bambu Lab printers (monitoring + pause/resume/stop). Cast, ESPHome, eufy RTSP and ecobee come next.",
+            "Supported now: Govee lights (LAN), TP-Link Kasa plugs, Tuya bulbs (by address), eufy RTSP cameras, LG webOS TVs, Bambu Lab printers (monitoring + pause/resume/stop). Cast, ESPHome and ecobee come next.",
             Patchbay.type.caption, c.textTertiary,
         )
     }
@@ -228,41 +258,6 @@ private fun ExposurePanel(live: LiveHome) {
     }
 }
 
-@Composable
-private fun LiveRow(d: LiveDevice, selected: Boolean, onPair: () -> Unit, onClick: () -> Unit) {
-    val c = Patchbay.colors
-    val s = d.snapshot
-    Row(
-        Modifier.fillMaxWidth().background(if (selected) c.raised else c.surface).clickable(role = Role.Button, onClick = onClick)
-            .padding(vertical = Space.s),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        DeviceGlyph(
-            d.device.kind, DeviceViews.glyphState(d.device, s), Modifier.size(24.dp),
-            emitted = DeviceViews.emittedColor(d.device, s, c),
-        )
-        HSpace(Space.m)
-        Column(Modifier.weight(1f)) {
-            PText(d.device.name, Patchbay.type.bodyStrong)
-            PText(DeviceViews.controlPathLabel(d.device.controlPath), Patchbay.type.caption, c.textSecondary)
-        }
-        if (d.needsPairing) {
-            PButton("Pair", onPair, kind = ButtonKind.PRIMARY)
-            return@Row
-        }
-        when (s?.reachability) {
-            Reachability.OFFLINE -> StatusTag("Offline", Tone.ALARM)
-            Reachability.DEGRADED -> StatusTag("No reply", Tone.ATTENTION)
-            null -> PText("…", Patchbay.type.valueS, c.textTertiary)
-            else -> {
-                val p = s.state<CapabilityState.PowerState>()
-                val b = s.state<CapabilityState.BrightnessState>()
-                PText(if (p?.on == true) (b?.let { "${Fmt.percent(it.level.value)} %" } ?: "On") else "Off", Patchbay.type.valueS, c.text)
-            }
-        }
-    }
-}
-
 /** Detail for a live device: lights get the LightPanel; anything else a summary. */
 @Composable
 fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
@@ -324,14 +319,14 @@ fun LiveScreenPhone(live: LiveHome, modifier: Modifier = Modifier) {
             }
         } else {
             Row(
-                Modifier.fillMaxWidth().clickable(role = Role.Button) { selected = null }.padding(horizontal = Space.l, vertical = Space.m),
+                Modifier.padding(start = Space.s, top = Space.s).height(Space.touchTarget).clip(Shapes.pill)
+                    .clickable(role = Role.Button) { selected = null }.padding(horizontal = Space.m),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 PText("‹", Patchbay.type.title, c.textSecondary)
                 HSpace(Space.s)
-                PText("On this network", Patchbay.type.bodyStrong, c.textSecondary)
+                PText("Home", Patchbay.type.bodyStrong, c.textSecondary)
             }
-            Hairline()
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) {
                 LiveDetail(live, sel)
             }
