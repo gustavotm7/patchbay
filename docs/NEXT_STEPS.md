@@ -2,14 +2,21 @@
 
 Updated 2026-11-06. Two lists: what happens before the test build is handed over, and what comes after you've tried it.
 
-## Before the test build (in progress)
+## Before the test build (done)
 
-1. **Restyle (done in code, unreviewed):** new dark-first look, soft rounded cards, pill buttons, quiet sentence-case labels, a light "inverse" fill for
+1. **Restyle (done, reviewed in CI renders):** new dark-first look, soft rounded cards, pill buttons, quiet sentence-case labels, a light "inverse" fill for
    selected and "on" states. Applies to every screen through the design tokens. ADR 0009.
 2. **Phone layout:** bottom tab bar, a device tile grid (tap a light or plug to toggle it, tap anything else to open it), device pages with large titles.
 3. **Desktop layout:** the same tiles and the restyled navigation rail.
 4. **Look at the real renders** from CI, fix what looks wrong, then record the new screenshot references.
 5. **Build the installable test app:** Android APK (easiest to try first) and the Windows installer, from the CI run, with direct download links.
+
+## Test build (CI run on `3ba2aed`, all 7 jobs green)
+
+- Run: https://github.com/gustavotm7/patchbay/actions/runs/42302893030
+- **Android (try this first):** https://github.com/gustavotm7/patchbay/actions/runs/42302893030/artifacts/13544398758 (27 MB zip; install `app-android-debug.apk` from inside it. Ignore the `release` APK: it is unsigned and won't install)
+- **Windows:** https://github.com/gustavotm7/patchbay/actions/runs/42302893030/artifacts/13545745178 (79 MB zip with the `.msi`; SmartScreen will warn because it's unsigned)
+- Downloads need you to be signed in to GitHub. Artifacts are kept until 2026-12-06; any later green run on the branch has fresh ones.
 
 ## After the test build (your side, then mine)
 
