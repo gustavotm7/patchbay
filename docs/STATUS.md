@@ -24,6 +24,9 @@ Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bo
 | **LG webOS TV** | Pinned WSS on 3001 only; pairing = fingerprint in Patchbay + accept on the TV; volume, mute, inputs, media keys, power off, power on (Wake-on-LAN) | 7 SSAP codec tests + 6 contract tests vs a simulated TV (incl. impostor → TrustChanged). CI green at `a6c3f3c`. **Not yet tried on your TV** (HARDWARE_TEST T1.x) |
 | **Bambu H2D** | Pinned MQTT/TLS 8883 + access code; dual-nozzle/bed/chamber temps, job progress, AMS swatches, HMS; pause/resume/stop + chamber lights only | 9 codec tests + 5 contract tests vs a simulated H2D (incl. wrong code, impostor). **Not yet tried on your printer** (HARDWARE_TEST B1.x) |
 | **App lock** | Windows: PIN (PBKDF2 in encrypted DB), locks at start and after unfocus. Android: BiometricPrompt (biometric or device PIN), auto-lock after 1 min in background | AppLock/PinHash tests |
+| **TP-Link Kasa** | Legacy local protocol (TCP/UDP 9999): discover, power on/off, state. KLAP-only firmware isn't found | 10 codec tests (incl. 25 000-input mutation) + 7 contract tests vs a simulated plug. **Not yet tried on your plugs** (HARDWARE_TEST K1.x) |
+| **eufy cameras (RTSP)** | Add by address, RTSP login pairing, Digest/Basic status check, view-only. No in-app video yet | 8 codec tests + RFC 2617 digest vector + 12 contract tests vs a simulated camera. **Not yet tried on your cameras** (HARDWARE_TEST E1.x) |
+| Add by address | Network screen panel: Bambu printer (IP + serial), RTSP camera (IP + name) | Bambu contract tests; UI compiles in CI |
 | Pairing UI | Inline panel: fingerprint → Trust/Cancel, on-device prompt, masked code entry; "Pair" on devices that need it | Compiles in CI |
 | Adapter registry | Adding a system = factory + adapter + simulator + contract tests (`docs/ADDING_AN_ADAPTER.md`) | Used by Bootstrap |
 
@@ -36,13 +39,18 @@ GitHub → Actions → **ci** → the latest green run on `ci/verification-boots
 
 Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1.1–G1.8).
 
+## Waiting on you: Lepro and Lefant
+
+Both look like Tuya devices, which need a per-device local key from Tuya's cloud. See `docs/protocols/tuya.md` and ADR 0007 (proposed).
+I need the model numbers and your go-ahead before writing an adapter.
+
 ## Not done yet (Phase 1 remainder, in the order I'd do it)
 
 1. Adapters, each with a simulator and contract tests like Govee:
    - ~~LG webOS~~ done (including power-on after restart)
-   - eufy RTSP cameras
+   - ~~eufy RTSP cameras~~ done for status; in-app video playback (Media3 on Android, TBD on desktop) is next
    - Cast v2 / Android TV Remote v2
-   - ~~Bambu H2D~~ done; follow-ups: camera (RTSPS), manual add by IP + serial
+   - ~~Bambu H2D~~ done, including manual add; follow-up: camera (RTSPS)
    - ESPHome (Noise NNpsk0)
 2. Windows Hello (app lock is done on both platforms: Android biometric, Windows PIN).
 3. Rooms and a floor-plan editor for live devices (the schema has `room_id`; the assignment UI is missing).

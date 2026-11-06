@@ -153,10 +153,12 @@ public class LanHome(
         val id = adapter.deviceId(found)
         val existing = _devices.value.firstOrNull { it.device.id == id }
         if (existing == null) {
-            val sameModel = _devices.value.count { it.device.model == found.model }
+            // The name the device or the owner gave it wins; otherwise "Vendor Model". Duplicates get a number.
+            val baseName = found.displayName?.trim()?.takeIf { it.isNotEmpty() } ?: listOfNotNull(found.vendor, found.model).joinToString(" ")
+            val sameName = _devices.value.count { it.device.name == baseName || it.device.name.startsWith("$baseName ") && it.device.name.removePrefix("$baseName ").all(Char::isDigit) }
             val device = Device(
                 id = id,
-                name = listOfNotNull(found.vendor, found.model).joinToString(" ") + if (sameModel > 0) " ${sameModel + 1}" else "",
+                name = baseName + if (sameName > 0) " ${sameName + 1}" else "",
                 kind = found.kind, vendor = found.vendor, model = found.model, roomId = null, placement = null,
                 controlPath = found.controlPath, capabilities = adapter.capabilities(id), adapter = adapter.id,
             )

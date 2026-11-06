@@ -288,6 +288,21 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
                 onLight = { send(dev.patchbay.core.model.Command.SetAuxLight("Chamber light", it)) },
             )
         }
+    } else if (d.device.kind == DeviceKind.CAMERA) {
+        val pairing = remember { PairingDialogState() }
+        Column(modifier) {
+            PairingPanel(pairing)
+            if (pairing.step != null) VSpace(Space.m)
+            CameraPanel(
+                d,
+                onPair = {
+                    scope.launch {
+                        val r = live.pair(id, pairing)
+                        pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.message)
+                    }
+                },
+            )
+        }
     } else if (d.device.kind == DeviceKind.PLUG || d.device.capability<dev.patchbay.core.model.Capability.Power>() != null) {
         PlugPanel(d, onCommand = send, modifier = modifier)
     } else {
@@ -354,17 +369,26 @@ private fun ManualAddPanel(live: LiveHome) {
     var address by remember { mutableStateOf("") }
     var key by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    val option = options.first()
+    var chosen by remember { mutableStateOf(0) }
+    val option = options[chosen.coerceIn(0, options.lastIndex)]
     VSpace(Space.m)
     Panel(Modifier.fillMaxWidth(), padding = Space.m) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Legend("Add by address")
-                if (!open) PText("If a scan can't find your ${option.title}.", Patchbay.type.caption, c.textSecondary)
+                if (!open) PText("For a device a scan can't see, such as an RTSP camera.", Patchbay.type.caption, c.textSecondary)
             }
             PButton(if (open) "Close" else "Add…", { open = !open })
         }
         if (open) {
+            if (options.size > 1) {
+                VSpace(Space.s)
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    options.forEachIndexed { i, o ->
+                        PButton(o.title, { chosen = i; error = null }, Modifier.weight(1f), if (i == chosen) ButtonKind.PRIMARY else ButtonKind.SECONDARY)
+                    }
+                }
+            }
             VSpace(Space.s)
             PText("IP address on your network", Patchbay.type.bodyStrong)
             VSpace(Space.xs)
@@ -380,7 +404,7 @@ private fun ManualAddPanel(live: LiveHome) {
             VSpace(Space.xs)
             BasicTextField(
                 value = key,
-                onValueChange = { v -> key = v.filter { it.isLetterOrDigit() }.take(24) },
+                onValueChange = { v -> key = v.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.take(32) },
                 singleLine = true,
                 textStyle = Patchbay.type.valueM.copy(color = c.text),
                 modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.s),

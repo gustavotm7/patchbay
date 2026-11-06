@@ -108,7 +108,7 @@ fun PairingPanel(state: PairingDialogState, modifier: Modifier = Modifier) {
                 VSpace(Space.xs)
                 BasicTextField(
                     value = text,
-                    onValueChange = { v -> text = v.filter { it.isLetterOrDigit() }.take(step.length.last) },
+                    onValueChange = { v -> text = v.filter { !it.isISOControl() && !it.isWhitespace() }.take(step.length.last) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     textStyle = Patchbay.type.valueM.copy(color = c.text),

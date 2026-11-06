@@ -127,3 +127,21 @@ legacy protocol and won't appear. That's expected for now; tell me the model if 
 | K1.6 | A plug missing from the scan | Look in "Everything else that answered" for TP-Link; send me the model and firmware version |
 
 Please report: plug models and firmware versions (Kasa app → device settings → device info), and which ones didn't appear.
+
+## Phase 1 — eufy cameras (RTSP)
+
+Prerequisite: in the eufy app, open the camera → Settings → turn on **RTSP stream** (also called NAS/RTSP) and set a
+username and password. Note the camera's IP address (your router's device list, or the eufy app's device info).
+Not every model has RTSP; HomeBase-connected cameras expose it on the HomeBase's address instead.
+
+| # | Step | Expected |
+|---|---|---|
+| E1.1 | Network screen → **Add by address** → "RTSP camera (eufy)" → the camera's IP and a name → Add | A camera entry with a "Needs login" tag |
+| E1.2 | Open it → **Enter login** → username, then password | Pairing completes and the tag becomes "Stream up" |
+| E1.3 | Enter a wrong password | "the camera rejected the username or password" |
+| E1.4 | Open `rtsp://<ip>/live0` in VLC and sign in | The camera's video plays (this checks the path and login outside Patchbay) |
+| E1.5 | Unplug the camera, wait about 1 min | "No reply", then "Offline". Replug: it recovers by itself |
+| E1.6 | Restart Patchbay | The camera is listed with its status and no new login prompt |
+
+Please report: camera and HomeBase models, whether the stream path was `live0`, and any error text.
+If the path differs, tell me the path VLC needed.

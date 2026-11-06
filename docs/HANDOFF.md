@@ -81,7 +81,7 @@ capabilities, so most additions need no new screens.
 
 **After the MVP:**
 
-5. **eufy RTSP cameras** (see `docs/protocols/eufy.md`). Viewing needs a player: Media3 on Android; desktop TBD.
+5. **eufy RTSP cameras**: status adapter done (HARDWARE_TEST E1.x). Still to do: in-app viewing, which needs a player (Media3 on Android; desktop TBD). TP-Link Kasa plugs are done too (K1.x). Lepro and Lefant wait on ADR 0007 and model numbers (`docs/protocols/tuya.md`).
 6. **Cast / Google TV.** Research first whether Chromecast TLS certificates rotate; if they do, TOFU pinning
    needs a different rule (ADR 0005 amendment).
 7. Rooms for live devices (the schema has `room_id`), the floor-plan editor, Jazzer fuzzing in CI, then

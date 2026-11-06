@@ -3,6 +3,7 @@ package dev.patchbay.core.adapter
 import dev.patchbay.core.adapter.bambu.BambuAdapter
 import dev.patchbay.core.adapter.govee.GoveeLanAdapter
 import dev.patchbay.core.adapter.kasa.KasaAdapter
+import dev.patchbay.core.adapter.rtsp.RtspCameraAdapter
 import dev.patchbay.core.adapter.webos.WebOsAdapter
 import dev.patchbay.core.log.SessionLog
 import dev.patchbay.core.net.NetGuard
@@ -42,6 +43,9 @@ public object AdapterRegistry {
     /** TP-Link Kasa plugs and switches on the legacy local protocol (TCP/UDP 9999). KLAP-only firmware is not found. */
     public val KASA: AdapterFactory = AdapterFactory { ctx -> KasaAdapter(ctx.netGuard, ctx.scope) }
 
+    /** RTSP cameras (eufy with RTSP switched on): added by address, view-only, status check. */
+    public val RTSP_CAMERA: AdapterFactory = AdapterFactory { ctx -> RtspCameraAdapter(ctx.netGuard) }
+
     /** Local adapters enabled by default, in discovery order. */
-    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, KASA)
+    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, KASA, RTSP_CAMERA)
 }

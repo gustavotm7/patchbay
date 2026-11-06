@@ -23,3 +23,4 @@ Status: Proposed · Date: YYYY-MM-DD
 ## Consequences
 ## Verification / follow-ups
 ```
+| [0007](0007-tuya-local-keys.md) | Tuya-based devices: user-supplied local keys, no Tuya contact (Lepro, Lefant) | Proposed |
