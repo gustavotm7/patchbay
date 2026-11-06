@@ -84,8 +84,10 @@ fun DesktopShell(
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = Space.xl), verticalAlignment = Alignment.CenterVertically) {
                 PText(section.label, Patchbay.type.title)
-                HSpace(Space.xl)
-                ExposureStrip(home)
+                if (!(live != null && (section == Section.INVENTORY || section == Section.EXPOSURE))) {
+                    HSpace(Space.xl)
+                    ExposureStrip(home)
+                }
                 Fill()
                 StatusTag(if (section == Section.INVENTORY && live != null) "Live" else "Demo home", Tone.NEUTRAL)
                 HSpace(Space.l)

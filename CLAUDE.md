@@ -56,8 +56,8 @@ user-owned WireGuard), **anything that controls the Kidde smoke/CO alarm**, prin
 - **Commits.** Small, focused, conventional-commit messages. Write an ADR for every non-obvious decision.
 - **No new dependency without a `docs/DEPENDENCIES.md` entry** (purpose, licence, makes network calls?)
   and a verification-metadata update (`./gradlew --write-verification-metadata sha256 help`).
-- **Design.** "Control Room" (ISA-101-inspired), see `docs/design/DESIGN_SPEC.md`. Colour carries meaning
-  only; never decorative. No banned clichés (section 6 of the brief). Use only design-system tokens —
+- **Design.** Dark-first modern look ("Control Room" values, visual direction v2: ADR 0009), see `docs/design/DESIGN_SPEC.md`.
+  Colour carries meaning only; never decorative. No gradients, glass or emoji. Use only design-system tokens —
   no hard-coded colours or sizes in screens.
 
 ## Layout and build

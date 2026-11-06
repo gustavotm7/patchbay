@@ -1,4 +1,28 @@
-# Design spec — "Control Room"
+# Design spec — "Control Room", visual direction v2
+
+> **v2, 2026-11-06 (ADR 0009, owner-directed).** The look moved from an industrial, squared "instrument panel" to a modern, dark-first,
+> Apple/Tesla-style interface. Where this note and the sections below disagree, **this note wins**. What stays from the original brief:
+> colour only for meaning, values first (tabular figures, units always), controls that mirror the physics, accessibility, reduced motion,
+> platform-appropriate layouts, no gradients, no glass, no emoji, no purple-blue or cream-terracotta clichés.
+>
+> | Topic | v2 rule |
+> |---|---|
+> | Depth | Three tonal layers (background, surface, raised). No borders on cards, no shadows, no blur. Dark base is near-black, never pure black; text is soft off-white, never pure white (Apple HIG dark-mode advice) |
+> | Shape | Cards 20 dp, tiles 22 dp, fields 14 dp, controls and tags are pills, small marks 8 dp |
+> | Emphasis | An "inverse" pair: a light pill or tile with dark text on dark themes (dark on light themes). Used for the primary button, the selected segment and an "on" device, so state reads at a glance without colour |
+> | Colour | Neutral surfaces; teal for active outputs, orange/blue for heat/cool, amber for attention, red for faults, and a device's real emitted colour. Selection never relies on colour alone |
+> | Type | Same Plex family. Sentence-case labels (no uppercase legends), 32 sp large titles, light-weight large numerals |
+> | Home | Tiles, one per device: glyph, name, one status line. Tap toggles lights and plugs; everything else opens its page (never one careless tap from turning off a TV). A separate details button on toggling tiles |
+> | Phone navigation | Bottom tab bar: Devices, Network, Demo. Edge-to-edge with system-bar insets handled |
+> | Desktop | Rounded rail (selected item is a raised pill), tile grid with a detail pane |
+> | Targets | At least 48 dp on phone, 40 dp on desktop; every tile and tab announces its name and state to screen readers |
+>
+> Designer references behind these choices: Apple's Human Interface Guidelines for Dark Mode (base and elevated backgrounds, 4.5:1 minimum and
+> 7:1 for small text, avoid glaring white); smart-home app practice (tiles with live status and one action, instant feedback, big touch
+> targets, name-then-state for screen readers); and critiques of Tesla's app (minimal chrome is good, but controls buried behind extra screens
+> are not, so important actions stay one tap away).
+
+# Original spec (v1)
 
 Status: Phase 0 · 2026-11-05 · Code: `ui/src/commonMain/kotlin/dev/patchbay/ui/designsystem/`
 Renders: `docs/design/screens/` (produced by the `screens` CI job; see §11).

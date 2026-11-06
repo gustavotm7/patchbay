@@ -25,3 +25,4 @@ Status: Proposed · Date: YYYY-MM-DD
 ```
 | [0007](0007-tuya-local-keys.md) | Tuya-based devices: user-supplied local keys, no Tuya contact (Lepro, Lefant) | Accepted |
 | [0008](0008-camera-playback-guarded-sockets.md) | In-app camera playback with NetGuard-backed sockets (Media3 RTSP) | Accepted |
+| [0009](0009-visual-direction-v2.md) | Visual direction v2: modern, dark-first, rounded (owner-directed) | Accepted |
