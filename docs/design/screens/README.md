@@ -2,16 +2,14 @@
 
 These PNGs are rendered by `ui/src/desktopTest/.../ScreenshotTest.kt` from the deterministic demo home.
 
-**Phase 0:** none are committed yet. The sandbox that wrote Phase 0 couldn't reach Google Maven, which Compose
-needs, so it couldn't render them. The CI `screens` job renders all 22 on every run and uploads them as the
-**`design-screens`** artifact. Once you've reviewed them, record them as goldens:
+**Recorded 2026-11-06** from the CI render of commit `84d96b3` (25 PNGs: light, dark and night, phone and desktop). The
+`:ui:desktopTest` run in CI compares every render with these and fails on drift (ADR 0006).
+
+When you change the UI on purpose, re-record and review the images before committing them. In CI, run the
+`verification-bootstrap` workflow and decode the PNGs from its log (see `docs/HANDOFF.md`), or locally:
 
 ```bash
 ./gradlew :ui:recordScreens
 ```
 
-```bash
-git add docs/design/screens/*.png && git commit -m "docs(design): record screenshot goldens"
-```
 
-After that, `:ui:desktopTest` fails if a render drifts from its golden (ADR 0006).
