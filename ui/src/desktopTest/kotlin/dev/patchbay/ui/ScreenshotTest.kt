@@ -72,7 +72,7 @@ class ScreenshotTest {
     private val failures = mutableListOf<String>()
 
     /** A fixed set of live devices for the tile screens: lights on and off, a plug, a TV, a printer, a camera, an unreachable one, one to pair. */
-    private class FakeLiveHome(home: dev.patchbay.core.model.Home) : LiveHome {
+    private class FakeLiveHome(private val home: dev.patchbay.core.model.Home) : LiveHome {
         private fun live(id: DeviceId, reach: Reachability? = null, pair: Boolean = false, name: String? = null, addr: String = "192.168.1.${20 + id.value.length}"): LiveDevice {
             val d = home.device(id)!!.let { if (name != null) it.copy(name = name) else it }
             val snap = home.snapshot(id)?.let { sn -> if (reach != null) sn.copy(reachability = reach, states = emptyList()) else sn }
