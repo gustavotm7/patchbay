@@ -69,6 +69,7 @@ public class BambuAdapter(
     )
 
     override val id: AdapterId = ID
+    override fun trustChanged(device: DeviceId): Boolean = device in trustBroken
     override val systemName: String = "Bambu printers"
     override val discoveryNote: String = "Needs LAN Only Mode on. If a scan can't see it (VLANs, client isolation), use Add by address with the IP and serial."
     override val requiresPairing: Boolean = true

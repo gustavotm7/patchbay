@@ -21,6 +21,7 @@ public class CastSimulator(
     keyStore: KeyStore,
     keyPassword: CharArray,
     public val friendlyName: String = "Living room TV",
+    port: Int = 0,
 ) : AutoCloseable {
 
     init {
@@ -42,11 +43,12 @@ public class CastSimulator(
     private val server: SSLServerSocket
     public val port: Int get() = server.localPort
     private val clients = CopyOnWriteArrayList<OutputStream>()
+    private val sockets = CopyOnWriteArrayList<Socket>()
 
     init {
         val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply { init(keyStore, keyPassword) }
         val ctx = SSLContext.getInstance("TLS").apply { init(kmf.keyManagers, null, null) }
-        server = ctx.serverSocketFactory.createServerSocket(0, 8, bind) as SSLServerSocket
+        server = ctx.serverSocketFactory.createServerSocket(port, 8, bind) as SSLServerSocket
         thread(isDaemon = true, name = "cast-sim-accept") {
             while (!server.isClosed) {
                 val c = runCatching { server.accept() }.getOrNull() ?: break
@@ -56,6 +58,7 @@ public class CastSimulator(
     }
 
     private fun serve(c: Socket) {
+        sockets += c
         if (offline) return
         val inp = DataInputStream(c.getInputStream())
         val out = c.getOutputStream()
@@ -148,5 +151,9 @@ public class CastSimulator(
         } catch (e: Exception) { null }
     }
 
-    override fun close() { server.close() }
+    /** Like a device that is switched off or replaced: stops accepting and drops the connections it has. */
+    override fun close() {
+        server.close()
+        sockets.forEach { runCatching { it.close() } }
+    }
 }

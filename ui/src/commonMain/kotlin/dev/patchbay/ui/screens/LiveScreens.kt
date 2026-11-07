@@ -123,6 +123,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                 )
             }
         } else {
+            NeedsAttention(devices, onSelect)
             ScenesPanel(live)
             val tileFor: @Composable (LiveDevice, Modifier) -> Unit = { d, m ->
                 val toggles = tileToggles(d)
@@ -298,6 +299,8 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
         LiveDetailBody(live, id, Modifier)
         VSpace(Space.l)
         RoomPanel(live, id)
+        VSpace(Space.l)
+        RemovePanel(live, id)
     }
 }
 
@@ -308,7 +311,11 @@ private fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = Mo
     val scope = rememberCoroutineScope()
     val d = devices.firstOrNull { it.device.id == id } ?: return
     val send: (dev.patchbay.core.model.Command) -> Unit = { cmd -> scope.launch { live.send(id, cmd) } }
-    if (d.device.kind == DeviceKind.LIGHT) {
+    if (d.trustChanged) {
+        TrustAlert(d, modifier)
+    } else if (d.snapshot?.reachability == Reachability.OFFLINE && !d.needsPairing) {
+        OfflineNotice(d, modifier)
+    } else if (d.device.kind == DeviceKind.LIGHT) {
         LightPanel(d, onCommand = send, modifier = modifier)
     } else if (d.device.kind == DeviceKind.TV || d.device.kind == DeviceKind.MEDIA_RECEIVER || d.device.kind == DeviceKind.SPEAKER) {
         TvPanel(d, onCommand = send, modifier = modifier)
@@ -354,6 +361,9 @@ private fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = Mo
 fun LiveScreenPhone(live: LiveHome, modifier: Modifier = Modifier) {
     var selected by remember { mutableStateOf<DeviceId?>(null) }
     val c = Patchbay.colors
+    val all by live.devices.collectAsState()
+    // A removed device has no page to show: go back to the list.
+    androidx.compose.runtime.LaunchedEffect(all, selected) { if (selected != null && all.none { it.device.id == selected }) selected = null }
     Column(modifier.fillMaxSize().background(c.background)) {
         val sel = selected
         if (sel == null) {
@@ -558,7 +568,18 @@ private fun ScenesPanel(live: LiveHome) {
                 Legend("Scenes")
                 if (scenes.isEmpty() && !creating) PText("One tap sets several lights and plugs the way they are now.", Patchbay.type.caption, c.textSecondary)
             }
-            if (!creating && eligible.isNotEmpty()) PButton("New scene", { creating = true; message = null; picked = eligible.map { it.device.id }.toSet() })
+            if (!creating && eligible.isNotEmpty()) {
+                PButton("All off", {
+                    scope.launch {
+                        message = when (val r = live.allOff()) {
+                            is dev.patchbay.core.result.PatchbayResult.Ok -> if (r.value == 0) "Everything is already off" else "Switched off ${r.value}"
+                            is dev.patchbay.core.result.PatchbayResult.Err -> r.error.message
+                        }
+                    }
+                })
+                HSpace(Space.s)
+                PButton("New scene", { creating = true; message = null; picked = eligible.map { it.device.id }.toSet() })
+            }
         }
         scenes.forEach { sc ->
             VSpace(Space.s)
@@ -659,5 +680,143 @@ private fun RoomPanel(live: LiveHome, id: DeviceId) {
         }
         VSpace(Space.xs)
         PText("A new room is created the first time a device is put in it.", Patchbay.type.caption, c.textTertiary)
+    }
+}
+
+/** Anything that needs a look, one tap from the main screen: a changed security key first, then devices that stopped answering. */
+@Composable
+private fun NeedsAttention(devices: List<LiveDevice>, onSelect: (DeviceId) -> Unit) {
+    val c = Patchbay.colors
+    val trouble = devices.filter { it.trustChanged } + devices.filter { !it.trustChanged && it.snapshot?.reachability == Reachability.OFFLINE && !it.needsPairing }
+    if (trouble.isEmpty()) return
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Needs attention")
+        trouble.forEach { d ->
+            VSpace(Space.s)
+            Row(
+                Modifier.fillMaxWidth().clip(Shapes.control).clickable(role = Role.Button) { onSelect(d.device.id) }.padding(vertical = Space.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ToneMarker(if (d.trustChanged) Tone.ALARM else Tone.ATTENTION, Modifier.size(10.dp))
+                HSpace(Space.m)
+                Column(Modifier.weight(1f)) {
+                    PText(d.device.name, Patchbay.type.bodyStrong)
+                    PText(
+                        if (d.trustChanged) "Different security key: Patchbay stopped talking to it" else "No reply for a while",
+                        Patchbay.type.caption, if (d.trustChanged) c.alarm else c.textSecondary,
+                    )
+                }
+                PText("›", Patchbay.type.title, c.textSecondary)
+            }
+        }
+    }
+    VSpace(Space.l)
+}
+
+/** The loud one (ADR 0005): the device is not who you paired. No controls are shown. */
+@Composable
+private fun TrustAlert(d: LiveDevice, modifier: Modifier) {
+    val c = Patchbay.colors
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                PText(d.device.name, Patchbay.type.title)
+                PText(listOfNotNull(d.device.vendor, d.address).joinToString(" · "), Patchbay.type.caption, c.textSecondary)
+            }
+            StatusTag("Security alert", Tone.ALARM)
+        }
+        VSpace(Space.l)
+        Panel(Modifier.fillMaxWidth()) {
+            PText("This device is presenting a different security key.", Patchbay.type.bodyStrong, c.alarm)
+            VSpace(Space.xs)
+            PText(
+                "Patchbay remembers the key this device showed when you paired it, and it has stopped talking to it. A firmware update or a factory reset can change the key. " +
+                    "So can another device on your network pretending to be this one. If you know why it changed, remove it below and pair it again; you'll see the new fingerprint. If you don't, leave it alone.",
+                Patchbay.type.body, c.textSecondary,
+            )
+        }
+    }
+}
+
+/** No dead buttons: when a device doesn't answer, say so instead of showing controls that do nothing. */
+@Composable
+private fun OfflineNotice(d: LiveDevice, modifier: Modifier) {
+    val c = Patchbay.colors
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                PText(d.device.name, Patchbay.type.title)
+                PText(listOfNotNull(d.device.vendor, d.device.model, d.address).joinToString(" · "), Patchbay.type.caption, c.textSecondary)
+            }
+            StatusTag("Offline", Tone.ALARM)
+        }
+        VSpace(Space.l)
+        Panel(Modifier.fillMaxWidth()) {
+            PText("No reply from this device.", Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            PText("It may be switched off, unplugged, or on another network. Patchbay keeps trying, so it comes back by itself when it answers.", Patchbay.type.body, c.textSecondary)
+        }
+    }
+}
+
+/** Forget a device and its saved pairing. Two taps, because it can't be undone (it can be found and paired again). */
+@Composable
+private fun RemovePanel(live: LiveHome, id: DeviceId) {
+    val c = Patchbay.colors
+    val scope = rememberCoroutineScope()
+    var confirming by remember { mutableStateOf(false) }
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Remove device")
+        VSpace(Space.xs)
+        PText("Forgets this device and its saved pairing on this device. It comes back on the next scan, unpaired.", Patchbay.type.caption, c.textSecondary)
+        VSpace(Space.s)
+        if (!confirming) {
+            PButton("Remove…", { confirming = true })
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                PButton("Confirm remove", { scope.launch { live.forget(id) } }, Modifier.weight(1f), ButtonKind.DESTRUCTIVE)
+                PButton("Cancel", { confirming = false }, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** What changed and when, newest first, kept on this device. Copying it as CSV is the only way it leaves. */
+@Composable
+fun ActivityScreen(live: LiveHome, modifier: Modifier = Modifier) {
+    val c = Patchbay.colors
+    val entries by live.activity.collectAsState()
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                PText("Activity", Patchbay.type.largeTitle)
+                PText("What changed and when. Stays on this device.", Patchbay.type.body, c.textSecondary)
+            }
+            if (entries.isNotEmpty()) PButton(if (copied) "Copied" else "Copy as CSV", { clipboard.setText(AnnotatedString(live.activityCsv())); copied = true })
+        }
+        VSpace(Space.l)
+        if (entries.isEmpty()) {
+            Panel(Modifier.fillMaxWidth()) {
+                PText("Nothing yet", Patchbay.type.title)
+                VSpace(Space.xs)
+                PText("Switching a light, a device going offline, a scene running: each shows up here as it happens.", Patchbay.type.body, c.textSecondary)
+            }
+        } else {
+            Panel(Modifier.fillMaxWidth()) {
+                entries.take(150).forEachIndexed { i, e ->
+                    if (i > 0) Hairline()
+                    Row(Modifier.fillMaxWidth().padding(vertical = Space.s), verticalAlignment = Alignment.Top) {
+                        Column(Modifier.weight(1f)) {
+                            PText(e.deviceName, Patchbay.type.bodyStrong)
+                            PText(e.event, Patchbay.type.caption, c.textSecondary)
+                        }
+                        HSpace(Space.m)
+                        PText(live.timeLabel(e.atMillis), Patchbay.type.caption, c.textTertiary)
+                    }
+                }
+            }
+        }
     }
 }

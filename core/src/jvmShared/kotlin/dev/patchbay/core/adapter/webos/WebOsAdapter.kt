@@ -72,6 +72,7 @@ public class WebOsAdapter(
     )
 
     override val id: AdapterId = ID
+    override fun trustChanged(device: DeviceId): Boolean = device in trustBroken
     override val systemName: String = "LG TVs"
     override val discoveryNote: String = "The TV must be on, on the same network, with “LG Connect Apps” (or “Mobile TV On”) enabled in its settings."
     override val requiresPairing: Boolean = true

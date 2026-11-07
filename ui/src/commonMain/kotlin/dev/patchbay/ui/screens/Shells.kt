@@ -51,7 +51,7 @@ import dev.patchbay.ui.designsystem.VFill
 import dev.patchbay.ui.designsystem.VSpace
 
 /** Desktop sections. The demo home is labelled as a demo so it can't be mistaken for your real devices. */
-enum class Section(val label: String) { INVENTORY("Devices"), EXPOSURE("Network"), HOME("Demo home"), SETTINGS("Settings") }
+enum class Section(val label: String) { INVENTORY("Devices"), LEDGER("Activity"), EXPOSURE("Network"), HOME("Demo home"), SETTINGS("Settings") }
 
 /** What the right-hand inspector (desktop) or the pushed screen (phone) shows. */
 sealed interface Focus {
@@ -103,6 +103,10 @@ fun DesktopShell(
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.xl)) {
                     if (settings != null) SettingsScreen(settings, Modifier.width(640.dp)) else PText("Settings aren't available here.", Patchbay.type.body, c.textSecondary)
                 }
+                return@Column
+            }
+            if (section == Section.LEDGER && live != null) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.xl)) { ActivityScreen(live, Modifier.width(720.dp)) }
                 return@Column
             }
             if (section == Section.EXPOSURE && live != null) {
@@ -262,7 +266,7 @@ fun DesktopApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome
     DesktopShell(home, trends, focus, nowLabel, section = section, onFocus = { focus = it }, onSection = { section = it }, live = live, settings = settings)
 }
 
-enum class PhoneTab(val label: String) { DEVICES("Devices"), NETWORK("Network"), PLAN("Demo"), SETTINGS("Settings") }
+enum class PhoneTab(val label: String) { DEVICES("Devices"), ACTIVITY("Activity"), NETWORK("Network"), PLAN("Demo"), SETTINGS("Settings") }
 
 /** Phone entry point: a bottom tab bar over Devices (tiles), Network (privacy and exposure) and the demo floor plan. */
 @Composable
@@ -277,6 +281,7 @@ fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 PhoneTab.DEVICES -> LiveScreenPhone(live)
+                PhoneTab.ACTIVITY -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { ActivityScreen(live) }
                 PhoneTab.NETWORK -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { NetworkScreen(live) }
                 PhoneTab.PLAN -> DemoPhone(home, trends, nowLabel)
                 PhoneTab.SETTINGS -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) {
@@ -328,6 +333,12 @@ private fun TabIcon(tab: PhoneTab, selected: Boolean, color: androidx.compose.ui
             PhoneTab.NETWORK -> {
                 drawCircle(color, s * 0.42f - sw / 2, style = st)
                 drawCircle(color, s * 0.14f)
+            }
+            PhoneTab.ACTIVITY -> {
+                // A clock: a ring with two hands.
+                drawCircle(color, s * 0.42f - sw / 2, style = st)
+                drawLine(color, androidx.compose.ui.geometry.Offset(s * 0.5f, s * 0.5f), androidx.compose.ui.geometry.Offset(s * 0.5f, s * 0.26f), sw)
+                drawLine(color, androidx.compose.ui.geometry.Offset(s * 0.5f, s * 0.5f), androidx.compose.ui.geometry.Offset(s * 0.68f, s * 0.58f), sw)
             }
             PhoneTab.SETTINGS -> {
                 // Three sliders: a line each, with a knob at a different position.

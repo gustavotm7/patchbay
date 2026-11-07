@@ -30,6 +30,7 @@ import dev.patchbay.core.model.Reachability
 import dev.patchbay.core.net.NetGuardStats
 import dev.patchbay.core.result.PatchbayError
 import dev.patchbay.core.result.PatchbayResult
+import dev.patchbay.ui.screens.ActivityScreen
 import dev.patchbay.ui.screens.AppSettings
 import dev.patchbay.ui.screens.Appearance
 import dev.patchbay.ui.screens.NetworkScreen
@@ -78,10 +79,10 @@ class ScreenshotTest {
 
     /** A fixed set of live devices for the tile screens: lights on and off, a plug, a TV, a printer, a camera, an unreachable one, one to pair. */
     private class FakeLiveHome(private val home: dev.patchbay.core.model.Home) : LiveHome {
-        private fun live(id: DeviceId, reach: Reachability? = null, pair: Boolean = false, name: String? = null, room: String? = null, addr: String = "192.168.1.${20 + id.value.length}"): LiveDevice {
+        private fun live(id: DeviceId, reach: Reachability? = null, pair: Boolean = false, name: String? = null, room: String? = null, trust: Boolean = false, addr: String = "192.168.1.${20 + id.value.length}"): LiveDevice {
             val d = home.device(id)!!.let { if (name != null) it.copy(name = name) else it }.copy(roomId = room?.let { dev.patchbay.core.model.RoomId(it) })
             val snap = home.snapshot(id)?.let { sn -> if (reach != null) sn.copy(reachability = reach, states = emptyList()) else sn }
-            return LiveDevice(d, if (pair) null else snap, addr, needsPairing = pair)
+            return LiveDevice(d, if (pair) null else snap, addr, needsPairing = pair, trustChanged = trust)
         }
 
         override val devices: StateFlow<List<LiveDevice>> = MutableStateFlow(
@@ -94,6 +95,7 @@ class ScreenshotTest {
                 live(DemoHome.Ids.CAMERA, name = "Front door", pair = true),
                 live(DemoHome.Ids.THERMOSTAT, name = "Hall thermostat"),
                 live(DemoHome.Ids.PURIFIER, reach = Reachability.OFFLINE, name = "Air purifier"),
+                live(DemoHome.Ids.GOOGLE_TV, reach = Reachability.DEGRADED, name = "Living room cast", trust = true),
             ),
         )
         override val scanState: StateFlow<ScanState> = MutableStateFlow(ScanState.DONE)
@@ -110,6 +112,19 @@ class ScreenshotTest {
             ),
         )
         override fun dismissProblem() {}
+        override val activity: StateFlow<List<dev.patchbay.core.home.LedgerEntry>> = MutableStateFlow(
+            listOf(
+                dev.patchbay.core.home.LedgerEntry(1_000, "Living room cast", "Presented a different security key than the one you paired (stopped talking to it)"),
+                dev.patchbay.core.home.LedgerEntry(2_000, "Scene: Movie night", "Ran (2 of 2 devices responded)"),
+                dev.patchbay.core.home.LedgerEntry(3_000, "Floor lamp", "Turned on (from Patchbay)"),
+                dev.patchbay.core.home.LedgerEntry(4_000, "Air purifier", "Went offline"),
+                dev.patchbay.core.home.LedgerEntry(5_000, "Workshop H2D", "Printer: printing (at the device or another app)"),
+            ),
+        )
+        override fun timeLabel(epochMillis: Long): String = "Today 19:${(30 + epochMillis / 1000).toString().padStart(2, '0')}"
+        override fun activityCsv(): String = "csv"
+        override suspend fun forget(device: DeviceId) {}
+        override suspend fun allOff(): PatchbayResult<Int> = PatchbayResult.Ok(2)
         override val rooms: StateFlow<List<String>> = MutableStateFlow(listOf("Bedroom", "Living room", "Workshop"))
         override suspend fun assignRoom(device: DeviceId, room: String?) {}
         override val scenes: StateFlow<List<dev.patchbay.core.home.Scene>> = MutableStateFlow(
@@ -167,6 +182,9 @@ class ScreenshotTest {
         }
         shot("settings_desktop_dark", desktop, PatchbayPalettes.Dark, FormFactor.DESKTOP) {
             DesktopShell(home, trends, Focus.RoomFocus(DemoHome.Ids.WORKSHOP), now, section = Section.SETTINGS, live = FakeLiveHome(home), settings = settings)
+        }
+        shot("activity_phone_dark", phoneTall, PatchbayPalettes.Dark, FormFactor.PHONE) {
+            Column(Modifier.fillMaxSize().background(PatchbayPalettes.Dark.background).padding(16.dp)) { ActivityScreen(FakeLiveHome(home)) }
         }
         shot("live_desktop_dark", desktop, PatchbayPalettes.Dark, FormFactor.DESKTOP) {
             DesktopShell(home, trends, Focus.RoomFocus(DemoHome.Ids.WORKSHOP), now, section = Section.INVENTORY, live = FakeLiveHome(home))

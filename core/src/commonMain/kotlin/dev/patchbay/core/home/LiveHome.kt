@@ -20,6 +20,8 @@ public data class LiveDevice(
     val address: String? = null,
     /** Found, but must be paired (TV prompt, TOFU fingerprint) before it can be observed or controlled. */
     val needsPairing: Boolean = false,
+    /** The device presented a different security key than the one you paired. Patchbay has stopped talking to it. */
+    val trustChanged: Boolean = false,
 )
 
 public enum class ScanState { IDLE, SCANNING, DONE, FAILED }
@@ -56,6 +58,21 @@ public interface LiveHome {
 
     /** Adds a device by LAN address and adapter-specific key, then it pairs like a scanned one. */
     public suspend fun addManually(adapter: AdapterId, address: String, key: String, choice: String? = null): PatchbayResult<DeviceId>
+
+    /** What changed and when, newest first (bounded). Kept on this device only. */
+    public val activity: StateFlow<List<LedgerEntry>>
+
+    /** A short local-time label for an activity entry ("Today 19:30", "Yesterday 08:12", "3 Nov 08:12"). */
+    public fun timeLabel(epochMillis: Long): String
+
+    /** The activity as CSV text, for the explicit "Copy as CSV" action. */
+    public fun activityCsv(): String
+
+    /** Removes a device and its saved pairing. It reappears on the next scan, unpaired. */
+    public suspend fun forget(device: DeviceId)
+
+    /** Switches off every light and plug that is on. Returns how many were switched, or an error naming how many didn't answer. */
+    public suspend fun allOff(): PatchbayResult<Int>
 
     /** Rooms in use, sorted. A room exists while at least one device is in it. */
     public val rooms: StateFlow<List<String>>

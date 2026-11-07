@@ -69,6 +69,7 @@ public class CastAdapter(
     )
 
     override val id: AdapterId = ID
+    override fun trustChanged(device: DeviceId): Boolean = device in trustBroken
     override val requiresPairing: Boolean = true
     override val systemName: String = "Cast and Google TV"
     override val discoveryNote: String =

@@ -57,9 +57,87 @@ public class LanHome(
     private val _rooms = MutableStateFlow<List<String>>(emptyList())
     private val _scenes = MutableStateFlow<List<Scene>>(emptyList())
     private var storedScenes: List<StoredScene> = emptyList()
+    private val _activity = MutableStateFlow<List<LedgerEntry>>(emptyList())
+    private data class Summary(
+        val reach: dev.patchbay.core.model.Reachability,
+        val power: Boolean?,
+        val stage: dev.patchbay.core.model.PrintStage?,
+        val media: dev.patchbay.core.model.PlaybackStatus?,
+    )
+    private val lastSummary = ConcurrentHashMap<DeviceId, Summary>()
+    private val lastCommandAt = ConcurrentHashMap<DeviceId, Long>()
+    private val trustAlerted = ConcurrentHashMap.newKeySet<DeviceId>()
+    @Volatile private var ledgerFlush: Job? = null
     private val sceneJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
     override val problem: StateFlow<String?> = _problem.asStateFlow()
     override val scanReport: StateFlow<List<dev.patchbay.core.home.AdapterScan>> = _report.asStateFlow()
+
+    override val activity: StateFlow<List<LedgerEntry>> = _activity.asStateFlow()
+
+    override fun timeLabel(epochMillis: Long): String {
+        val zone = java.time.ZoneId.systemDefault()
+        val t = java.time.Instant.ofEpochMilli(epochMillis).atZone(zone)
+        val today = java.time.Instant.ofEpochMilli(clock()).atZone(zone).toLocalDate()
+        val hhmm = "%02d:%02d".format(t.hour, t.minute)
+        return when (t.toLocalDate()) {
+            today -> "Today $hhmm"
+            today.minusDays(1) -> "Yesterday $hhmm"
+            else -> "${t.dayOfMonth} ${t.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)} $hhmm"
+        }
+    }
+
+    override fun activityCsv(): String = LedgerCsv.of(_activity.value) { java.time.Instant.ofEpochMilli(it).toString() }
+
+    private fun loadLedger() {
+        val raw = store?.setting("ledger") ?: return
+        _activity.value = try {
+            sceneJson.decodeFromString<List<StoredLedgerEntry>>(raw).map { LedgerEntry(it.t, it.d, it.e) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Adds an entry (newest first, at most 300) and schedules a write; writes are batched so a burst costs one. */
+    private fun record(deviceName: String, event: String) {
+        _activity.update { (listOf(LedgerEntry(clock(), deviceName, event)) + it).take(300) }
+        if (store != null && ledgerFlush == null) {
+            ledgerFlush = scope.launch {
+                delay(2_000)
+                ledgerFlush = null
+                store.putSetting("ledger", sceneJson.encodeToString(_activity.value.map { StoredLedgerEntry(it.atMillis, it.deviceName, it.event) }))
+            }
+        }
+    }
+
+    override suspend fun forget(device: DeviceId) {
+        val name = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return
+        observers.remove(device)?.cancel()
+        owners.remove(device); pendingPairing.remove(device); lastSummary.remove(device); trustAlerted.remove(device)
+        synchronized(this) {
+            _devices.update { list -> list.filterNot { it.device.id == device } }
+            refreshRooms()
+        }
+        store?.forget(device)
+        record(name, "Removed from Patchbay")
+        log?.info("home", "removed a device and its saved pairing")
+    }
+
+    override suspend fun allOff(): PatchbayResult<Int> {
+        val targets = _devices.value.filter {
+            val snap = it.snapshot
+            (it.device.kind == dev.patchbay.core.model.DeviceKind.LIGHT || it.device.kind == dev.patchbay.core.model.DeviceKind.PLUG) &&
+                snap != null && snap.reachability == dev.patchbay.core.model.Reachability.ONLINE &&
+                snap.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on == true
+        }
+        var failed = 0
+        for (t in targets) {
+            if (send(t.device.id, Command.SetPower(false)) is PatchbayResult.Err) failed++
+            delay(40)
+        }
+        record("All lights and plugs", "Switched off from Patchbay (${targets.size - failed} of ${targets.size})")
+        return if (failed == 0) PatchbayResult.Ok(targets.size)
+        else PatchbayResult.Err(PatchbayError.Unreachable("$failed of ${targets.size} didn't respond"))
+    }
 
     override val rooms: StateFlow<List<String>> = _rooms.asStateFlow()
     override val scenes: StateFlow<List<Scene>> = _scenes.asStateFlow()
@@ -149,6 +227,7 @@ public class LanHome(
             }
             if (!ok) failed++
         }
+        record("Scene: ${scene.name}", "Ran (${scene.steps.size - failed} of ${scene.steps.size} devices responded)")
         log?.info("home", "ran a scene: ${scene.steps.size - failed} of ${scene.steps.size} devices responded")
         return if (failed == 0) PatchbayResult.Ok(Unit)
         else PatchbayResult.Err(PatchbayError.Unreachable("$failed of ${scene.steps.size} devices didn't respond"))
@@ -177,6 +256,7 @@ public class LanHome(
         restoreSaved()
         refreshRooms()
         loadScenes()
+        loadLedger()
     }
 
     /** Devices saved by earlier sessions appear immediately and are polled; no scan needed. */
@@ -321,12 +401,48 @@ public class LanHome(
     private fun updateSnapshot(snap: DeviceSnapshot) {
         // Capabilities can grow once a device is connected (e.g. a TV's input list), so refresh them too.
         val caps = owners[snap.deviceId]?.capabilities(snap.deviceId)
+        val trust = owners[snap.deviceId]?.trustChanged(snap.deviceId) == true
         _devices.update { list ->
             list.map {
                 if (it.device.id != snap.deviceId) it
-                else it.copy(snapshot = merge(it.snapshot, snap), device = if (caps != null && caps != it.device.capabilities) it.device.copy(capabilities = caps) else it.device)
+                else it.copy(
+                    snapshot = merge(it.snapshot, snap), trustChanged = trust,
+                    device = if (caps != null && caps != it.device.capabilities) it.device.copy(capabilities = caps) else it.device,
+                )
             }
         }
+        val live = _devices.value.firstOrNull { it.device.id == snap.deviceId } ?: return
+        if (trust && trustAlerted.add(snap.deviceId)) {
+            record(live.device.name, "Presented a different security key than the one you paired (stopped talking to it)")
+            report("${live.device.name} presented a different security key than the one you paired. Open it for details.")
+        } else if (!trust) {
+            trustAlerted.remove(snap.deviceId)
+        }
+        val s = live.snapshot ?: return
+        val now = Summary(s.reachability, s.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on, s.state<dev.patchbay.core.model.CapabilityState.PrintJobState>()?.stage, s.state<dev.patchbay.core.model.CapabilityState.MediaState>()?.status)
+        val before = lastSummary.put(snap.deviceId, now)
+        if (before != null && before != now) describeChange(before, now, snap.deviceId)?.let { record(live.device.name, it) }
+    }
+
+    /** What happened, in words, or null when the change isn't worth a line (a brief "no reply" flicker). */
+    private fun describeChange(a: Summary, b: Summary, id: DeviceId): String? {
+        val parts = mutableListOf<String>()
+        var stateChange = false
+        if (a.reach != dev.patchbay.core.model.Reachability.OFFLINE && b.reach == dev.patchbay.core.model.Reachability.OFFLINE) parts += "Went offline"
+        if (a.reach == dev.patchbay.core.model.Reachability.OFFLINE && b.reach == dev.patchbay.core.model.Reachability.ONLINE) parts += "Back online"
+        if (a.power != null && b.power != null && a.power != b.power) { parts += if (b.power) "Turned on" else "Turned off"; stateChange = true }
+        if (b.stage != null && a.stage != b.stage) { parts += "Printer: ${b.stage.name.lowercase()}"; stateChange = true }
+        if (b.media != null && a.media != b.media && b.media != dev.patchbay.core.model.PlaybackStatus.BUFFERING) {
+            parts += when (b.media) {
+                dev.patchbay.core.model.PlaybackStatus.PLAYING -> "Playing"
+                dev.patchbay.core.model.PlaybackStatus.PAUSED -> "Paused"
+                else -> "Stopped"
+            }
+            stateChange = true
+        }
+        if (parts.isEmpty()) return null
+        val cause = if (!stateChange) "" else if (clock() - (lastCommandAt[id] ?: 0L) < 15_000) " (from Patchbay)" else " (at the device or another app)"
+        return parts.joinToString("; ") + cause
     }
 
     /** An unreachable poll keeps the last known values, marked with the new reachability. */
@@ -339,6 +455,7 @@ public class LanHome(
         val ok = CommandValidator.validate(live.device, command, live.snapshot)
         if (ok is PatchbayResult.Err) return ok
         val adapter = owners[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("no adapter"))
+        lastCommandAt[device] = clock()
         val r = adapter.command(device, command)
         if (r is PatchbayResult.Ok) optimistic(device, command)
         else report((r as PatchbayResult.Err).error.message)

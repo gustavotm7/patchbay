@@ -23,6 +23,9 @@ public interface DeviceAdapter {
     /** True when a device must be paired (TV prompt, access code, TOFU) before [observe]/[command] work. */
     public val requiresPairing: Boolean get() = false
 
+    /** True when a paired device presented a different security key than the one pinned at pairing (ADR 0005). Cheap; no I/O. */
+    public fun trustChanged(device: DeviceId): Boolean = false
+
     /** Plain name for this system in scan results ("Govee lights"). */
     public val systemName: String get() = id.value
 

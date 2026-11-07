@@ -38,6 +38,7 @@ import dev.patchbay.ui.designsystem.Space
 /** One line of status for a tile: what the device is doing, or why it can't be reached. */
 internal fun tileStatus(d: LiveDevice): String {
     val s = d.snapshot
+    if (d.trustChanged) return "Key changed"
     if (d.needsPairing) return "Tap to pair"
     if (s == null) return "Connecting…"
     when (s.reachability) {
@@ -75,7 +76,7 @@ internal fun tileStatus(d: LiveDevice): String {
 
 /** Lights and plugs switch on a tap; everything else opens its page (a TV or printer is never one careless tap from turning off). */
 internal fun tileToggles(d: LiveDevice): Boolean =
-    !d.needsPairing && (d.device.kind == DeviceKind.LIGHT || d.device.kind == DeviceKind.PLUG) && d.device.capability<Capability.Power>() != null
+    !d.needsPairing && !d.trustChanged && d.snapshot?.reachability == Reachability.ONLINE && (d.device.kind == DeviceKind.LIGHT || d.device.kind == DeviceKind.PLUG) && d.device.capability<Capability.Power>() != null
 
 /**
  * A device tile: glyph, name, one line of status. "On" is the inverse fill (a light tile with dark text on dark themes),
@@ -96,6 +97,7 @@ fun DeviceTile(
     val fg = if (on) c.onInverse else c.text
     val status = tileStatus(d)
     val attention = d.needsPairing || s?.reachability == Reachability.OFFLINE || s?.reachability == Reachability.DEGRADED
+    val alarm = d.trustChanged
     Column(
         modifier
             .defaultMinSize(minHeight = 120.dp)
@@ -132,7 +134,7 @@ fun DeviceTile(
         }
         Box(Modifier.weight(1f, fill = true).defaultMinSize(minHeight = Space.l))
         PText(d.device.name, Patchbay.type.bodyStrong, fg, maxLines = 2)
-        PText(status, Patchbay.type.caption, if (on) c.onInverse else if (attention) c.attention else c.textSecondary, maxLines = 1)
+        PText(status, Patchbay.type.caption, if (on) c.onInverse else if (alarm) c.alarm else if (attention) c.attention else c.textSecondary, maxLines = 1)
     }
 }
 
