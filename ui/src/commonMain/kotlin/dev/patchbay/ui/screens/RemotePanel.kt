@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +43,7 @@ fun RemotePanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifi
         VSpace(Space.l)
         Legend("Navigate")
         VSpace(Space.xs)
-        Row(Modifier.fillMaxWidthRow(), horizontalArrangement = Arrangement.Center) { PButton("Up", key(RemoteKey.UP), Modifier.weight(1f)); Box(Modifier.weight(2f)) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { PButton("Up", key(RemoteKey.UP), Modifier.weight(1f)); Box(Modifier.weight(2f)) }
         VSpace(Space.xs)
         Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
             PButton("Left", key(RemoteKey.LEFT), Modifier.weight(1f))
@@ -50,7 +51,7 @@ fun RemotePanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifi
             PButton("Right", key(RemoteKey.RIGHT), Modifier.weight(1f))
         }
         VSpace(Space.xs)
-        Row(Modifier.fillMaxWidthRow()) { PButton("Down", key(RemoteKey.DOWN), Modifier.weight(1f)); Box(Modifier.weight(2f)) }
+        Row(Modifier.fillMaxWidth()) { PButton("Down", key(RemoteKey.DOWN), Modifier.weight(1f)); Box(Modifier.weight(2f)) }
         VSpace(Space.m)
         Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
             PButton("Back", key(RemoteKey.BACK), Modifier.weight(1f))
@@ -71,6 +72,3 @@ fun RemotePanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifi
         PText("Power toggles the TV like the power button on its remote.", Patchbay.type.caption, c.textTertiary)
     }
 }
-
-private fun Modifier.fillMaxWidthRow(): Modifier = this.then(Modifier.fillMaxWidthCompat())
-private fun Modifier.fillMaxWidthCompat(): Modifier = androidx.compose.foundation.layout.run { this@fillMaxWidthCompat.fillMaxWidth() }
