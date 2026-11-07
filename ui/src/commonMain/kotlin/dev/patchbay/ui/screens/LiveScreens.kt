@@ -64,6 +64,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
     val devices by live.devices.collectAsState()
     val scan by live.scanState.collectAsState()
     val problem by live.problem.collectAsState()
+    val report by live.scanReport.collectAsState()
     val scope = rememberCoroutineScope()
     val pairing = remember { PairingDialogState() }
 
@@ -80,6 +81,10 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                     },
                     Patchbay.type.body, c.textSecondary,
                 )
+                val silent = report.filter { it.discoverable && it.found == 0 }.map { it.name }
+                if (scan == ScanState.DONE && silent.isNotEmpty()) {
+                    PText("Nothing answered from ${silent.joinToString(", ")}. See Network for what to try.", Patchbay.type.caption, c.attention)
+                }
             }
             PButton(
                 if (scan == ScanState.SCANNING) "Scanning…" else "Scan", { scope.launch { live.scan() } },
@@ -88,10 +93,15 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
         }
         problem?.let {
             VSpace(Space.m)
-            Row(Modifier.fillMaxWidth().background(c.attention.copy(alpha = 0.16f), Shapes.control).padding(Space.m), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().background(c.attention.copy(alpha = 0.16f), Shapes.control).padding(start = Space.m), verticalAlignment = Alignment.CenterVertically) {
                 ToneMarker(Tone.ATTENTION, Modifier.size(8.dp))
                 HSpace(Space.s)
-                PText(it, Patchbay.type.caption, c.attention)
+                PText(it, Patchbay.type.caption, c.attention, Modifier.weight(1f).padding(vertical = Space.m))
+                Box(
+                    Modifier.height(Space.touchTarget).clip(Shapes.control)
+                        .clickable(role = Role.Button, onClickLabel = "Dismiss") { live.dismissProblem() }.padding(horizontal = Space.l),
+                    contentAlignment = Alignment.Center,
+                ) { PText("Dismiss", Patchbay.type.bodyStrong, c.attention) }
             }
         }
         VSpace(Space.l)
@@ -119,7 +129,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                         when {
                             d.needsPairing -> scope.launch {
                                 val r = live.pair(d.device.id, pairing)
-                                pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.message)
+                                pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.takeIf { it !is dev.patchbay.core.result.PatchbayError.Cancelled }?.message)
                             }
                             toggles -> scope.launch {
                                 val on = d.snapshot?.state<CapabilityState.PowerState>()?.on == true
@@ -160,8 +170,10 @@ fun NetworkScreen(live: LiveHome, modifier: Modifier = Modifier) {
                 Patchbay.type.caption, c.textSecondary,
             )
         }
+        ScanReportPanel(live)
         CensusPanel(live)
         ExposurePanel(live)
+        LogPanel(live)
         VSpace(Space.m)
         PText(
             "Supported now: Govee lights (LAN), TP-Link Kasa plugs, Tuya bulbs (by address), eufy RTSP cameras, LG webOS TVs, Bambu Lab printers (monitoring + pause/resume/stop). Cast, ESPHome and ecobee come next.",
@@ -294,7 +306,7 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
                 onPair = {
                     scope.launch {
                         val r = live.pair(id, pairing)
-                        pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.message)
+                        pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.takeIf { it !is dev.patchbay.core.result.PatchbayError.Cancelled }?.message)
                     }
                 },
             )
@@ -429,12 +441,63 @@ private fun ManualAddPanel(live: LiveHome) {
                             }
                         }
                     },
-                    Modifier.weight(1f), ButtonKind.PRIMARY, enabled = address.isNotBlank() && key.isNotBlank(),
+                    Modifier.weight(1f), ButtonKind.PRIMARY, enabled = address.isNotBlank() && (key.isNotBlank() || option.keyOptional),
                 )
                 PButton("Cancel", { open = false; error = null }, Modifier.weight(1f))
             }
             VSpace(Space.xs)
             PText("Then tap Pair on the new entry, as for a scanned device. No address ever leaves your network.", Patchbay.type.caption, c.textTertiary)
+        }
+    }
+}
+
+/** What each system found in the last scan, and what to try when it found nothing. This is how a missing device gets explained. */
+@Composable
+private fun ScanReportPanel(live: LiveHome) {
+    val c = Patchbay.colors
+    val report by live.scanReport.collectAsState()
+    if (report.isEmpty()) return
+    VSpace(Space.m)
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Last scan")
+        report.forEachIndexed { i, r ->
+            VSpace(Space.s)
+            if (i > 0) Hairline()
+            if (i > 0) VSpace(Space.s)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PText(r.name, Patchbay.type.bodyStrong, modifier = Modifier.weight(1f))
+                when {
+                    !r.discoverable -> StatusTag("By address", Tone.NEUTRAL)
+                    r.found == 0 -> StatusTag("None found", Tone.ATTENTION)
+                    else -> StatusTag("${r.found} found", Tone.ACTIVE)
+                }
+            }
+            if (r.note != null && (r.discoverable && r.found == 0 || !r.discoverable)) {
+                VSpace(Space.xs)
+                PText(
+                    if (r.discoverable) r.note else "These don't announce themselves. Add them with Add by address on the Devices tab.",
+                    Patchbay.type.caption, c.textSecondary,
+                )
+            }
+        }
+    }
+}
+
+/** The redacted session log, copied only when asked. Passwords, codes and keys are already removed. */
+@Composable
+private fun LogPanel(live: LiveHome) {
+    val c = Patchbay.colors
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    VSpace(Space.m)
+    Panel(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Legend("Session log")
+                PText("Copies the latest log lines with secrets removed. Nothing is sent anywhere; you paste it where you choose.", Patchbay.type.caption, c.textSecondary)
+            }
+            HSpace(Space.m)
+            PButton(if (copied) "Copied" else "Copy log", { clipboard.setText(AnnotatedString(live.recentLog())); copied = true })
         }
     }
 }

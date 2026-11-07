@@ -52,7 +52,18 @@ public class LanHome(
     private val _census = MutableStateFlow<List<Finding>>(emptyList())
     override val census: StateFlow<List<Finding>> = _census.asStateFlow()
     private val _problem = MutableStateFlow<String?>(null)
+    private val _report = MutableStateFlow<List<dev.patchbay.core.home.AdapterScan>>(emptyList())
     override val problem: StateFlow<String?> = _problem.asStateFlow()
+    override val scanReport: StateFlow<List<dev.patchbay.core.home.AdapterScan>> = _report.asStateFlow()
+
+    override fun dismissProblem() {
+        _problem.value = null
+    }
+
+    override fun recentLog(maxLines: Int): String {
+        val f = log?.file?.takeIf { it.exists() } ?: return "No log yet."
+        return f.readLines().takeLast(maxLines.coerceIn(1, 2_000)).joinToString("\n")
+    }
 
     private val owners = ConcurrentHashMap<DeviceId, DeviceAdapter>()
     private val observers = ConcurrentHashMap<DeviceId, Job>()
@@ -101,7 +112,11 @@ public class LanHome(
         val found = pendingPairing[device] ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("device is already paired"))
         val pairing = when (val r = adapter.pair(found, prompt)) {
             is PatchbayResult.Ok -> r.value
-            is PatchbayResult.Err -> { report(r.error.message); return r }
+            is PatchbayResult.Err -> {
+                // Backing out is the user's choice, not a fault: say nothing and leave nothing on screen.
+                if (r.error !is PatchbayError.Cancelled) report(r.error.message)
+                return r
+            }
         }
         store?.savePairing(StoredPairing(device, pairing.secret, pairing.pinnedFingerprint, clock()))
         adapter.restore(device, found.address, pairing)
@@ -116,9 +131,13 @@ public class LanHome(
 
     override suspend fun addManually(adapter: dev.patchbay.core.model.AdapterId, address: String, key: String, choice: String?): PatchbayResult<DeviceId> {
         val a = adapters.firstOrNull { it.id == adapter } ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown system"))
-        val found = when (val r = a.manualDevice(address.trim(), key.trim(), choice)) {
+        val first = when (val r = a.manualDevice(address.trim(), key.trim(), choice)) {
             is PatchbayResult.Ok -> r.value
-            is PatchbayResult.Err -> { report(r.error.message); return r }
+            is PatchbayResult.Err -> { log?.warn("home", "add by address failed: ${r.error.message}"); return r }
+        }
+        val found = when (val r = a.resolveManual(first)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> { log?.warn("home", "add by address failed: ${r.error.message}"); return r }
         }
         synchronized(this) { add(a, found) }
         log?.info("home", "added ${found.vendor ?: "device"} by address ${found.address}")
@@ -138,7 +157,13 @@ public class LanHome(
             coroutineScope {
                 val censusJob = censusEngine?.let { c -> async { c.run() } }
                 // All adapters listen at once, so a scan takes as long as the slowest one, not the sum.
-                adapters.map { a -> launch { a.discover().collect { found -> synchronized(this@LanHome) { add(a, found) } } } }.forEach { it.join() }
+                val counts = java.util.concurrent.ConcurrentHashMap<dev.patchbay.core.model.AdapterId, Int>()
+                adapters.map { a ->
+                    launch { a.discover().collect { found -> counts.merge(a.id, 1, Int::plus); synchronized(this@LanHome) { add(a, found) } } }
+                }.forEach { it.join() }
+                _report.value = adapters.map { a ->
+                    dev.patchbay.core.home.AdapterScan(a.systemName, counts[a.id] ?: 0, a.discoveryNote, a.discoverable)
+                }
                 when (val r = censusJob?.await()) {
                     is PatchbayResult.Ok -> _census.value = r.value
                     is PatchbayResult.Err -> report(r.error.message)

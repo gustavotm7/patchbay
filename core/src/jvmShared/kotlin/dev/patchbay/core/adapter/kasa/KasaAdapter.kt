@@ -4,6 +4,7 @@ import dev.patchbay.core.adapter.AdapterHealth
 import dev.patchbay.core.adapter.DeviceAdapter
 import dev.patchbay.core.adapter.DiscoveredDevice
 import dev.patchbay.core.adapter.HealthState
+import dev.patchbay.core.adapter.ManualAdd
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
 import dev.patchbay.core.model.AdapterId
@@ -52,13 +53,23 @@ public class KasaAdapter(
         /** Where scans go. Real homes: limited broadcast. Tests: simulator addresses. */
         val scanTargets: List<String> = listOf("255.255.255.255"),
         val port: Int = KasaProtocol.PORT,
-        val scanWindowMs: Long = 1_500,
+        val scanWindowMs: Long = 2_400,
+        /** The discovery datagram is sent this many times across the window (UDP is lossy; plugs sometimes miss one). */
+        val scanAttempts: Int = 3,
+        /** Also broadcast on each connected network's own broadcast address, not only 255.255.255.255. */
+        val includeLocalBroadcasts: Boolean = true,
+        /** A plug that answers here but not on [port] has newer (KLAP) firmware. */
+        val webPort: Int = 80,
         val ioTimeoutMs: Int = 2_000,
         val pollIntervalMs: Long = 5_000,
         val maxBackoffMs: Long = 60_000,
     )
 
     override val id: AdapterId = ID
+    override val systemName: String = "TP-Link Kasa plugs"
+    override val discoveryNote: String =
+        "Finds plugs on older firmware only. A plug that never appears usually has newer firmware (it needs your TP-Link login, not supported yet). Use Add by address to check one."
+    override val manualAdd: ManualAdd = ManualAdd(ID, "TP-Link Kasa plug", "Name (optional: the plug's own name is used)", keyOptional = true)
 
     private val known = ConcurrentHashMap<DeviceId, LanAddress>()
     private val locks = ConcurrentHashMap<LanAddress, Mutex>()
@@ -71,31 +82,81 @@ public class KasaAdapter(
     override fun discover(): Flow<DiscoveredDevice> = channelFlow {
         val udp = (netGuard.openUdp(0) as? PatchbayResult.Ok)?.value ?: return@channelFlow
         try {
-            for (t in config.scanTargets) {
-                val target = (netGuard.address(t) as? PatchbayResult.Ok)?.value ?: continue
-                udp.send(target, config.port, KasaProtocol.discoveryDatagram)
-            }
+            val targets = (config.scanTargets + if (config.includeLocalBroadcasts) netGuard.localBroadcastAddresses() else emptyList())
+                .distinct().mapNotNull { (netGuard.address(it) as? PatchbayResult.Ok)?.value }
             val seen = HashSet<String>()
-            val deadline = clock() + config.scanWindowMs
-            while (clock() < deadline && currentCoroutineContext().isActive) {
-                val d = (udp.receive(KasaProtocol.MAX_MESSAGE_BYTES, 250) as? PatchbayResult.Ok)?.value ?: continue
-                when (val r = KasaProtocol.parseSysinfo(KasaProtocol.unscramble(d.payload))) {
-                    is PatchbayResult.Err -> if (r.error !is PatchbayError.Unsupported) rejectedMessages++
-                    is PatchbayResult.Ok -> if (seen.add(r.value.deviceKey)) {
-                        known[deviceIdFor(r.value.deviceKey)] = d.from
-                        send(
-                            DiscoveredDevice(
-                                adapter = ID, key = r.value.deviceKey, address = d.from.literal, port = config.port,
-                                kind = DeviceKind.PLUG, vendor = "TP-Link", model = r.value.model,
-                                displayName = r.value.alias.ifBlank { null },
-                                controlPath = ControlPath.LOCAL, seenAt = EpochMillis(clock()),
-                            ),
-                        )
+            val attempts = config.scanAttempts.coerceAtLeast(1)
+            val slice = config.scanWindowMs / attempts
+            repeat(attempts) {
+                for (t in targets) udp.send(t, config.port, KasaProtocol.discoveryDatagram)
+                val sliceEnd = clock() + slice
+                while (clock() < sliceEnd && currentCoroutineContext().isActive) {
+                    val d = (udp.receive(KasaProtocol.MAX_MESSAGE_BYTES, 100) as? PatchbayResult.Ok)?.value ?: continue
+                    when (val r = KasaProtocol.parseSysinfo(KasaProtocol.unscramble(d.payload))) {
+                        is PatchbayResult.Err -> if (r.error !is PatchbayError.Unsupported) rejectedMessages++
+                        is PatchbayResult.Ok -> if (seen.add(r.value.deviceKey)) {
+                            known[deviceIdFor(r.value.deviceKey)] = d.from
+                            send(discovered(r.value, d.from))
+                        }
                     }
                 }
             }
         } finally {
             udp.close()
+        }
+    }
+
+    private fun discovered(info: KasaProtocol.Sysinfo, from: LanAddress) = DiscoveredDevice(
+        adapter = ID, key = info.deviceKey, address = from.literal, port = config.port,
+        kind = DeviceKind.PLUG, vendor = "TP-Link", model = info.model,
+        displayName = info.alias.ifBlank { null },
+        controlPath = ControlPath.LOCAL, seenAt = EpochMillis(clock()),
+    )
+
+    /** For Add by address: a placeholder entry; [resolveManual] then asks the plug who it is. */
+    override fun manualDevice(address: String, key: String, choice: String?): PatchbayResult<DiscoveredDevice> {
+        val a = when (val r = netGuard.address(address)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> return r
+        }
+        return PatchbayResult.Ok(
+            DiscoveredDevice(
+                adapter = ID, key = "pending", address = a.literal, port = config.port, kind = DeviceKind.PLUG,
+                vendor = "TP-Link", model = null, displayName = null, controlPath = ControlPath.LOCAL, seenAt = EpochMillis(clock()),
+            ),
+        )
+    }
+
+    /**
+     * Asks the plug at the address for its identity over the legacy protocol. If it doesn't answer there, checks the web
+     * port to tell "newer firmware" apart from "wrong address or offline", so the message says which.
+     */
+    override suspend fun resolveManual(found: DiscoveredDevice): PatchbayResult<DiscoveredDevice> {
+        val addr = when (val r = netGuard.address(found.address)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> return r
+        }
+        val reply = when (val r = exchange(addr, KasaProtocol.GET_SYSINFO)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> return PatchbayResult.Err(unansweredOnLegacyPort(addr, r.error))
+        }
+        val info = when (val r = KasaProtocol.parseSysinfo(reply)) {
+            is PatchbayResult.Ok -> r.value
+            is PatchbayResult.Err -> { rejectedMessages++; return r }
+        }
+        known[deviceIdFor(info.deviceKey)] = addr
+        return PatchbayResult.Ok(discovered(info, addr))
+    }
+
+    private suspend fun unansweredOnLegacyPort(addr: LanAddress, cause: PatchbayError): PatchbayError {
+        val web = netGuard.connectTcp(addr, config.webPort, 1_500)
+        return if (web is PatchbayResult.Ok) {
+            web.value.close()
+            PatchbayError.Unsupported(
+                "That plug answers, but not on Kasa's older local protocol (port ${config.port}). It has newer firmware that needs your TP-Link login, which Patchbay doesn't support yet.",
+            )
+        } else {
+            PatchbayError.Unreachable("No answer from that address (${cause.message}). Check the IP and that the plug is on this network.")
         }
     }
 

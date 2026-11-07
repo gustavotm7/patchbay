@@ -69,6 +69,8 @@ public class BambuAdapter(
     )
 
     override val id: AdapterId = ID
+    override val systemName: String = "Bambu printers"
+    override val discoveryNote: String = "Needs LAN Only Mode on. If a scan can't see it (VLANs, client isolation), use Add by address with the IP and serial."
     override val requiresPairing: Boolean = true
 
     private class Known(val address: LanAddress, val serial: String, val accessCode: String?, val pin: String?)
@@ -180,12 +182,12 @@ public class BambuAdapter(
         }
         if (!prompt.confirmFingerprint(name, PinnedTls.display(tls.spkiSha256))) {
             tls.close()
-            return PatchbayResult.Err(PatchbayError.Unauthorized("fingerprint not confirmed"))
+            return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         }
         val code = prompt.askForCode("Access code (printer screen → Settings → LAN Only Mode)", 8..8)
         if (code == null) {
             tls.close()
-            return PatchbayResult.Err(PatchbayError.Unauthorized("no access code entered"))
+            return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         }
         return kotlinx.coroutines.withContext(Dispatchers.IO) {
             when (val m = MqttClient.connect(tls.socket, clientId(), BambuReport.USERNAME, code)) {

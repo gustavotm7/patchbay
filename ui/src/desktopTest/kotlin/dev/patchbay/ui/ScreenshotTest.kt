@@ -19,6 +19,7 @@ import dev.patchbay.core.adapter.ManualAdd
 import dev.patchbay.core.adapter.PairingPrompt
 import dev.patchbay.core.adapter.StreamLease
 import dev.patchbay.core.discovery.Finding
+import dev.patchbay.core.home.AdapterScan
 import dev.patchbay.core.home.LiveDevice
 import dev.patchbay.core.home.LiveHome
 import dev.patchbay.core.home.ScanState
@@ -29,6 +30,7 @@ import dev.patchbay.core.model.Reachability
 import dev.patchbay.core.net.NetGuardStats
 import dev.patchbay.core.result.PatchbayError
 import dev.patchbay.core.result.PatchbayResult
+import dev.patchbay.ui.screens.NetworkScreen
 import dev.patchbay.ui.screens.PhoneApp
 import dev.patchbay.ui.screens.Section
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +97,17 @@ class ScreenshotTest {
         override val netStats: StateFlow<NetGuardStats> = MutableStateFlow(NetGuardStats(allowed = 214, denied = 0))
         override val census: StateFlow<List<Finding>> = MutableStateFlow(emptyList())
         override val problem: StateFlow<String?> = MutableStateFlow(null)
+        override val scanReport: StateFlow<List<AdapterScan>> = MutableStateFlow(
+            listOf(
+                AdapterScan("Govee lights", 0, "Turn on “LAN Control” for each light in the Govee app. If Windows Firewall blocked Patchbay, allow it on Private networks.", true),
+                AdapterScan("LG TVs", 1, null, true),
+                AdapterScan("Bambu printers", 1, null, true),
+                AdapterScan("TP-Link Kasa plugs", 1, "Finds plugs on older firmware only.", true),
+                AdapterScan("RTSP cameras", 0, null, false),
+            ),
+        )
+        override fun dismissProblem() {}
+        override fun recentLog(maxLines: Int): String = "log"
         override val manualAdd: List<ManualAdd> = listOf(ManualAdd(AdapterId("rtsp"), "RTSP camera", "Name"))
         override suspend fun addManually(adapter: AdapterId, address: String, key: String, choice: String?): PatchbayResult<DeviceId> =
             PatchbayResult.Err(PatchbayError.Unsupported("screenshot fake"))
@@ -128,6 +141,9 @@ class ScreenshotTest {
                     LightPanel(LiveDevice(lamp, home.snapshot(lamp.id)), onCommand = {})
                 }
             }
+        }
+        shot("network_phone_dark", phoneTall, PatchbayPalettes.Dark, FormFactor.PHONE) {
+            Column(Modifier.fillMaxSize().background(PatchbayPalettes.Dark.background).padding(16.dp)) { NetworkScreen(FakeLiveHome(home)) }
         }
         shot("live_desktop_dark", desktop, PatchbayPalettes.Dark, FormFactor.DESKTOP) {
             DesktopShell(home, trends, Focus.RoomFocus(DemoHome.Ids.WORKSHOP), now, section = Section.INVENTORY, live = FakeLiveHome(home))

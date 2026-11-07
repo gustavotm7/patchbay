@@ -24,6 +24,9 @@ public data class LiveDevice(
 
 public enum class ScanState { IDLE, SCANNING, DONE, FAILED }
 
+/** What one system found in the last scan, and what to try if it found nothing. */
+public data class AdapterScan(val name: String, val found: Int, val note: String?, val discoverable: Boolean)
+
 /**
  * The real home, as seen from this client: what discovery found and what each device currently reports.
  * Platform-free so the shared UI can use it; implemented by `LanHome` (jvm/android).
@@ -38,6 +41,15 @@ public interface LiveHome {
 
     /** Last problem worth showing the user (redacted), e.g. "Govee needs UDP port 4002". */
     public val problem: StateFlow<String?>
+
+    /** Per-system results of the last scan, so a missing device can be explained. Empty before the first scan. */
+    public val scanReport: StateFlow<List<AdapterScan>>
+
+    /** Clears the problem banner. */
+    public fun dismissProblem()
+
+    /** The tail of this session's log (already redacted), for the explicit "Copy log" action. */
+    public fun recentLog(maxLines: Int = 300): String
 
     /** Systems that can be added by typing an address when discovery doesn't find them. */
     public val manualAdd: List<ManualAdd>

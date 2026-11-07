@@ -57,7 +57,7 @@ class KasaContractTest {
         adapter = KasaAdapter(
             guard, scope,
             KasaAdapter.Config(
-                scanTargets = listOf("127.0.0.2", "127.0.0.3", "127.0.0.4", "127.0.0.5"), port = lamp.port,
+                scanTargets = listOf("127.0.0.2", "127.0.0.3", "127.0.0.4", "127.0.0.5"), port = lamp.port, includeLocalBroadcasts = false,
                 scanWindowMs = 600, ioTimeoutMs = 500, pollIntervalMs = 100, maxBackoffMs = 400,
             ),
         )
@@ -111,6 +111,43 @@ class KasaContractTest {
         lamp.errCode = 0
         assertIs<PatchbayError.Unsupported>(adapter.command(lampId, Command.SetVolume(3)).errorOrNull())
         assertIs<PatchbayError.Unreachable>(adapter.command(DeviceId("kasa-unknown"), Command.SetPower(true)).errorOrNull())
+    }
+
+    @Test
+    fun addByAddressLearnsTheRealIdentityAndWorksWithoutAScan(): Unit = runBlocking {
+        val placeholder = adapter.manualDevice("127.0.0.2", "", null).getOrNull()!!
+        val resolved = adapter.resolveManual(placeholder).getOrNull()!!
+        assertEquals(lampKey, resolved.key)
+        assertEquals("Desk lamp", resolved.displayName)
+        assertEquals(lampId, adapter.deviceId(resolved))
+        assertTrue(adapter.command(lampId, Command.SetPower(true)) is PatchbayResult.Ok)
+        assertEquals(true, lamp.on)
+        assertIs<PatchbayError.NetGuardDenied>(adapter.manualDevice("8.8.8.8", "", null).errorOrNull())
+    }
+
+    @Test
+    fun addByAddressExplainsNewerFirmwareVersusWrongAddress(): Unit = runBlocking {
+        // 127.0.0.60 answers on the "web port" but not on the Kasa port: the signature of a KLAP-only plug.
+        val web = java.net.ServerSocket(0, 5, java.net.InetAddress.getByName("127.0.0.60"))
+        try {
+            val klap = KasaAdapter(guard, scope, KasaAdapter.Config(port = lamp.port, webPort = web.localPort, ioTimeoutMs = 500))
+            val e1 = klap.resolveManual(klap.manualDevice("127.0.0.60", "", null).getOrNull()!!).errorOrNull()
+            assertIs<PatchbayError.Unsupported>(e1)
+            assertTrue(e1.message.contains("newer firmware"), e1.message)
+            // 127.0.0.61 answers on neither port.
+            val e2 = klap.resolveManual(klap.manualDevice("127.0.0.61", "", null).getOrNull()!!).errorOrNull()
+            assertIs<PatchbayError.Unreachable>(e2)
+            assertTrue(e2.message.contains("Check the IP"), e2.message)
+        } finally {
+            web.close()
+        }
+    }
+
+    @Test
+    fun aPlugThatMissesTheFirstDatagramIsStillFoundByTheRepeats(): Unit = runBlocking {
+        // The simulator ignores the first request it gets, like a plug that missed a broadcast.
+        lamp.dropNextUdp = 1
+        assertEquals(setOf(lampKey, fanKey), discoverAll().map { it.key }.toSet())
     }
 
     @Test

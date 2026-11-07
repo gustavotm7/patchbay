@@ -36,6 +36,9 @@ public class KasaSimulator(
     @Volatile public var oversizeFrame: Boolean = false
     @Volatile public var errCode: Int = 0
 
+    /** Ignores this many incoming UDP datagrams (a plug that missed a broadcast). */
+    @Volatile public var dropNextUdp: Int = 0
+
     /** Every plaintext request received (UDP and TCP). */
     public val received: MutableList<String> = CopyOnWriteArrayList()
 
@@ -79,6 +82,7 @@ public class KasaSimulator(
         while (!udp.isClosed) {
             val p = DatagramPacket(buf, buf.size)
             try { udp.receive(p) } catch (e: SocketException) { return }
+            if (dropNextUdp > 0) { dropNextUdp--; continue }
             val reply = handle(KasaProtocol.unscramble(p.data.copyOf(p.length)).decodeToString()) ?: continue
             val out = garble(reply)
             udp.send(DatagramPacket(out, out.size, p.socketAddress))

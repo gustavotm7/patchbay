@@ -99,7 +99,7 @@ class RtspContractTest {
 
     @Test
     fun cancelledOrUnsafeCredentialsStopBeforeAnyNetworkTraffic(): Unit = runBlocking {
-        assertIs<PatchbayError.InvalidArgument>(adapter.pair(found(), Prompt(null, null)).errorOrNull())
+        assertIs<PatchbayError.Cancelled>(adapter.pair(found(), Prompt(null, null)).errorOrNull())
         assertIs<PatchbayError.InvalidArgument>(adapter.pair(found(), Prompt("pa\"tch", "x")).errorOrNull())
         assertEquals(0, cam.requests.size)
     }

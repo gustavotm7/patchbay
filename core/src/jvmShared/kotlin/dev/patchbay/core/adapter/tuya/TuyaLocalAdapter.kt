@@ -61,6 +61,8 @@ public class TuyaLocalAdapter(
     )
 
     override val id: AdapterId = ID
+    override val systemName: String = "Tuya bulbs"
+    override val discoverable: Boolean = false
     override val requiresPairing: Boolean = true
     override val manualAdd: ManualAdd = ManualAdd(
         ID, "Tuya bulb (Lepro and others)", "Device ID (20–24 letters and numbers)", TuyaBulbProfile.ALL.map { it.label },
@@ -121,7 +123,7 @@ public class TuyaLocalAdapter(
         }
         val profile = TuyaBulbProfile.byId(device.model ?: "") ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown device type"))
         val keyText = prompt.askForCode("Local key (16 characters from the Tuya developer console or tinytuya)", 16..16)
-            ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("pairing cancelled"))
+            ?: return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         if (keyText.length != 16 || keyText.any { it.code !in 33..126 }) {
             return PatchbayResult.Err(PatchbayError.InvalidArgument("A Tuya local key is exactly 16 visible characters"))
         }

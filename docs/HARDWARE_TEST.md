@@ -124,7 +124,7 @@ legacy protocol and won't appear. That's expected for now; tell me the model if 
 | K1.3 | Switch the plug with its physical button or the Kasa app | Patchbay shows the new state within about 5 s |
 | K1.4 | Unplug it, wait about 20 s | "No reply", then "Offline". Replug: it recovers by itself |
 | K1.5 | Restart Patchbay without scanning | The plug is listed immediately and shows its state within about 5 s |
-| K1.6 | A plug missing from the scan | Look in "Everything else that answered" for TP-Link; send me the model and firmware version |
+| K1.6 | A plug missing from the scan | Network tab → "Last scan" shows what each system found. Then Devices → **Add by address** → "TP-Link Kasa plug" → the plug's IP. It either appears, or says it has newer firmware (needs a TP-Link login), or that nothing answered at that address |
 
 Please report: plug models and firmware versions (Kasa app → device settings → device info), and which ones didn't appear.
 

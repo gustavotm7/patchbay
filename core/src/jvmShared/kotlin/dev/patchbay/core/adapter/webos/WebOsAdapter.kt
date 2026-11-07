@@ -72,6 +72,8 @@ public class WebOsAdapter(
     )
 
     override val id: AdapterId = ID
+    override val systemName: String = "LG TVs"
+    override val discoveryNote: String = "The TV must be on, on the same network, with “LG Connect Apps” (or “Mobile TV On”) enabled in its settings."
     override val requiresPairing: Boolean = true
 
     private class Known(val address: LanAddress, val clientKey: String?, val pin: String?, val name: String)
@@ -110,7 +112,7 @@ public class WebOsAdapter(
                 send(
                     DiscoveredDevice(
                         adapter = ID, key = key, address = d.from.literal, port = config.wssPort, kind = DeviceKind.TV,
-                        vendor = "LG", model = reply.server?.substringBefore(" ")?.take(32) ?: "webOS TV", displayName = null,
+                        vendor = "LG", model = "webOS TV", displayName = null,
                         controlPath = ControlPath.LOCAL, seenAt = EpochMillis(clock()),
                     ),
                 )
@@ -153,7 +155,7 @@ public class WebOsAdapter(
         // 1. The user confirms the TV's key before we send anything that matters.
         if (!prompt.confirmFingerprint(device.model ?: "LG TV", PinnedTls.display(tls.spkiSha256))) {
             tls.close()
-            return PatchbayResult.Err(PatchbayError.Unauthorized("fingerprint not confirmed"))
+            return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         }
         val ws = when (val r = withContext(Dispatchers.IO) { WebSocketClient.handshake(tls.socket, "${addr.literal}:${config.wssPort}") }) {
             is PatchbayResult.Ok -> r.value

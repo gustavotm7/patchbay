@@ -85,7 +85,7 @@ class WebOsContractTest {
     @Test
     fun rejectingTheFingerprintSendsNothing(): Unit = runBlocking {
         val d = discoverOne()
-        assertIs<PatchbayError.Unauthorized>(adapter.pair(d, RecordingPrompt(trust = false)).errorOrNull())
+        assertIs<PatchbayError.Cancelled>(adapter.pair(d, RecordingPrompt(trust = false)).errorOrNull())
         assertEquals(0, tv.issuedKeys.size)
         assertEquals(0, tv.requests.size)
     }

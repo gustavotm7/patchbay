@@ -19,6 +19,9 @@ public sealed interface PatchbayError {
     public data class Unauthorized(override val message: String) : PatchbayError
     public data class Timeout(override val message: String) : PatchbayError
 
+    /** The user backed out (cancelled a pairing step). Not a fault: nothing is reported and nothing is left on screen. */
+    public data class Cancelled(override val message: String) : PatchbayError
+
     /** The device sent something that violates the protocol or our parser bounds. */
     public data class ProtocolViolation(override val message: String) : PatchbayError
 

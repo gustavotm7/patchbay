@@ -80,7 +80,7 @@ class TuyaContractTest {
         assertIs<PatchbayError.Unauthorized>(adapter.pair(found(), Prompt("fedcba9876543210")).errorOrNull())
         assertIs<PatchbayError.InvalidArgument>(adapter.pair(found(), Prompt("short")).errorOrNull())
         assertIs<PatchbayError.InvalidArgument>(adapter.pair(found(), Prompt("has space 123456")).errorOrNull())
-        assertIs<PatchbayError.InvalidArgument>(adapter.pair(found(), Prompt(null)).errorOrNull())
+        assertIs<PatchbayError.Cancelled>(adapter.pair(found(), Prompt(null)).errorOrNull())
     }
 
     @Test

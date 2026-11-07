@@ -23,6 +23,21 @@ public interface DeviceAdapter {
     /** True when a device must be paired (TV prompt, access code, TOFU) before [observe]/[command] work. */
     public val requiresPairing: Boolean get() = false
 
+    /** Plain name for this system in scan results ("Govee lights"). */
+    public val systemName: String get() = id.value
+
+    /** What to try when a scan of this system finds nothing. Shown on the Network screen. */
+    public val discoveryNote: String? get() = null
+
+    /** False for systems that never announce themselves (cameras, Tuya bulbs): they are added by address instead. */
+    public val discoverable: Boolean get() = true
+
+    /**
+     * Completes a manual add once the address is known, by asking the device who it is. The default accepts [found] as is.
+     * Adapters that can learn the real identity (a Kasa plug's device ID and name) override this. May touch the network.
+     */
+    public suspend fun resolveManual(found: DiscoveredDevice): PatchbayResult<DiscoveredDevice> = PatchbayResult.Ok(found)
+
     /** Non-null when a device can be added by typing its address, for networks where discovery fails. */
     public val manualAdd: ManualAdd? get() = null
 
@@ -121,6 +136,8 @@ public data class ManualAdd(
     val keyLabel: String,
     /** When not empty, the user picks one (for example a device profile) and it is passed to [DeviceAdapter.manualDevice]. */
     val choices: List<String> = emptyList(),
+    /** True when the key field may be left empty (the device supplies its own name). */
+    val keyOptional: Boolean = false,
 )
 
 /**

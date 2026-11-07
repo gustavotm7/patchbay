@@ -158,6 +158,22 @@ public class NetGuard {
         }
     }
 
+    /**
+     * The directed-broadcast address of every IPv4 network this machine is connected to (for example 192.168.18.255).
+     * Limited broadcast (255.255.255.255) leaves through one interface only; on a laptop with a VPN or virtual adapters that
+     * may not be the home Wi-Fi. Only addresses [AddressPolicy] allows are returned.
+     */
+    public fun localBroadcastAddresses(): List<String> = try {
+        NetworkInterface.getNetworkInterfaces().toList()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.interfaceAddresses }
+            .mapNotNull { it.broadcast?.hostAddress }
+            .distinct()
+            .filter { address(it) is PatchbayResult.Ok }
+    } catch (e: java.io.IOException) {
+        emptyList()
+    }
+
     internal fun allow() {
         _stats.update { it.copy(allowed = it.allowed + 1) }
     }

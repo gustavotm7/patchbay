@@ -60,6 +60,8 @@ public class RtspCameraAdapter(
     )
 
     override val id: AdapterId = ID
+    override val systemName: String = "RTSP cameras"
+    override val discoverable: Boolean = false
     override val requiresPairing: Boolean = true
     override val manualAdd: ManualAdd = ManualAdd(ID, "RTSP camera (eufy)", "Name for this camera (e.g. Front door)")
 
@@ -116,9 +118,9 @@ public class RtspCameraAdapter(
             is PatchbayResult.Err -> return r
         }
         val user = prompt.askForCode("RTSP username (camera settings → RTSP stream in the eufy app)", 1..64)
-            ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("pairing cancelled"))
+            ?: return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         val password = prompt.askForCode("RTSP password", 1..64)
-            ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("pairing cancelled"))
+            ?: return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         if (!RtspProtocol.isSafeCredential(user) || !RtspProtocol.isSafeCredential(password)) {
             return PatchbayResult.Err(PatchbayError.InvalidArgument("The username or password has characters Patchbay can't send safely (spaces, quotes or backslashes)"))
         }
