@@ -11,14 +11,14 @@ Updated 2026-11-06. Two lists: what happens before the test build is handed over
 4. **Look at the real renders** from CI, fix what looks wrong, then record the new screenshot references.
 5. **Build the installable test app:** Android APK (easiest to try first) and the Windows installer, from the CI run, with direct download links.
 
-## Test build (CI run on `847f942`, all 7 jobs green)
+## Test build (CI run on `cdecbea`, all 7 jobs green)
 
-Adds Windows tray mode and scheduled automations (R1.x in `docs/HARDWARE_TEST.md`), on top of attention/removal/activity, Cast, rooms and scenes, Settings and the portable build.
+Adds adaptive lighting and away mode (D1.x in `docs/HARDWARE_TEST.md`), on top of tray mode and automations (R1.x), attention/removal/activity (N1.x), Cast (C1.x), rooms and scenes (S1.x), Settings and the portable build.
 
-- Run: https://github.com/gustavotm7/patchbay/actions/runs/42415369781
-- **Windows, no install (recommended):** https://github.com/gustavotm7/patchbay/actions/runs/42415369781/artifacts/13591740732 (79 MB zip; right-click the zip → Properties → Unblock, extract, run `Patchbay\Patchbay.exe`; delete the folder to remove everything)
-- **Android:** https://github.com/gustavotm7/patchbay/actions/runs/42415369781/artifacts/13591680515 (28 MB zip; install `app-android-debug.apk` from inside it; ignore the unsigned `release` APK)
-- **Windows installer (optional):** https://github.com/gustavotm7/patchbay/actions/runs/42415369781/artifacts/13591316627
+- Run: https://github.com/gustavotm7/patchbay/actions/runs/42422325277
+- **Windows, no install (recommended):** https://github.com/gustavotm7/patchbay/actions/runs/42422325277/artifacts/13593289425 (79 MB zip; right-click the zip → Properties → Unblock, extract, run `Patchbay\Patchbay.exe`; delete the folder to remove everything)
+- **Android:** https://github.com/gustavotm7/patchbay/actions/runs/42422325277/artifacts/13593807673 (28 MB zip; install `app-android-debug.apk` from inside it; ignore the unsigned `release` APK)
+- **Windows installer (optional):** https://github.com/gustavotm7/patchbay/actions/runs/42422325277/artifacts/13593199797
 - Downloads need you to be signed in to GitHub. Artifacts are kept until 2026-12-07.
 
 ## After the test build (your side, then mine)
@@ -27,5 +27,5 @@ Adds Windows tray mode and scheduled automations (R1.x in `docs/HARDWARE_TEST.md
    Tuya bulbs (U1), eufy cameras (E1, including Watch). Send me each step that failed, with what you saw. Also tell me what feels off in the new look.
 7. **Me, from your results:** fix what broke (adapters first, simulator test before the fix), tune the look from your feedback.
 8. **Waiting on you:** Lefant vacuum model number and its data-point list; the protocol version of your Lepro bulbs (3.3 works today).
-9. **Then, in order:** Tuya protocol 3.4/3.5 if your bulbs need it; Google TV remote keys (Android TV Remote v2); desktop camera player; floor-plan editor for real devices;
+9. **Then, in order:** Tuya protocol 3.4/3.5 if your bulbs need it; Google TV remote keys and ESPHome (both need their exact message formats researched from reference sources first: see the notes in `docs/HANDOFF.md`); desktop camera player; floor-plan editor for real devices;
    Windows Hello; fuzzing in CI; automations (scenes on a schedule or a trigger, Phase 2); merge `ci/verification-bootstrap` into `main` through a pull request.
