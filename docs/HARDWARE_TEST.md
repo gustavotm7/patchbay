@@ -32,7 +32,8 @@ No real devices are contacted in Phase 0. The apps only render simulator data.
 | W0.4 | Click Hall → Thermostat in the inspector | Thermostat panel with vertical scale and setpoints |
 | W0.5 | Windows Settings → Personalisation → Colours: switch light/dark, then restart the app | The theme follows the system setting |
 | W0.6 | (Optional) Resource Monitor → Network | Patchbay.exe has **no** TCP connections |
-| W0.7 | Uninstall via Settings → Apps | Removes cleanly. No leftover service, scheduled task or updater |
+| W0.7 | Uninstall via Settings → Apps | Removes the app cleanly. No leftover service, scheduled task or updater. Your data stays in `%LOCALAPPDATA%\Patchbay` until you delete that folder |
+| W0.8 | Portable zip (`patchbay-windows-portable`): right-click the zip → Properties → Unblock, extract, run `Patchbay\Patchbay.exe` | Runs with no install and no admin prompt. A `PatchbayData` folder appears beside the exe. Delete the whole `Patchbay` folder to remove everything |
 
 ### Please also tell me
 

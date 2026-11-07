@@ -122,6 +122,20 @@ jobs:
           name: patchbay-windows-msi
           path: app-windows/build/compose/binaries/main/msi/*.msi
           retention-days: 30
+      # No installer: an app folder you unzip and run. portable.txt switches on portable mode (data beside the exe).
+      - name: Package portable app
+        shell: pwsh
+        run: |
+          ./gradlew "-Pcompose.desktop.application.downloadWix=false" :app-windows:createDistributable
+          $dir = "app-windows/build/compose/binaries/main/app/Patchbay"
+          "Portable mode: Patchbay keeps its data in the PatchbayData folder next to Patchbay.exe. Delete this whole folder to remove everything." | Out-File "$dir/portable.txt" -Encoding utf8
+          New-Item -ItemType Directory -Force -Path portable-out | Out-Null
+          Compress-Archive -Path $dir -DestinationPath "portable-out/Patchbay-portable.zip"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: patchbay-windows-portable
+          path: portable-out/Patchbay-portable.zip
+          retention-days: 30
 
   # Plugin resolution from Gradle Central can fail transiently (seen once at 5df65a6); re-run the job before debugging.
   sbom:

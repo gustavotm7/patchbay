@@ -25,8 +25,15 @@ import java.awt.event.WindowFocusListener
  * Native window decorations (decided 2026-11-05; DESIGN_SPEC §7): native resize and Windows 11 snap layouts.
  */
 fun main() {
-    // Bootstrap once, at process start. Data lives under %LOCALAPPDATA%\Patchbay (per-user).
-    val root = System.getenv("LOCALAPPDATA")?.let { File(it, "Patchbay") } ?: File(System.getProperty("user.home"), ".patchbay")
+    // Bootstrap once, at process start. Installed: data lives under %LOCALAPPDATA%\Patchbay (per-user).
+    // Portable: the zip contains a portable.txt next to Patchbay.exe, and then everything (database, key, logs) lives in
+    // PatchbayData beside it, so deleting the folder removes it all. The key is wrapped by Windows for this user and PC.
+    val exeDir = System.getProperty("jpackage.app-path")?.let { File(it).parentFile }
+    val portable = exeDir != null && File(exeDir, "portable.txt").isFile
+    val root = when {
+        portable -> File(exeDir, "PatchbayData")
+        else -> System.getenv("LOCALAPPDATA")?.let { File(it, "Patchbay") } ?: File(System.getProperty("user.home"), ".patchbay")
+    }
     val services = DesktopBootstrap.start("windows", root)
     Runtime.getRuntime().addShutdownHook(Thread { services.close() })
     app(services.home, DesktopLock(services.store))
