@@ -43,6 +43,7 @@ public class LanHome(
     private val store: HomeStore? = null,
     private val censusEngine: NetworkCensus? = null,
     private val clock: () -> Long = { System.currentTimeMillis() },
+    private val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
 ) : LiveHome {
 
     private val _devices = MutableStateFlow<List<LiveDevice>>(emptyList())
@@ -57,6 +58,9 @@ public class LanHome(
     private val _rooms = MutableStateFlow<List<String>>(emptyList())
     private val _scenes = MutableStateFlow<List<Scene>>(emptyList())
     private var storedScenes: List<StoredScene> = emptyList()
+    private val _automations = MutableStateFlow<List<Automation>>(emptyList())
+    private var storedAutomations: List<StoredAutomation> = emptyList()
+    private val lastAutomationRun = ConcurrentHashMap<String, Long>()
     private val _activity = MutableStateFlow<List<LedgerEntry>>(emptyList())
     private data class Summary(
         val reach: dev.patchbay.core.model.Reachability,
@@ -137,6 +141,75 @@ public class LanHome(
         record("All lights and plugs", "Switched off from Patchbay (${targets.size - failed} of ${targets.size})")
         return if (failed == 0) PatchbayResult.Ok(targets.size)
         else PatchbayResult.Err(PatchbayError.Unreachable("$failed of ${targets.size} didn't respond"))
+    }
+
+    override val automations: StateFlow<List<Automation>> = _automations.asStateFlow()
+
+    private fun loadAutomations() {
+        val raw = store?.setting("automations") ?: return
+        storedAutomations = try { sceneJson.decodeFromString(raw) } catch (e: Exception) { emptyList() }
+        publishAutomations()
+    }
+
+    private fun publishAutomations() {
+        _automations.value = storedAutomations.map { a ->
+            Automation(a.id, a.name, a.sceneId, storedScenes.firstOrNull { it.id == a.sceneId }?.name, a.hour, a.minute, a.days.toSet(), a.enabled)
+        }
+    }
+
+    private fun persistAutomations() {
+        store?.putSetting("automations", sceneJson.encodeToString(storedAutomations))
+        publishAutomations()
+    }
+
+    override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>): PatchbayResult<Unit> {
+        val clean = name.trim().replace(Regex("\\s+"), " ")
+        if (clean.length !in 1..32 || !clean.all { it.isLetterOrDigit() || it == ' ' || it == '-' }) {
+            return PatchbayResult.Err(PatchbayError.InvalidArgument("Give the automation a short name using letters, numbers, spaces or hyphens"))
+        }
+        if (hour !in 0..23 || minute !in 0..59) return PatchbayResult.Err(PatchbayError.InvalidArgument("The time must be between 00:00 and 23:59"))
+        if (days.isEmpty() || days.any { it !in 1..7 }) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick at least one day"))
+        if (storedScenes.none { it.id == sceneId }) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick a scene to run"))
+        synchronized(this) {
+            storedAutomations = storedAutomations + StoredAutomation(java.util.UUID.randomUUID().toString().take(8), clean, sceneId, hour, minute, days.sorted())
+            persistAutomations()
+        }
+        return PatchbayResult.Ok(Unit)
+    }
+
+    override suspend fun setAutomationEnabled(id: String, enabled: Boolean) {
+        synchronized(this) {
+            storedAutomations = storedAutomations.map { if (it.id == id) it.copy(enabled = enabled) else it }
+            persistAutomations()
+        }
+    }
+
+    override suspend fun deleteAutomation(id: String) {
+        synchronized(this) {
+            storedAutomations = storedAutomations.filterNot { it.id == id }
+            persistAutomations()
+        }
+    }
+
+    /**
+     * Runs every enabled automation whose time is this minute on a matching day, once per minute. Called every 15 seconds
+     * while Patchbay runs; public so tests can drive it with a fixed clock.
+     */
+    public fun tickAutomations(nowMillis: Long = clock()) {
+        val t = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
+        val minuteKey = t.toLocalDate().toEpochDay() * 1_440 + t.hour * 60 + t.minute
+        for (a in storedAutomations) {
+            if (!a.enabled || t.dayOfWeek.value !in a.days || t.hour != a.hour || t.minute != a.minute) continue
+            if (lastAutomationRun[a.id] == minuteKey) continue
+            lastAutomationRun[a.id] = minuteKey
+            val scene = storedScenes.firstOrNull { it.id == a.sceneId }
+            if (scene == null) {
+                record("Automation: ${a.name}", "Skipped: its scene was deleted")
+                continue
+            }
+            record("Automation: ${a.name}", "Running scene ${scene.name}")
+            scope.launch { runScene(scene.id) }
+        }
     }
 
     override val rooms: StateFlow<List<String>> = _rooms.asStateFlow()
@@ -237,6 +310,7 @@ public class LanHome(
         synchronized(this) {
             storedScenes = storedScenes.filterNot { it.id == id }
             persistScenes()
+            publishAutomations()
         }
     }
 
@@ -257,6 +331,13 @@ public class LanHome(
         refreshRooms()
         loadScenes()
         loadLedger()
+        loadAutomations()
+        scope.launch {
+            while (true) {
+                delay(15_000)
+                tickAutomations()
+            }
+        }
     }
 
     /** Devices saved by earlier sessions appear immediately and are polled; no scan needed. */

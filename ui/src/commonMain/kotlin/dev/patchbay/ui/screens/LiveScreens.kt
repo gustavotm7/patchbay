@@ -125,6 +125,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
         } else {
             NeedsAttention(devices, onSelect)
             ScenesPanel(live)
+            AutomationsPanel(live)
             val tileFor: @Composable (LiveDevice, Modifier) -> Unit = { d, m ->
                 val toggles = tileToggles(d)
                 DeviceTile(
@@ -819,4 +820,117 @@ fun ActivityScreen(live: LiveHome, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+private val DAY_LETTERS = listOf("M", "T", "W", "T", "F", "S", "S")
+
+private fun daysText(days: Set<Int>): String = when {
+    days.size == 7 -> "Every day"
+    days == setOf(1, 2, 3, 4, 5) -> "Weekdays"
+    days == setOf(6, 7) -> "Weekends"
+    else -> days.sorted().joinToString(" ") { listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[it - 1] }
+}
+
+/** Run a scene at a time on chosen days. Only while Patchbay is open or in the tray; the panel says so. */
+@Composable
+private fun AutomationsPanel(live: LiveHome) {
+    val c = Patchbay.colors
+    val automations by live.automations.collectAsState()
+    val scenes by live.scenes.collectAsState()
+    val scope = rememberCoroutineScope()
+    if (scenes.isEmpty() && automations.isEmpty()) return
+    var creating by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("07:30") }
+    var sceneId by remember { mutableStateOf<String?>(null) }
+    var days by remember { mutableStateOf(setOf(1, 2, 3, 4, 5, 6, 7)) }
+    var error by remember { mutableStateOf<String?>(null) }
+    Panel(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Legend("Automations")
+                PText("Run a scene at a set time. Only while Patchbay is open or in the tray.", Patchbay.type.caption, c.textSecondary)
+            }
+            if (!creating && scenes.isNotEmpty()) PButton("New", { creating = true; error = null; sceneId = scenes.first().id })
+        }
+        automations.forEach { a ->
+            VSpace(Space.s)
+            PToggle(a.name, a.enabled, { on -> scope.launch { live.setAutomationEnabled(a.id, on) } })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PText(
+                    "%02d:%02d · %s · %s".format(a.hour, a.minute, daysText(a.days), a.sceneName ?: "scene deleted"),
+                    Patchbay.type.caption, if (a.sceneName == null) c.attention else c.textSecondary, Modifier.weight(1f),
+                )
+                Box(
+                    Modifier.height(Space.touchTarget).clip(Shapes.pill)
+                        .clickable(role = Role.Button, onClickLabel = "Delete ${a.name}") { scope.launch { live.deleteAutomation(a.id) } }
+                        .padding(horizontal = Space.m),
+                    contentAlignment = Alignment.Center,
+                ) { PText("Delete", Patchbay.type.caption, c.textSecondary) }
+            }
+        }
+        if (creating) {
+            VSpace(Space.m)
+            PText("Name", Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            BasicTextField(
+                value = name, onValueChange = { v -> name = v.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.take(32) }, singleLine = true,
+                textStyle = Patchbay.type.valueM.copy(color = c.text),
+                modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+            )
+            VSpace(Space.s)
+            PText("Scene", Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            scenes.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    row.forEach { sc -> PButton(sc.name, { sceneId = sc.id }, Modifier.weight(1f), if (sc.id == sceneId) ButtonKind.PRIMARY else ButtonKind.SECONDARY) }
+                    if (row.size == 1) Box(Modifier.weight(1f))
+                }
+                VSpace(Space.xs)
+            }
+            VSpace(Space.xs)
+            PText("Time (24 hour, HH:MM)", Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            BasicTextField(
+                value = time, onValueChange = { v -> time = v.filter { it.isDigit() || it == ':' }.take(5) }, singleLine = true,
+                textStyle = Patchbay.type.valueM.copy(color = c.text),
+                modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+            )
+            VSpace(Space.s)
+            PText("Days", Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                DAY_LETTERS.forEachIndexed { i, letter ->
+                    val d = i + 1
+                    PButton(letter, { days = if (d in days) days - d else days + d }, Modifier.weight(1f), if (d in days) ButtonKind.PRIMARY else ButtonKind.SECONDARY)
+                }
+            }
+            error?.let {
+                VSpace(Space.xs)
+                PText(it, Patchbay.type.caption, c.alarm)
+            }
+            VSpace(Space.s)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                PButton(
+                    "Save", {
+                        val parts = time.split(':')
+                        val h = parts.getOrNull(0)?.toIntOrNull()
+                        val m = parts.getOrNull(1)?.toIntOrNull()
+                        val sid = sceneId
+                        if (h == null || m == null || parts.size != 2) error = "Enter the time as HH:MM, for example 07:30"
+                        else if (sid == null) error = "Pick a scene"
+                        else scope.launch {
+                            when (val r = live.saveAutomation(name, sid, h, m, days)) {
+                                is dev.patchbay.core.result.PatchbayResult.Ok -> { creating = false; name = ""; error = null }
+                                is dev.patchbay.core.result.PatchbayResult.Err -> error = r.error.message
+                            }
+                        }
+                    },
+                    Modifier.weight(1f), ButtonKind.PRIMARY, enabled = name.isNotBlank(),
+                )
+                PButton("Cancel", { creating = false; error = null }, Modifier.weight(1f))
+            }
+        }
+    }
+    VSpace(Space.l)
 }

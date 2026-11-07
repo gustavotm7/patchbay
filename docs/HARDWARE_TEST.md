@@ -212,3 +212,17 @@ Please report: model (Chromecast gen, Google TV, speaker), whether C1.1 found it
 | N1.5 | **All off** (Scenes card) | Every light and plug that was on switches off. It says how many ("Switched off 3") or "Everything is already off" |
 | N1.6 | Open a device → **Remove…** → **Confirm remove** | It disappears and its saved pairing is gone. Scan again: it comes back, and a TV, printer or Cast device asks to pair again |
 | N1.7 | (Security) A paired TV, printer or Cast device whose key changes, for example after a factory reset | A red "Security alert" page replaces its controls and the Devices tab flags it first. Patchbay doesn't talk to it until you remove it and pair again, comparing the new fingerprint |
+
+## Phase 2 — Tray mode and automations (Windows)
+
+| # | Step | Expected |
+|---|---|---|
+| R1.1 | Settings → Background → turn on "Keep running in the tray…". Close the window with the X | The window disappears, a teal icon stays in the tray (check the hidden-icons arrow). The app is still running |
+| R1.2 | Click the tray icon, or right-click → Open Patchbay | The window returns **locked** (enter your PIN). Devices are still listed and current |
+| R1.3 | Tray menu → All off / Lock now | Lights and plugs that were on switch off; Lock now locks the window |
+| R1.4 | Tray menu → Quit | The icon disappears and the process exits (Task Manager) |
+| R1.5 | With the setting off, close the window | The app quits as before |
+| R1.6 | Make a scene, then Automations → New: pick the scene, a time two minutes ahead, all days. Leave the window open | At that minute the scene runs once. Activity shows "Automation: …" |
+| R1.7 | Repeat with the window closed to the tray | It still runs |
+| R1.8 | Turn the automation's switch off, wait for its time | Nothing runs |
+| R1.9 | Quit Patchbay across an automation's time, reopen | It does not run late (by design: no catch-up) |

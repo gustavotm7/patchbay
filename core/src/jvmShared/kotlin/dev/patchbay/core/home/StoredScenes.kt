@@ -14,3 +14,14 @@ internal data class StoredStep(
 
 @Serializable
 internal data class StoredScene(val id: String, val name: String, val steps: List<StoredStep>)
+
+@Serializable
+internal data class StoredAutomation(
+    val id: String,
+    val name: String,
+    val sceneId: String,
+    val hour: Int,
+    val minute: Int,
+    val days: List<Int>,
+    val enabled: Boolean = true,
+)

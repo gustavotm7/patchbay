@@ -133,6 +133,15 @@ class ScreenshotTest {
                 dev.patchbay.core.home.Scene("2", "Good night", listOf(DemoHome.Ids.FLOOR_LAMP, DemoHome.Ids.SHELF_STRIP, DemoHome.Ids.BEDSIDE)),
             ),
         )
+        override val automations: StateFlow<List<dev.patchbay.core.home.Automation>> = MutableStateFlow(
+            listOf(
+                dev.patchbay.core.home.Automation("a1", "Evening lights", "1", "Movie night", 19, 30, setOf(1, 2, 3, 4, 5, 6, 7), true),
+                dev.patchbay.core.home.Automation("a2", "Bedtime", "2", "Good night", 23, 0, setOf(1, 2, 3, 4, 5), true),
+            ),
+        )
+        override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override suspend fun setAutomationEnabled(id: String, enabled: Boolean) {}
+        override suspend fun deleteAutomation(id: String) {}
         override suspend fun saveScene(name: String, devices: List<DeviceId>): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
         override suspend fun runScene(id: String): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
         override suspend fun deleteScene(id: String) {}

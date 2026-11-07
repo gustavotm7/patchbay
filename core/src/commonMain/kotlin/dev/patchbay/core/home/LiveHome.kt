@@ -85,6 +85,15 @@ public interface LiveHome {
     /** Saves the current state of the given lights and plugs as a scene (replacing one of the same name). */
     public suspend fun saveScene(name: String, devices: List<DeviceId>): PatchbayResult<Unit>
 
+    public val automations: StateFlow<List<Automation>>
+
+    /** Schedules a scene. [days] are ISO weekdays 1 to 7. Runs only while Patchbay is open or in the tray. */
+    public suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>): PatchbayResult<Unit>
+
+    public suspend fun setAutomationEnabled(id: String, enabled: Boolean)
+
+    public suspend fun deleteAutomation(id: String)
+
     /** Applies a scene. Fails with a count if some devices didn't respond. */
     public suspend fun runScene(id: String): PatchbayResult<Unit>
 

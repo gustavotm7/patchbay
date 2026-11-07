@@ -44,6 +44,9 @@ class AppSettings(
     /** Portable Windows build: the folder holds everything. */
     val portable: Boolean,
     val version: String,
+    /** Windows only: keep running in the system tray when the window is closed. Null where there is no tray. */
+    val trayMode: Boolean? = null,
+    val onTrayMode: ((Boolean) -> Unit)? = null,
 )
 
 @Composable
@@ -67,6 +70,19 @@ fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier) {
                 PText("Patchbay locks itself after a minute away.", Patchbay.type.body, c.textSecondary)
                 VSpace(Space.s)
                 PButton("Lock now", { s.onLockNow.invoke() })
+            }
+        }
+        if (s.trayMode != null && s.onTrayMode != null) {
+            VSpace(Space.m)
+            Panel(Modifier.fillMaxWidth()) {
+                Legend("Background")
+                VSpace(Space.xs)
+                dev.patchbay.ui.designsystem.PToggle("Keep running in the tray when the window is closed", s.trayMode, s.onTrayMode)
+                VSpace(Space.xs)
+                PText(
+                    "Patchbay keeps watching your devices and running automations. It locks when the window is hidden. Quit from the tray icon.",
+                    Patchbay.type.caption, c.textSecondary,
+                )
             }
         }
         VSpace(Space.m)

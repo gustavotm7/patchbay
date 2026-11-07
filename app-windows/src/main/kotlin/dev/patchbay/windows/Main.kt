@@ -19,6 +19,14 @@ import dev.patchbay.ui.screens.Appearance
 import dev.patchbay.ui.screens.DesktopApp
 import dev.patchbay.ui.screens.LockGate
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.isTraySupported
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,11 +53,40 @@ fun main() {
     app(services.home, DesktopLock(services.store), services.store, services.keyKind, root, portable)
 }
 
+/** The tray icon: a teal disc with a dark centre, drawn in code so there is no image file to ship. */
+private object TrayIcon : Painter() {
+    override val intrinsicSize: Size = Size(64f, 64f)
+    override fun DrawScope.onDraw() {
+        drawCircle(Color(0xFF2DD4BF), radius = size.minDimension * 0.46f)
+        drawCircle(Color(0xFF0A0B0D), radius = size.minDimension * 0.17f)
+    }
+}
+
 private fun app(live: LiveHome, lock: DesktopLock, store: HomeStore, keyKind: String, root: File, portable: Boolean) = application {
     val home = DemoHome.home()
     val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
+    val scope = rememberCoroutineScope()
+    var visible by remember { mutableStateOf(true) }
+    var trayMode by remember { mutableStateOf(store.setting("ui.tray") == "true") }
+    val trayOn = trayMode && isTraySupported
+    if (trayOn) {
+        Tray(
+            icon = TrayIcon,
+            tooltip = "Patchbay",
+            onAction = { visible = true },
+            menu = {
+                Item("Open Patchbay") { visible = true }
+                Item("All off") { scope.launch { live.allOff() } }
+                Item("Lock now") { lock.lockNow() }
+                Separator()
+                Item("Quit") { exitApplication() }
+            },
+        )
+    }
     Window(
-        onCloseRequest = ::exitApplication,
+        visible = visible,
+        // With the tray on, closing hides the window and locks it; the app keeps running. Otherwise closing quits.
+        onCloseRequest = { if (trayOn) { lock.lockNow(); visible = false } else exitApplication() },
         title = "Patchbay",
         state = rememberWindowState(width = 1440.dp, height = 900.dp),
     ) {
@@ -71,6 +108,8 @@ private fun app(live: LiveHome, lock: DesktopLock, store: HomeStore, keyKind: St
             dataLocation = root.absolutePath,
             portable = portable,
             version = "0.1.0",
+            trayMode = if (isTraySupported) trayMode else null,
+            onTrayMode = { trayMode = it; store.putSetting("ui.tray", it.toString()) },
         )
         PatchbayTheme(appearance.palette(isSystemInDarkTheme()), DesktopFonts.typefaces, FormFactor.DESKTOP) {
             LockGate(lock) { DesktopApp(home, DemoHome.trends, now, live, settings) }
