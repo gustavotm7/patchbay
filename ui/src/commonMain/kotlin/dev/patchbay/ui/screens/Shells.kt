@@ -86,7 +86,7 @@ fun DesktopShell(
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = Space.xl), verticalAlignment = Alignment.CenterVertically) {
                 PText(section.label, Patchbay.type.title)
-                if (!(live != null && (section == Section.INVENTORY || section == Section.EXPOSURE))) {
+                if (section == Section.HOME) {
                     HSpace(Space.xl)
                     ExposureStrip(home)
                 }
