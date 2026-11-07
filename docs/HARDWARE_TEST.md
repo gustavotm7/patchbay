@@ -183,3 +183,20 @@ If the path differs, tell me the path VLC needed.
 | S1.8 | Delete the scene | It's gone for good |
 
 Scenes only ever hold lights and plugs. A TV, printer, camera or lock can't be put in one.
+
+## Phase 1 — Chromecast, Google TV and Cast speakers
+
+Prerequisite: the device is on, on the same network (not a guest network), and something is set up in the Google Home app as usual.
+
+| # | Step | Expected |
+|---|---|---|
+| C1.1 | Scan | Each Cast device appears as a tile (Chromecast, Google TV, speakers) named as in the Google Home app, with "Tap to pair". Network → Last scan shows "Cast and Google TV: N found" |
+| C1.2 | Tap the tile → check the fingerprint → Trust | No code and no prompt on the TV. Within a few seconds the tile shows its state ("Idle", or "Playing · title") |
+| C1.3 | Open it → volume −5 / +5 / mute | The device's volume follows within about a second, and the readout updates |
+| C1.4 | Start a video or song from your phone to the device | The tile and panel show "Playing" with the title; progress isn't shown yet |
+| C1.5 | Play / Pause / Stop in Patchbay | The video or song pauses, resumes and stops |
+| C1.6 | With nothing playing, press Play | Patchbay says nothing is playing (no error on the device) |
+| C1.7 | Restart Patchbay | The device reconnects without asking to pair again (same fingerprint) |
+| C1.8 | (If a firmware update changes its key) | Patchbay shows a trust warning rather than silently reconnecting; re-pair to accept |
+
+Please report: model (Chromecast gen, Google TV, speaker), whether C1.1 found it, and what a Cast device's volume and title looked like.

@@ -53,6 +53,17 @@ internal fun tileStatus(d: LiveDevice): String {
         }
     }
     s.state<CapabilityState.ThermostatState>()?.let { return "${Fmt.celsius(it.current.value)} °C" }
+    s.state<CapabilityState.MediaState>()?.let { m ->
+        // Chromecasts and speakers have no power state: show what they're doing.
+        if (s.state<CapabilityState.PowerState>() == null) {
+            return when (m.status) {
+                dev.patchbay.core.model.PlaybackStatus.PLAYING -> "Playing" + (m.title?.let { " · $it" } ?: "")
+                dev.patchbay.core.model.PlaybackStatus.PAUSED -> "Paused"
+                dev.patchbay.core.model.PlaybackStatus.BUFFERING -> "Buffering"
+                dev.patchbay.core.model.PlaybackStatus.IDLE -> "Idle"
+            }
+        }
+    }
     s.state<CapabilityState.PowerState>()?.let { p ->
         if (!p.on) return "Off"
         s.state<CapabilityState.BrightnessState>()?.let { return "On · ${Fmt.percent(it.level.value)} %" }

@@ -1,11 +1,13 @@
 package dev.patchbay.core.adapter
 
 import dev.patchbay.core.adapter.bambu.BambuAdapter
+import dev.patchbay.core.adapter.cast.CastAdapter
 import dev.patchbay.core.adapter.govee.GoveeLanAdapter
 import dev.patchbay.core.adapter.kasa.KasaAdapter
 import dev.patchbay.core.adapter.rtsp.RtspCameraAdapter
 import dev.patchbay.core.adapter.tuya.TuyaLocalAdapter
 import dev.patchbay.core.adapter.webos.WebOsAdapter
+import dev.patchbay.core.discovery.NetworkCensus
 import dev.patchbay.core.log.SessionLog
 import dev.patchbay.core.net.NetGuard
 import dev.patchbay.core.result.PatchbayResult
@@ -41,6 +43,12 @@ public object AdapterRegistry {
     /** Bambu Lab printers: pinned MQTT/TLS on 8883 + LAN access code; monitor, pause/resume/stop, light. */
     public val BAMBU: AdapterFactory = AdapterFactory { ctx -> BambuAdapter(ctx.netGuard) }
 
+    /** Chromecast, Google TV and Cast speakers: Cast v2 over pinned TLS; found through the network census (mDNS). */
+    public val CAST: AdapterFactory = AdapterFactory { ctx ->
+        val census = NetworkCensus(ctx.netGuard)
+        CastAdapter(ctx.netGuard, finder = CastAdapter.CastFinder { (census.run() as? PatchbayResult.Ok)?.value.orEmpty() })
+    }
+
     /** TP-Link Kasa plugs and switches on the legacy local protocol (TCP/UDP 9999). KLAP-only firmware is not found. */
     public val KASA: AdapterFactory = AdapterFactory { ctx -> KasaAdapter(ctx.netGuard, ctx.scope) }
 
@@ -51,5 +59,5 @@ public object AdapterRegistry {
     public val TUYA_LOCAL: AdapterFactory = AdapterFactory { ctx -> TuyaLocalAdapter(ctx.netGuard) }
 
     /** Local adapters enabled by default, in discovery order. */
-    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, KASA, RTSP_CAMERA, TUYA_LOCAL)
+    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, CAST, KASA, RTSP_CAMERA, TUYA_LOCAL)
 }

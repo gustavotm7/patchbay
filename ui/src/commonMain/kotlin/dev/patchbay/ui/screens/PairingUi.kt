@@ -134,13 +134,16 @@ fun PairingPanel(state: PairingDialogState, modifier: Modifier = Modifier) {
     }
 }
 
-/** TV controls rendered from capabilities: power off, volume, mute, inputs, media keys. */
+/** TV, Chromecast and speaker controls rendered from capabilities: power, volume, mute, inputs, transport, and what's playing. */
 @Composable
 fun TvPanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifier = Modifier) {
     val c = Patchbay.colors
     val s = live.snapshot
     val on = s?.state<CapabilityState.PowerState>()?.on ?: false
     val vol = s?.state<CapabilityState.VolumeState>()
+    val media = s?.state<CapabilityState.MediaState>()
+    val hasPower = live.device.capability<dev.patchbay.core.model.Capability.Power>() != null
+    val hasTransport = live.device.capability<dev.patchbay.core.model.Capability.MediaTransport>() != null
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -151,11 +154,21 @@ fun TvPanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifier =
                 live.needsPairing -> StatusTag("Needs pairing", Tone.ATTENTION)
                 s?.reachability == Reachability.OFFLINE -> StatusTag("Offline", Tone.ALARM)
                 s?.reachability == Reachability.DEGRADED -> StatusTag("No reply", Tone.ATTENTION)
+                !hasPower && media?.status == dev.patchbay.core.model.PlaybackStatus.PLAYING -> StatusTag("Playing", Tone.ACTIVE)
+                !hasPower && media?.status == dev.patchbay.core.model.PlaybackStatus.PAUSED -> StatusTag("Paused", Tone.NEUTRAL)
+                !hasPower -> StatusTag("Online", Tone.NEUTRAL)
                 on -> StatusTag("On", Tone.ACTIVE)
                 else -> StatusTag("Standby", Tone.NEUTRAL)
             }
         }
         VSpace(Space.l)
+        val nowPlaying = media?.title
+        if (nowPlaying != null) {
+            Legend("Now playing")
+            PText(nowPlaying, Patchbay.type.bodyStrong, maxLines = 2)
+            media?.subtitle?.let { PText(it, Patchbay.type.caption, c.textSecondary, maxLines = 1) }
+            VSpace(Space.l)
+        }
         Legend("Volume")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Readout(vol?.level?.toString() ?: "—", "/ 100", Patchbay.type.valueL, spokenUnit = "of 100", label = "Volume")
@@ -168,13 +181,15 @@ fun TvPanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifier =
             PButton("+5", { vol?.let { onCommand(Command.SetVolume((it.level + 5).coerceAtMost(100))) } }, Modifier.weight(1f), enabled = vol != null)
         }
         PToggle("Mute", vol?.muted ?: false, { onCommand(Command.SetMute(it)) })
-        VSpace(Space.m)
-        Legend("Playback")
-        VSpace(Space.xs)
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            PButton("Play", { onCommand(Command.Media(MediaAction.PLAY)) }, Modifier.weight(1f))
-            PButton("Pause", { onCommand(Command.Media(MediaAction.PAUSE)) }, Modifier.weight(1f))
-            PButton("Stop", { onCommand(Command.Media(MediaAction.STOP)) }, Modifier.weight(1f))
+        if (hasTransport) {
+            VSpace(Space.m)
+            Legend("Playback")
+            VSpace(Space.xs)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                PButton("Play", { onCommand(Command.Media(MediaAction.PLAY)) }, Modifier.weight(1f))
+                PButton("Pause", { onCommand(Command.Media(MediaAction.PAUSE)) }, Modifier.weight(1f))
+                PButton("Stop", { onCommand(Command.Media(MediaAction.STOP)) }, Modifier.weight(1f))
+            }
         }
         val inputs = live.device.capability<dev.patchbay.core.model.Capability.InputSource>()?.sources.orEmpty()
         if (inputs.isNotEmpty()) {
@@ -188,15 +203,17 @@ fun TvPanel(live: LiveDevice, onCommand: (Command) -> Unit, modifier: Modifier =
                 VSpace(Space.xs)
             }
         }
-        VSpace(Space.m)
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            PButton("Turn on", { onCommand(Command.SetPower(true)) }, Modifier.weight(1f), ButtonKind.PRIMARY, enabled = !on)
-            PButton("Turn off", { onCommand(Command.SetPower(false)) }, Modifier.weight(1f), ButtonKind.DESTRUCTIVE, enabled = on)
+        if (hasPower) {
+            VSpace(Space.m)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                PButton("Turn on", { onCommand(Command.SetPower(true)) }, Modifier.weight(1f), ButtonKind.PRIMARY, enabled = !on)
+                PButton("Turn off", { onCommand(Command.SetPower(false)) }, Modifier.weight(1f), ButtonKind.DESTRUCTIVE, enabled = on)
+            }
+            VSpace(Space.xs)
+            PText(
+                "Turn on uses Wake-on-LAN: enable “Turn on via Wi-Fi” on the TV. Patchbay must have reached the TV once this session.",
+                Patchbay.type.caption, c.textTertiary,
+            )
         }
-        VSpace(Space.xs)
-        PText(
-            "Turn on uses Wake-on-LAN: enable “Turn on via Wi-Fi” on the TV. Patchbay must have reached the TV once this session.",
-            Patchbay.type.caption, c.textTertiary,
-        )
     }
 }

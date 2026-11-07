@@ -83,8 +83,7 @@ capabilities, so most additions need no new screens.
 **After the MVP:**
 
 5. **eufy RTSP cameras**: status adapter done (HARDWARE_TEST E1.x). Still to do: in-app viewing, which needs a player and ADR 0008 (proposed: guarded sockets) (Media3 on Android; desktop TBD). TP-Link Kasa plugs are done too (K1.x). Tuya: ADR 0007 accepted; the bulb adapter (Lepro, protocol 3.3) is built (HARDWARE_TEST U1.x, key steps in `docs/TUYA_KEYS.md`). The Lefant vacuum needs its model + data-point list; protocol 3.4/3.5 is a follow-up if the bulbs use it.
-6. **Cast / Google TV.** Research done (`docs/protocols/cast.md`): pin the TLS leaf, skip the device-auth chain. No new trust design
-   needed; the amendment to ADR 0005 is only a note. Build it after the LG and Bambu hardware tests confirm the TOFU flow.
+6. ~~Cast / Google TV~~ adapter built (HARDWARE_TEST C1.x); the Android TV Remote v2 part (remote keys) is still open.
 7. ~~Rooms for live devices~~ done (grouped tiles, Room picker; S1.x), scenes done (lights and plugs only). Next: the floor-plan editor, Jazzer fuzzing in CI, then
    Phase 2 (ecobee HAP, scenes, automations, ledger, widgets, tray/command bar, peer sync).
 

@@ -310,7 +310,7 @@ private fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = Mo
     val send: (dev.patchbay.core.model.Command) -> Unit = { cmd -> scope.launch { live.send(id, cmd) } }
     if (d.device.kind == DeviceKind.LIGHT) {
         LightPanel(d, onCommand = send, modifier = modifier)
-    } else if (d.device.kind == DeviceKind.TV) {
+    } else if (d.device.kind == DeviceKind.TV || d.device.kind == DeviceKind.MEDIA_RECEIVER || d.device.kind == DeviceKind.SPEAKER) {
         TvPanel(d, onCommand = send, modifier = modifier)
     } else if (d.device.kind == DeviceKind.PRINTER_3D) {
         val snap = d.snapshot

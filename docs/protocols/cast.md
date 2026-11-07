@@ -1,6 +1,8 @@
 # Cast (Chromecast) and Android TV Remote v2
 
-Status: research note, 2026-11-06. **No adapter yet.** Both are tier **LS** (local, with a one-time trust step).
+Status: 2026-11-07. **Cast v2 adapter built** (`core/.../adapter/cast/`): volume, mute, play, pause, stop, current app and now-playing, over
+TLS 8009 with a trust-on-first-use key pin; devices are found through the mDNS census. Not built: Android TV Remote v2 (remote keys for Google TV),
+anything that launches apps or casts media. Not yet tried on a real device (HARDWARE_TEST C1.x). Both protocols are tier **LS** (local, with a one-time trust step).
 Findings come from web search of community sources, not from vendor documentation; Google doesn't publish the protocols.
 
 ## Cast v2 (Chromecast, Google TV Streamer, Cast-enabled TVs and speakers)
