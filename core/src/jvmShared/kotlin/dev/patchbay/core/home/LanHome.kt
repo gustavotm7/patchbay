@@ -44,6 +44,7 @@ public class LanHome(
     private val censusEngine: NetworkCensus? = null,
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    private val random: kotlin.random.Random = kotlin.random.Random.Default,
 ) : LiveHome {
 
     private val _devices = MutableStateFlow<List<LiveDevice>>(emptyList())
@@ -61,6 +62,13 @@ public class LanHome(
     private val _automations = MutableStateFlow<List<Automation>>(emptyList())
     private var storedAutomations: List<StoredAutomation> = emptyList()
     private val lastAutomationRun = ConcurrentHashMap<String, Long>()
+    private val _adaptive = MutableStateFlow<Set<DeviceId>>(emptySet())
+    private val adaptiveApplied = ConcurrentHashMap<DeviceId, Int>()
+    private val adaptiveAppliedAt = ConcurrentHashMap<DeviceId, Long>()
+    private val adaptiveOverridden = ConcurrentHashMap.newKeySet<DeviceId>()
+    private val _away = MutableStateFlow(AwayState())
+    private val nextFlip = ConcurrentHashMap<DeviceId, Long>()
+    @Volatile private var simOffDay = -1L
     private val _activity = MutableStateFlow<List<LedgerEntry>>(emptyList())
     private data class Summary(
         val reach: dev.patchbay.core.model.Reachability,
@@ -212,6 +220,96 @@ public class LanHome(
         }
     }
 
+    override val adaptive: StateFlow<Set<DeviceId>> = _adaptive.asStateFlow()
+    override val away: StateFlow<AwayState> = _away.asStateFlow()
+
+    private fun loadAdaptiveAndAway() {
+        store?.setting("adaptive")?.let { raw ->
+            _adaptive.value = try { sceneJson.decodeFromString<List<String>>(raw).map(::DeviceId).toSet() } catch (e: Exception) { emptySet() }
+        }
+        store?.setting("away")?.let { raw ->
+            _away.value = try { sceneJson.decodeFromString<StoredAway>(raw).let { AwayState(it.active, it.simulate.map(::DeviceId).toSet()) } } catch (e: Exception) { AwayState() }
+        }
+    }
+
+    override suspend fun setAdaptive(device: DeviceId, on: Boolean) {
+        _adaptive.update { if (on) it + device else it - device }
+        adaptiveApplied.remove(device); adaptiveOverridden.remove(device)
+        store?.putSetting("adaptive", sceneJson.encodeToString(_adaptive.value.map { it.value }))
+        val name = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return
+        record(name, if (on) "Adaptive lighting turned on" else "Adaptive lighting turned off")
+    }
+
+    /**
+     * Moves the white colour of each adaptive light that is on toward the day's curve. A light you change yourself is left alone
+     * until you switch it off and on again. Colour-mode lights are never touched. Public so tests can drive it with a fixed clock.
+     */
+    public fun tickAdaptive(nowMillis: Long = clock()) {
+        val t = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
+        val minute = t.hour * 60 + t.minute
+        for (id in _adaptive.value) {
+            val live = _devices.value.firstOrNull { it.device.id == id } ?: continue
+            val snap = live.snapshot ?: continue
+            if (snap.reachability != dev.patchbay.core.model.Reachability.ONLINE) continue
+            if (snap.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on != true) {
+                adaptiveApplied.remove(id); adaptiveOverridden.remove(id); continue
+            }
+            val k = snap.state<dev.patchbay.core.model.CapabilityState.ColourTemperatureState>()?.kelvin?.value ?: continue
+            val last = adaptiveApplied[id]
+            if (last != null && nowMillis - (adaptiveAppliedAt[id] ?: 0L) > 20_000 && kotlin.math.abs(k - last) > 250) adaptiveOverridden += id
+            if (id in adaptiveOverridden) continue
+            val cap = live.device.capability<dev.patchbay.core.model.Capability.ColourTemperature>() ?: continue
+            val target = AdaptiveCurve.kelvinAt(minute).coerceIn(cap.warmest.value, cap.coolest.value)
+            if (kotlin.math.abs(k - target) > 100) {
+                adaptiveApplied[id] = target; adaptiveAppliedAt[id] = nowMillis
+                scope.launch { send(id, Command.SetColourTemperature(dev.patchbay.core.model.Kelvin(target))) }
+            }
+        }
+    }
+
+    override suspend fun setAway(active: Boolean, simulate: Set<DeviceId>) {
+        val was = _away.value.active
+        _away.value = AwayState(active, if (active) simulate else emptySet())
+        store?.putSetting("away", sceneJson.encodeToString(StoredAway(active, _away.value.simulate.map { it.value })))
+        nextFlip.clear()
+        if (active && !was) {
+            record("Away mode", "Turned on" + if (simulate.isNotEmpty()) " (simulating presence with ${simulate.size} lights)" else "")
+            allOff()
+        } else if (!active && was) {
+            record("Away mode", "Turned off")
+        }
+    }
+
+    /**
+     * While away with simulation on: between 18:00 and 22:59 each chosen light flips at irregular intervals (20 to 60 minutes),
+     * and at 23:00 they all go off once. Public so tests can drive it with a fixed clock and a seeded random.
+     */
+    public fun tickAway(nowMillis: Long = clock()) {
+        val a = _away.value
+        if (!a.active || a.simulate.isEmpty()) return
+        val t = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
+        when {
+            t.hour in 18..22 -> for (id in a.simulate) {
+                val live = _devices.value.firstOrNull { it.device.id == id } ?: continue
+                val snap = live.snapshot ?: continue
+                if (snap.reachability != dev.patchbay.core.model.Reachability.ONLINE) continue
+                val due = nextFlip.getOrPut(id) { nowMillis + random.nextInt(1, 40) * 60_000L }
+                if (nowMillis < due) continue
+                nextFlip[id] = nowMillis + random.nextInt(20, 61) * 60_000L
+                val on = snap.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on == true
+                record("Away mode", "Simulated presence: ${live.device.name} ${if (on) "off" else "on"}")
+                scope.launch { send(id, Command.SetPower(!on)) }
+            }
+            t.hour == 23 && simOffDay != t.toLocalDate().toEpochDay() -> {
+                simOffDay = t.toLocalDate().toEpochDay()
+                nextFlip.clear()
+                for (id in a.simulate) scope.launch { send(id, Command.SetPower(false)) }
+                record("Away mode", "Simulated presence ended for the night")
+            }
+            t.hour < 18 -> nextFlip.clear()
+        }
+    }
+
     override val rooms: StateFlow<List<String>> = _rooms.asStateFlow()
     override val scenes: StateFlow<List<Scene>> = _scenes.asStateFlow()
 
@@ -332,10 +430,13 @@ public class LanHome(
         loadScenes()
         loadLedger()
         loadAutomations()
+        loadAdaptiveAndAway()
         scope.launch {
             while (true) {
                 delay(15_000)
                 tickAutomations()
+                tickAdaptive()
+                tickAway()
             }
         }
     }

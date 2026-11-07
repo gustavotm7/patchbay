@@ -16,8 +16,8 @@ Researched 2026-11-07 from community posts and product write-ups (practitioner o
 
 | Idea | Why it's interesting | What it needs |
 |---|---|---|
-| **Adaptive lighting**: colour temperature follows the day (cool and bright at noon, warm in the evening) | One of the few features people never turn off ([Apple Home](https://www.macworld.com/article/3563913/homekit-in-ios-14-support-for-facial-recognition-and-adaptive-lighting.html)) | The Windows tray mode now exists, so this can be built on the automation scheduler. Time-of-day curve per light, off by default |
-| **Home / Away / Sleep modes** driving other things, including fake occupancy while on holiday | Top answers in the Home Assistant thread | Needs an automation engine and presence. No location or SSID by design: presence could be "your phone is on the home Wi-Fi", which is already visible without reading the SSID |
+| ~~**Adaptive lighting**~~ built: colour temperature follows the day | One of the few features people never turn off ([Apple Home](https://www.macworld.com/article/3563913/homekit-in-ios-14-support-for-facial-recognition-and-adaptive-lighting.html)) | The Windows tray mode now exists, so this can be built on the automation scheduler. Time-of-day curve per light, off by default |
+| ~~Away mode~~ built (manual toggle, all off, imitation). Still open: **Home / Away / Sleep modes** driving other things, including fake occupancy while on holiday | Top answers in the Home Assistant thread | Needs an automation engine and presence. No location or SSID by design: presence could be "your phone is on the home Wi-Fi", which is already visible without reading the SSID |
 | **Automations: triggers** (when a device changes, sunset) | Time-of-day scenes are built; triggers aren't | Sunset needs a typed home location (never read from the phone) |
 | **Suggested automations** when you add a device (Apple Home suggests daily adaptive lighting) | Lowers the barrier for new users | After automations exist |
 | **Quiet hours and battery thresholds** for alerts (SmartThings: 15 % and 5 %, daytime only) | Avoids 3 a.m. notifications | Notifications (Phase 2) and battery sensors |

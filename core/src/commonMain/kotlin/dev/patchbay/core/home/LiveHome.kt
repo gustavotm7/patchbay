@@ -94,6 +94,16 @@ public interface LiveHome {
 
     public suspend fun deleteAutomation(id: String)
 
+    /** Lights whose white colour follows the day. */
+    public val adaptive: StateFlow<Set<DeviceId>>
+
+    public suspend fun setAdaptive(device: DeviceId, on: Boolean)
+
+    public val away: StateFlow<AwayState>
+
+    /** Turns away mode on or off. Turning it on switches everything off; [simulate] lights imitate presence in the evening. */
+    public suspend fun setAway(active: Boolean, simulate: Set<DeviceId>)
+
     /** Applies a scene. Fails with a count if some devices didn't respond. */
     public suspend fun runScene(id: String): PatchbayResult<Unit>
 

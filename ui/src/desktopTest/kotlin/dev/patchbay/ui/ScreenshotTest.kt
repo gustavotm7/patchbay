@@ -142,6 +142,10 @@ class ScreenshotTest {
         override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
         override suspend fun setAutomationEnabled(id: String, enabled: Boolean) {}
         override suspend fun deleteAutomation(id: String) {}
+        override val adaptive: StateFlow<Set<DeviceId>> = MutableStateFlow(emptySet())
+        override suspend fun setAdaptive(device: DeviceId, on: Boolean) {}
+        override val away: StateFlow<dev.patchbay.core.home.AwayState> = MutableStateFlow(dev.patchbay.core.home.AwayState())
+        override suspend fun setAway(active: Boolean, simulate: Set<DeviceId>) {}
         override suspend fun saveScene(name: String, devices: List<DeviceId>): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
         override suspend fun runScene(id: String): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
         override suspend fun deleteScene(id: String) {}

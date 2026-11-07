@@ -25,3 +25,6 @@ internal data class StoredAutomation(
     val days: List<Int>,
     val enabled: Boolean = true,
 )
+
+@Serializable
+internal data class StoredAway(val active: Boolean, val simulate: List<String>)

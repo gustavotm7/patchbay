@@ -226,3 +226,15 @@ Please report: model (Chromecast gen, Google TV, speaker), whether C1.1 found it
 | R1.7 | Repeat with the window closed to the tray | It still runs |
 | R1.8 | Turn the automation's switch off, wait for its time | Nothing runs |
 | R1.9 | Quit Patchbay across an automation's time, reopen | It does not run late (by design: no catch-up) |
+
+## Phase 2 — Adaptive lighting and away mode
+
+| # | Step | Expected |
+|---|---|---|
+| D1.1 | Open a white-tunable light that is on → **Adaptive lighting** → Follow the day | Within about 15 s the white colour moves to the day's target (about 5500 K at midday, about 3000 K at 20:00, about 2400 K at 22:00). Brightness doesn't change |
+| D1.2 | Set a different white yourself | Patchbay stops adjusting that light |
+| D1.3 | Switch it off and on again | Adaptive takes over again |
+| D1.4 | Set it to a colour (not white) | It's left alone |
+| D1.5 | Devices → **Away mode** on, with the imitation on | Everything switches off now. Activity says so |
+| D1.6 | Leave it on between 18:00 and 23:00 with Patchbay open or in the tray | Your lights switch on and off at irregular times (20 to 60 minutes apart) and are off at 23:00. Activity lists each switch |
+| D1.7 | Away off | The imitation stops and nothing else changes |

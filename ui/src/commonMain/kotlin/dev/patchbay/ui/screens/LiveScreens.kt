@@ -126,6 +126,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
             NeedsAttention(devices, onSelect)
             ScenesPanel(live)
             AutomationsPanel(live)
+            AwayPanel(live)
             val tileFor: @Composable (LiveDevice, Modifier) -> Unit = { d, m ->
                 val toggles = tileToggles(d)
                 DeviceTile(
@@ -299,6 +300,7 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
     Column(modifier) {
         LiveDetailBody(live, id, Modifier)
         VSpace(Space.l)
+        AdaptivePanel(live, id)
         RoomPanel(live, id)
         VSpace(Space.l)
         RemovePanel(live, id)
@@ -931,6 +933,55 @@ private fun AutomationsPanel(live: LiveHome) {
                 PButton("Cancel", { creating = false; error = null }, Modifier.weight(1f))
             }
         }
+    }
+    VSpace(Space.l)
+}
+
+/** Away mode: everything off now, and optionally the lights imitate someone being home in the evening. */
+@Composable
+private fun AwayPanel(live: LiveHome) {
+    val c = Patchbay.colors
+    val away by live.away.collectAsState()
+    val devices by live.devices.collectAsState()
+    val scope = rememberCoroutineScope()
+    val lights = devices.filter { it.device.kind == DeviceKind.LIGHT }.map { it.device.id }
+    if (lights.isEmpty() && !away.active) return
+    var simulate by remember { mutableStateOf(true) }
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Away mode")
+        VSpace(Space.xs)
+        PToggle("Away", away.active, { on -> scope.launch { live.setAway(on, if (on && simulate) lights.toSet() else emptySet()) } })
+        if (!away.active) {
+            PToggle("Imitate someone home with my lights", simulate, { simulate = it })
+        }
+        VSpace(Space.xs)
+        PText(
+            if (away.active) "Away is on. Everything was switched off${if (away.simulate.isNotEmpty()) "; lights switch on and off between 18:00 and 23:00 as if someone were home" else ""}."
+            else "Turning it on switches everything off now. With the imitation on, lights flip at irregular times in the evening and go off at 23:00. It runs only while Patchbay is open or in the tray.",
+            Patchbay.type.caption, c.textSecondary,
+        )
+    }
+    VSpace(Space.l)
+}
+
+/** Adaptive lighting for a light with a white colour temperature: cool at midday, warm in the evening, never overriding a change you make. */
+@Composable
+private fun AdaptivePanel(live: LiveHome, id: DeviceId) {
+    val c = Patchbay.colors
+    val devices by live.devices.collectAsState()
+    val adaptive by live.adaptive.collectAsState()
+    val scope = rememberCoroutineScope()
+    val d = devices.firstOrNull { it.device.id == id } ?: return
+    if (d.device.kind != DeviceKind.LIGHT || d.device.capability<dev.patchbay.core.model.Capability.ColourTemperature>() == null) return
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Adaptive lighting")
+        VSpace(Space.xs)
+        PToggle("Follow the day", id in adaptive, { on -> scope.launch { live.setAdaptive(id, on) } })
+        VSpace(Space.xs)
+        PText(
+            "Moves the white colour through the day: cool at midday, warm in the evening. Brightness and colours are never touched. If you change the colour yourself it stops until you switch the light off and on. Runs only while Patchbay is open or in the tray.",
+            Patchbay.type.caption, c.textSecondary,
+        )
     }
     VSpace(Space.l)
 }
