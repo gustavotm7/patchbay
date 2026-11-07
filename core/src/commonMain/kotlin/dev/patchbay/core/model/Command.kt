@@ -21,5 +21,6 @@ public sealed interface Command {
     public data class SetMute(val muted: Boolean) : Command
     public data class SelectInput(val source: String) : Command
     public data class ControlPrint(val action: PrintAction) : Command
+    public data class PressKey(val key: RemoteKey) : Command
     public data class SetAuxLight(val lightName: String, val on: Boolean) : Command
 }

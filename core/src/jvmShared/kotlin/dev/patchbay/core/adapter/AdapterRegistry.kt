@@ -1,5 +1,6 @@
 package dev.patchbay.core.adapter
 
+import dev.patchbay.core.adapter.androidtv.AndroidTvRemoteAdapter
 import dev.patchbay.core.adapter.bambu.BambuAdapter
 import dev.patchbay.core.adapter.cast.CastAdapter
 import dev.patchbay.core.adapter.govee.GoveeLanAdapter
@@ -49,6 +50,12 @@ public object AdapterRegistry {
         CastAdapter(ctx.netGuard, finder = CastAdapter.CastFinder { (census.run() as? PatchbayResult.Ok)?.value.orEmpty() })
     }
 
+    /** Google TV and Android TV as a remote control (Android TV Remote v2): pairing with the code on the TV, then remote keys. */
+    public val ANDROID_TV_REMOTE: AdapterFactory = AdapterFactory { ctx ->
+        val census = NetworkCensus(ctx.netGuard)
+        AndroidTvRemoteAdapter(ctx.netGuard, CastAdapter.CastFinder { (census.run() as? PatchbayResult.Ok)?.value.orEmpty() })
+    }
+
     /** TP-Link Kasa plugs and switches on the legacy local protocol (TCP/UDP 9999). KLAP-only firmware is not found. */
     public val KASA: AdapterFactory = AdapterFactory { ctx -> KasaAdapter(ctx.netGuard, ctx.scope) }
 
@@ -59,5 +66,5 @@ public object AdapterRegistry {
     public val TUYA_LOCAL: AdapterFactory = AdapterFactory { ctx -> TuyaLocalAdapter(ctx.netGuard) }
 
     /** Local adapters enabled by default, in discovery order. */
-    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, CAST, KASA, RTSP_CAMERA, TUYA_LOCAL)
+    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, CAST, ANDROID_TV_REMOTE, KASA, RTSP_CAMERA, TUYA_LOCAL)
 }

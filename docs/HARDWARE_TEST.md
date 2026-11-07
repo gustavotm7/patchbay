@@ -250,3 +250,22 @@ Please report: model (Chromecast gen, Google TV, speaker), whether C1.1 found it
 | F1.5 | Same with Sunrise and a negative offset | It runs that many minutes before sunrise |
 | F1.6 | (Windows, tray mode on, window hidden) Unplug a plug and wait about a minute | A Windows notification says the device "stopped answering". Replugging and unplugging again within an hour doesn't repeat it |
 | F1.7 | (Security) A paired device whose key changes | A notification says it presented a different security key |
+
+## Phase 2 — Google TV remote
+
+Prerequisite: the Google TV or Android TV is on, on the same network. This is the protocol's first real-device test: tell me exactly where it stops if it does.
+
+| # | Step | Expected |
+|---|---|---|
+| A1.1 | Scan | A tile named "<TV name> remote" appears (it is separate from the Cast tile for the same TV), with "Tap to pair" |
+| A1.2 | Tap it → check the fingerprint → Trust | The TV shows a 6-character code (letters A–F and digits) |
+| A1.3 | Type the code | Pairing completes; the tile says "Remote ready" within a few seconds |
+| A1.4 | A wrong code | "That code isn't right", and the TV doesn't pair |
+| A1.5 | Open it → Up / Down / Left / Right / OK | The TV's focus moves and OK selects |
+| A1.6 | Back, Home, Play/Pause | They behave as on the TV's own remote |
+| A1.7 | Vol −, Mute, Vol + | The TV volume follows. If a streaming stick shows no volume change, tell me which model |
+| A1.8 | Power | The TV turns off or on like its power key (Wake-on-LAN isn't used) |
+| A1.9 | Restart Patchbay | It reconnects without asking for a code |
+| A1.10 | In the TV's settings, remove the remote | Patchbay shows it as not answering; remove it in Patchbay and pair again |
+
+Unverified until now (the references don't say): whether the TV presents the same key on the pairing port (6467) and the remote port (6466). If A1.3 pairs but the tile never says "Remote ready", that is the first thing to check.

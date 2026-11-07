@@ -30,9 +30,9 @@ public object PinnedTls {
      * Creates a context that accepts exactly the key whose SPKI hash is [pinnedSha256], or, when it's
      * null (first use), any key, recording what it saw in [observed] so pairing can show it to the user.
      */
-    public fun context(pinnedSha256: String?, observed: ObservedKey): SSLContext {
+    public fun context(pinnedSha256: String?, observed: ObservedKey, clientKeys: Array<javax.net.ssl.KeyManager>? = null): SSLContext {
         val tm = PinningTrustManager(pinnedSha256, observed)
-        return SSLContext.getInstance("TLS").apply { init(null, arrayOf(tm), null) }
+        return SSLContext.getInstance("TLS").apply { init(clientKeys, arrayOf(tm), null) }
     }
 
     /** Restricts a socket to TLS 1.2+ (some devices, like webOS TVs, don't do 1.3). */

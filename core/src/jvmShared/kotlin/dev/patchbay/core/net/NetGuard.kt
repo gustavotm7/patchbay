@@ -95,6 +95,8 @@ public class NetGuard {
         pinnedSha256: String?,
         deviceName: String,
         timeoutMs: Int = 5_000,
+        /** Our own client certificate, for devices that identify the client by one (Android TV Remote). */
+        clientKeys: Array<javax.net.ssl.KeyManager>? = null,
     ): PatchbayResult<TlsConnection> {
         val tcp = when (val r = connectTcp(to, port, timeoutMs)) {
             is PatchbayResult.Ok -> r.value
@@ -103,7 +105,7 @@ public class NetGuard {
         return withContext(Dispatchers.IO) {
             val observed = PinnedTls.ObservedKey()
             try {
-                val ctx = PinnedTls.context(pinnedSha256, observed)
+                val ctx = PinnedTls.context(pinnedSha256, observed, clientKeys)
                 val ssl = ctx.socketFactory.createSocket(tcp, to.literal, port, true) as SSLSocket
                 PinnedTls.harden(ssl)
                 ssl.soTimeout = timeoutMs

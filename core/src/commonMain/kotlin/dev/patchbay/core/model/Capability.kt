@@ -86,6 +86,12 @@ public sealed interface Capability {
      */
     public data object LockStatus : Capability
 
+    /**
+     * Remote-control keys (d-pad, home, back, volume, play/pause, power), as on a TV remote. Keys only: nothing here installs,
+     * launches or reads anything.
+     */
+    public data object RemoteKeys : Capability
+
     /** A secondary light on a device, such as a printer's chamber light. */
     public data class AuxLight(val lightName: String) : Capability
 }
@@ -97,5 +103,8 @@ public enum class HvacAction { IDLE, HEATING, COOLING, FAN_ONLY }
 public enum class MediaAction { PLAY, PAUSE, STOP, NEXT, PREVIOUS, SEEK }
 
 public enum class PrintAction { PAUSE, RESUME, STOP }
+
+/** The keys of a TV remote that Patchbay can press. */
+public enum class RemoteKey { UP, DOWN, LEFT, RIGHT, SELECT, HOME, BACK, PLAY_PAUSE, VOLUME_UP, VOLUME_DOWN, MUTE, POWER }
 
 public enum class StreamProtocol { RTSP, RTSPS }

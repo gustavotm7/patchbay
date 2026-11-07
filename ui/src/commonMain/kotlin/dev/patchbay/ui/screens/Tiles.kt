@@ -71,6 +71,7 @@ internal fun tileStatus(d: LiveDevice): String {
         return "On"
     }
     if (d.device.kind == DeviceKind.CAMERA) return "Stream up"
+    if (d.device.capability<Capability.RemoteKeys>() != null) return "Remote ready"
     return "Online"
 }
 

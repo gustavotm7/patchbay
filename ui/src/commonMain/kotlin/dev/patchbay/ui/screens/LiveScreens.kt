@@ -331,6 +331,8 @@ private fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = Mo
         OfflineNotice(d, modifier)
     } else if (d.device.kind == DeviceKind.LIGHT) {
         LightPanel(d, onCommand = send, modifier = modifier)
+    } else if (d.device.capability<dev.patchbay.core.model.Capability.RemoteKeys>() != null) {
+        RemotePanel(d, onCommand = send, modifier = modifier)
     } else if (d.device.kind == DeviceKind.TV || d.device.kind == DeviceKind.MEDIA_RECEIVER || d.device.kind == DeviceKind.SPEAKER) {
         TvPanel(d, onCommand = send, modifier = modifier)
     } else if (d.device.kind == DeviceKind.PRINTER_3D) {

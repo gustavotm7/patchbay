@@ -2,7 +2,9 @@
 
 Status: 2026-11-07. **Cast v2 adapter built** (`core/.../adapter/cast/`): volume, mute, play, pause, stop, current app and now-playing, over
 TLS 8009 with a trust-on-first-use key pin; devices are found through the mDNS census. Not built: Android TV Remote v2 (remote keys for Google TV),
-anything that launches apps or casts media. Not yet tried on a real device (HARDWARE_TEST C1.x). Both protocols are tier **LS** (local, with a one-time trust step).
+anything that launches apps or casts media. Not yet tried on a real device (HARDWARE_TEST C1.x).
+
+**Android TV Remote v2 is built too** (`core/.../adapter/androidtv/`, HARDWARE_TEST A1.x): field numbers, framing (varint length), the pairing secret (SHA-256 over the client and TV RSA modulus and exponent plus the last two bytes of the 6-character code; the first digest byte must equal the first code byte), the feature bits and the key codes come from louis49/androidtv-remote (MIT) and tronikos/androidtvremote2 (Apache-2.0), read on 2026-11-07. The client certificate is RSA 2048, self-signed, SHA-256. Both protocols are tier **LS** (local, with a one-time trust step).
 Findings come from web search of community sources, not from vendor documentation; Google doesn't publish the protocols.
 
 ## Cast v2 (Chromecast, Google TV Streamer, Cast-enabled TVs and speakers)

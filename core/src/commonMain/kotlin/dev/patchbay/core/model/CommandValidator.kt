@@ -67,6 +67,10 @@ public object CommandValidator {
                 val cap = device.capability<Capability.PrintControl>() ?: return missing(device, "print control")
                 if (command.action !in cap.actions) unsupported("${command.action} not supported") else ok()
             }
+            is Command.PressKey -> {
+                device.capability<Capability.RemoteKeys>() ?: return missing(device, "remote keys")
+                ok()
+            }
             is Command.SetAuxLight -> {
                 val known = device.capabilities.filterIsInstance<Capability.AuxLight>().any { it.lightName == command.lightName }
                 if (!known) missing(device, "light '${command.lightName}'") else ok()
