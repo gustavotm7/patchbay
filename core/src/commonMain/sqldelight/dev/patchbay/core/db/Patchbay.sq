@@ -45,6 +45,9 @@ VALUES (
   :now
 );
 
+setDeviceRoom:
+UPDATE device SET room_id = :room WHERE id = :id;
+
 forgetDevice:
 DELETE FROM device WHERE id = ?;
 

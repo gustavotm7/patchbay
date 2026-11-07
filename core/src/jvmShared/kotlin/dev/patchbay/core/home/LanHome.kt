@@ -23,6 +23,7 @@ import dev.patchbay.core.store.StoredPairing
 import dev.patchbay.core.discovery.Finding
 import dev.patchbay.core.discovery.NetworkCensus
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
@@ -53,8 +54,112 @@ public class LanHome(
     override val census: StateFlow<List<Finding>> = _census.asStateFlow()
     private val _problem = MutableStateFlow<String?>(null)
     private val _report = MutableStateFlow<List<dev.patchbay.core.home.AdapterScan>>(emptyList())
+    private val _rooms = MutableStateFlow<List<String>>(emptyList())
+    private val _scenes = MutableStateFlow<List<Scene>>(emptyList())
+    private var storedScenes: List<StoredScene> = emptyList()
+    private val sceneJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
     override val problem: StateFlow<String?> = _problem.asStateFlow()
     override val scanReport: StateFlow<List<dev.patchbay.core.home.AdapterScan>> = _report.asStateFlow()
+
+    override val rooms: StateFlow<List<String>> = _rooms.asStateFlow()
+    override val scenes: StateFlow<List<Scene>> = _scenes.asStateFlow()
+
+    private fun refreshRooms() {
+        _rooms.value = _devices.value.mapNotNull { it.device.roomId?.value }.distinct().sortedBy { it.lowercase() }
+    }
+
+    override suspend fun assignRoom(device: DeviceId, room: String?) {
+        val name = room?.trim()?.replace(Regex("\\s+"), " ")
+        if (room != null && (name.isNullOrEmpty() || name.length > 24 || !name.all { it.isLetterOrDigit() || it == ' ' || it == '-' })) return
+        val roomId = name?.let { dev.patchbay.core.model.RoomId(it) }
+        synchronized(this) {
+            _devices.update { list -> list.map { if (it.device.id == device) it.copy(device = it.device.copy(roomId = roomId)) else it } }
+            refreshRooms()
+        }
+        store?.setRoom(device, roomId)
+    }
+
+    private fun loadScenes() {
+        val raw = store?.setting("scenes") ?: return
+        storedScenes = try {
+            sceneJson.decodeFromString<List<StoredScene>>(raw)
+        } catch (e: Exception) {
+            log?.warn("home", "saved scenes could not be read; starting with none")
+            emptyList()
+        }
+        _scenes.value = storedScenes.map { s -> Scene(s.id, s.name, s.steps.map { DeviceId(it.device) }) }
+    }
+
+    private fun persistScenes() {
+        store?.putSetting("scenes", sceneJson.encodeToString(storedScenes))
+        _scenes.value = storedScenes.map { s -> Scene(s.id, s.name, s.steps.map { DeviceId(it.device) }) }
+    }
+
+    override suspend fun saveScene(name: String, devices: List<DeviceId>): PatchbayResult<Unit> {
+        val clean = name.trim().replace(Regex("\\s+"), " ")
+        if (clean.length !in 1..32 || !clean.all { it.isLetterOrDigit() || it == ' ' || it == '-' }) {
+            return PatchbayResult.Err(PatchbayError.InvalidArgument("Give the scene a short name using letters, numbers, spaces or hyphens"))
+        }
+        val steps = devices.mapNotNull { id ->
+            val live = _devices.value.firstOrNull { it.device.id == id } ?: return@mapNotNull null
+            // Lights and plugs only: nothing that moves, heats, records or locks can be part of a scene.
+            if (live.device.kind != dev.patchbay.core.model.DeviceKind.LIGHT && live.device.kind != dev.patchbay.core.model.DeviceKind.PLUG) return@mapNotNull null
+            val snap = live.snapshot ?: return@mapNotNull null
+            if (snap.reachability != dev.patchbay.core.model.Reachability.ONLINE) return@mapNotNull null
+            val power = snap.state<dev.patchbay.core.model.CapabilityState.PowerState>() ?: return@mapNotNull null
+            StoredStep(
+                device = id.value, power = power.on,
+                brightness = if (power.on) snap.state<dev.patchbay.core.model.CapabilityState.BrightnessState>()?.level?.value else null,
+                kelvin = if (power.on) snap.state<dev.patchbay.core.model.CapabilityState.ColourTemperatureState>()?.kelvin?.value else null,
+                rgb = if (power.on && snap.state<dev.patchbay.core.model.CapabilityState.ColourTemperatureState>() == null) {
+                    snap.state<dev.patchbay.core.model.CapabilityState.RgbState>()?.colour?.let { listOf(it.r, it.g, it.b) }
+                } else null,
+            )
+        }
+        if (steps.isEmpty()) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick at least one light or plug that is reachable right now"))
+        synchronized(this) {
+            val existing = storedScenes.firstOrNull { it.name.equals(clean, ignoreCase = true) }
+            val scene = StoredScene(existing?.id ?: java.util.UUID.randomUUID().toString().take(8), clean, steps)
+            storedScenes = storedScenes.filterNot { it.id == scene.id } + scene
+            persistScenes()
+        }
+        log?.info("home", "saved a scene with ${steps.size} devices")
+        return PatchbayResult.Ok(Unit)
+    }
+
+    override suspend fun runScene(id: String): PatchbayResult<Unit> {
+        val scene = storedScenes.firstOrNull { it.id == id } ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown scene"))
+        var failed = 0
+        for (step in scene.steps) {
+            val target = DeviceId(step.device)
+            val commands = buildList<Command> {
+                add(Command.SetPower(step.power))
+                if (step.power) {
+                    step.brightness?.let { add(Command.SetBrightness(dev.patchbay.core.model.Percent(it))) }
+                    val k = step.kelvin
+                    val rgb = step.rgb
+                    if (k != null) add(Command.SetColourTemperature(dev.patchbay.core.model.Kelvin(k)))
+                    else if (rgb != null && rgb.size == 3) add(Command.SetColour(dev.patchbay.core.model.Rgb(rgb[0], rgb[1], rgb[2])))
+                }
+            }
+            var ok = true
+            for (c in commands) {
+                if (send(target, c) is PatchbayResult.Err) ok = false
+                delay(40)
+            }
+            if (!ok) failed++
+        }
+        log?.info("home", "ran a scene: ${scene.steps.size - failed} of ${scene.steps.size} devices responded")
+        return if (failed == 0) PatchbayResult.Ok(Unit)
+        else PatchbayResult.Err(PatchbayError.Unreachable("$failed of ${scene.steps.size} devices didn't respond"))
+    }
+
+    override suspend fun deleteScene(id: String) {
+        synchronized(this) {
+            storedScenes = storedScenes.filterNot { it.id == id }
+            persistScenes()
+        }
+    }
 
     override fun dismissProblem() {
         _problem.value = null
@@ -70,6 +175,8 @@ public class LanHome(
 
     init {
         restoreSaved()
+        refreshRooms()
+        loadScenes()
     }
 
     /** Devices saved by earlier sessions appear immediately and are polled; no scan needed. */

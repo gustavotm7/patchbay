@@ -47,6 +47,7 @@ import dev.patchbay.ui.designsystem.Hairline
 import dev.patchbay.ui.designsystem.Legend
 import dev.patchbay.ui.designsystem.PButton
 import dev.patchbay.ui.designsystem.PText
+import dev.patchbay.ui.designsystem.PToggle
 import dev.patchbay.ui.designsystem.Panel
 import dev.patchbay.ui.designsystem.Shapes
 import dev.patchbay.ui.designsystem.Patchbay
@@ -65,6 +66,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
     val scan by live.scanState.collectAsState()
     val problem by live.problem.collectAsState()
     val report by live.scanReport.collectAsState()
+    val rooms by live.rooms.collectAsState()
     val scope = rememberCoroutineScope()
     val pairing = remember { PairingDialogState() }
 
@@ -121,7 +123,8 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                 )
             }
         } else {
-            TileGrid(devices) { d, m ->
+            ScenesPanel(live)
+            val tileFor: @Composable (LiveDevice, Modifier) -> Unit = { d, m ->
                 val toggles = tileToggles(d)
                 DeviceTile(
                     d, d.device.id == selected,
@@ -141,6 +144,24 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                     onDetails = if (toggles) ({ onSelect(d.device.id) }) else null,
                     modifier = m,
                 )
+            }
+            if (rooms.isEmpty()) {
+                TileGrid(devices, tile = tileFor)
+            } else {
+                for (room in rooms) {
+                    val inRoom = devices.filter { it.device.roomId?.value == room }
+                    if (inRoom.isEmpty()) continue
+                    PText(room, Patchbay.type.title)
+                    VSpace(Space.s)
+                    TileGrid(inRoom, tile = tileFor)
+                    VSpace(Space.l)
+                }
+                val rest = devices.filter { it.device.roomId == null }
+                if (rest.isNotEmpty()) {
+                    PText("Other devices", Patchbay.type.title)
+                    VSpace(Space.s)
+                    TileGrid(rest, tile = tileFor)
+                }
             }
         }
         ManualAddPanel(live)
@@ -270,9 +291,19 @@ private fun ExposurePanel(live: LiveHome) {
     }
 }
 
-/** Detail for a live device: lights get the LightPanel; anything else a summary. */
+/** A device's page: its controls, then which room it is in. */
 @Composable
 fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        LiveDetailBody(live, id, Modifier)
+        VSpace(Space.l)
+        RoomPanel(live, id)
+    }
+}
+
+/** The controls for a live device: lights get the LightPanel; anything else a summary. */
+@Composable
+private fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
     val devices by live.devices.collectAsState()
     val scope = rememberCoroutineScope()
     val d = devices.firstOrNull { it.device.id == id } ?: return
@@ -502,5 +533,131 @@ private fun LogPanel(live: LiveHome) {
             HSpace(Space.m)
             PButton(if (copied) "Copied" else "Copy log", { clipboard.setText(AnnotatedString(live.recentLog())); copied = true })
         }
+    }
+}
+
+/** Saved scenes with a Run button each, and a way to make a new one from the lights and plugs as they are right now. */
+@Composable
+private fun ScenesPanel(live: LiveHome) {
+    val c = Patchbay.colors
+    val scenes by live.scenes.collectAsState()
+    val devices by live.devices.collectAsState()
+    val scope = rememberCoroutineScope()
+    val eligible = devices.filter {
+        (it.device.kind == DeviceKind.LIGHT || it.device.kind == DeviceKind.PLUG) &&
+            it.snapshot?.reachability == Reachability.ONLINE && it.snapshot?.state<CapabilityState.PowerState>() != null
+    }
+    if (scenes.isEmpty() && eligible.isEmpty()) return
+    var creating by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var picked by remember { mutableStateOf(setOf<DeviceId>()) }
+    var message by remember { mutableStateOf<String?>(null) }
+    Panel(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Legend("Scenes")
+                if (scenes.isEmpty() && !creating) PText("One tap sets several lights and plugs the way they are now.", Patchbay.type.caption, c.textSecondary)
+            }
+            if (!creating && eligible.isNotEmpty()) PButton("New scene", { creating = true; message = null; picked = eligible.map { it.device.id }.toSet() })
+        }
+        scenes.forEach { sc ->
+            VSpace(Space.s)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    PText(sc.name, Patchbay.type.bodyStrong)
+                    PText("${sc.devices.size} devices", Patchbay.type.caption, c.textSecondary)
+                }
+                Box(
+                    Modifier.height(Space.touchTarget).clip(Shapes.pill)
+                        .clickable(role = Role.Button, onClickLabel = "Delete ${sc.name}") { scope.launch { live.deleteScene(sc.id) } }
+                        .padding(horizontal = Space.m),
+                    contentAlignment = Alignment.Center,
+                ) { PText("Delete", Patchbay.type.caption, c.textSecondary) }
+                HSpace(Space.xs)
+                PButton("Run", {
+                    scope.launch {
+                        message = when (val r = live.runScene(sc.id)) {
+                            is dev.patchbay.core.result.PatchbayResult.Ok -> "${sc.name}: done"
+                            is dev.patchbay.core.result.PatchbayResult.Err -> r.error.message
+                        }
+                    }
+                }, kind = ButtonKind.PRIMARY)
+            }
+        }
+        message?.let {
+            VSpace(Space.s)
+            PText(it, Patchbay.type.caption, c.textSecondary)
+        }
+        if (creating) {
+            VSpace(Space.m)
+            PText("Name", Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            BasicTextField(
+                value = name,
+                onValueChange = { v -> name = v.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.take(32) },
+                singleLine = true,
+                textStyle = Patchbay.type.valueM.copy(color = c.text),
+                modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+            )
+            VSpace(Space.s)
+            PText("Include", Patchbay.type.bodyStrong)
+            eligible.forEach { d ->
+                PToggle(d.device.name, d.device.id in picked, { on -> picked = if (on) picked + d.device.id else picked - d.device.id })
+            }
+            VSpace(Space.s)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                PButton(
+                    "Save scene", {
+                        scope.launch {
+                            when (val r = live.saveScene(name, picked.toList())) {
+                                is dev.patchbay.core.result.PatchbayResult.Ok -> { creating = false; name = ""; message = null }
+                                is dev.patchbay.core.result.PatchbayResult.Err -> message = r.error.message
+                            }
+                        }
+                    },
+                    Modifier.weight(1f), ButtonKind.PRIMARY, enabled = name.isNotBlank() && picked.isNotEmpty(),
+                )
+                PButton("Cancel", { creating = false; message = null }, Modifier.weight(1f))
+            }
+            VSpace(Space.xs)
+            PText("Saves each device's power, brightness and colour as they are right now.", Patchbay.type.caption, c.textTertiary)
+        }
+    }
+    VSpace(Space.l)
+}
+
+/** Which room this device is in: pick an existing room, none, or type a new one. */
+@Composable
+private fun RoomPanel(live: LiveHome, id: DeviceId) {
+    val c = Patchbay.colors
+    val rooms by live.rooms.collectAsState()
+    val devices by live.devices.collectAsState()
+    val scope = rememberCoroutineScope()
+    var newRoom by remember { mutableStateOf("") }
+    val current = devices.firstOrNull { it.device.id == id }?.device?.roomId?.value
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Room")
+        VSpace(Space.s)
+        (listOf<String?>(null) + rooms).chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                row.forEach { r ->
+                    PButton(r ?: "None", { scope.launch { live.assignRoom(id, r) } }, Modifier.weight(1f), if (r == current) ButtonKind.PRIMARY else ButtonKind.SECONDARY)
+                }
+                if (row.size == 1) Box(Modifier.weight(1f))
+            }
+            VSpace(Space.s)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            BasicTextField(
+                value = newRoom,
+                onValueChange = { v -> newRoom = v.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.take(24) },
+                singleLine = true,
+                textStyle = Patchbay.type.valueM.copy(color = c.text),
+                modifier = Modifier.weight(1f).border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+            )
+            PButton("Add room", { scope.launch { live.assignRoom(id, newRoom); newRoom = "" } }, enabled = newRoom.isNotBlank())
+        }
+        VSpace(Space.xs)
+        PText("A new room is created the first time a device is put in it.", Patchbay.type.caption, c.textTertiary)
     }
 }

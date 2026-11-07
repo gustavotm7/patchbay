@@ -78,19 +78,19 @@ class ScreenshotTest {
 
     /** A fixed set of live devices for the tile screens: lights on and off, a plug, a TV, a printer, a camera, an unreachable one, one to pair. */
     private class FakeLiveHome(private val home: dev.patchbay.core.model.Home) : LiveHome {
-        private fun live(id: DeviceId, reach: Reachability? = null, pair: Boolean = false, name: String? = null, addr: String = "192.168.1.${20 + id.value.length}"): LiveDevice {
-            val d = home.device(id)!!.let { if (name != null) it.copy(name = name) else it }
+        private fun live(id: DeviceId, reach: Reachability? = null, pair: Boolean = false, name: String? = null, room: String? = null, addr: String = "192.168.1.${20 + id.value.length}"): LiveDevice {
+            val d = home.device(id)!!.let { if (name != null) it.copy(name = name) else it }.copy(roomId = room?.let { dev.patchbay.core.model.RoomId(it) })
             val snap = home.snapshot(id)?.let { sn -> if (reach != null) sn.copy(reachability = reach, states = emptyList()) else sn }
             return LiveDevice(d, if (pair) null else snap, addr, needsPairing = pair)
         }
 
         override val devices: StateFlow<List<LiveDevice>> = MutableStateFlow(
             listOf(
-                live(DemoHome.Ids.FLOOR_LAMP, name = "Floor lamp"),
-                live(DemoHome.Ids.SHELF_STRIP, name = "Shelf strip"),
-                live(DemoHome.Ids.BEDSIDE, name = "Bedside"),
-                live(DemoHome.Ids.TV, name = "LG OLED"),
-                live(DemoHome.Ids.PRINTER, name = "Workshop H2D"),
+                live(DemoHome.Ids.FLOOR_LAMP, name = "Floor lamp", room = "Living room"),
+                live(DemoHome.Ids.SHELF_STRIP, name = "Shelf strip", room = "Living room"),
+                live(DemoHome.Ids.BEDSIDE, name = "Bedside", room = "Bedroom"),
+                live(DemoHome.Ids.TV, name = "LG OLED", room = "Living room"),
+                live(DemoHome.Ids.PRINTER, name = "Workshop H2D", room = "Workshop"),
                 live(DemoHome.Ids.CAMERA, name = "Front door", pair = true),
                 live(DemoHome.Ids.THERMOSTAT, name = "Hall thermostat"),
                 live(DemoHome.Ids.PURIFIER, reach = Reachability.OFFLINE, name = "Air purifier"),
@@ -110,6 +110,17 @@ class ScreenshotTest {
             ),
         )
         override fun dismissProblem() {}
+        override val rooms: StateFlow<List<String>> = MutableStateFlow(listOf("Bedroom", "Living room", "Workshop"))
+        override suspend fun assignRoom(device: DeviceId, room: String?) {}
+        override val scenes: StateFlow<List<dev.patchbay.core.home.Scene>> = MutableStateFlow(
+            listOf(
+                dev.patchbay.core.home.Scene("1", "Movie night", listOf(DemoHome.Ids.FLOOR_LAMP, DemoHome.Ids.SHELF_STRIP)),
+                dev.patchbay.core.home.Scene("2", "Good night", listOf(DemoHome.Ids.FLOOR_LAMP, DemoHome.Ids.SHELF_STRIP, DemoHome.Ids.BEDSIDE)),
+            ),
+        )
+        override suspend fun saveScene(name: String, devices: List<DeviceId>): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override suspend fun runScene(id: String): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override suspend fun deleteScene(id: String) {}
         override fun recentLog(maxLines: Int): String = "log"
         override val manualAdd: List<ManualAdd> = listOf(ManualAdd(AdapterId("rtsp"), "RTSP camera", "Name"))
         override suspend fun addManually(adapter: AdapterId, address: String, key: String, choice: String?): PatchbayResult<DeviceId> =

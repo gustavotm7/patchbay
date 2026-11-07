@@ -57,6 +57,22 @@ public interface LiveHome {
     /** Adds a device by LAN address and adapter-specific key, then it pairs like a scanned one. */
     public suspend fun addManually(adapter: AdapterId, address: String, key: String, choice: String? = null): PatchbayResult<DeviceId>
 
+    /** Rooms in use, sorted. A room exists while at least one device is in it. */
+    public val rooms: StateFlow<List<String>>
+
+    /** Puts a device in a room (created on first use), or takes it out with null. Invalid names are ignored. */
+    public suspend fun assignRoom(device: DeviceId, room: String?)
+
+    public val scenes: StateFlow<List<Scene>>
+
+    /** Saves the current state of the given lights and plugs as a scene (replacing one of the same name). */
+    public suspend fun saveScene(name: String, devices: List<DeviceId>): PatchbayResult<Unit>
+
+    /** Applies a scene. Fails with a count if some devices didn't respond. */
+    public suspend fun runScene(id: String): PatchbayResult<Unit>
+
+    public suspend fun deleteScene(id: String)
+
     /** Runs discovery on every adapter and the network census. Returns the number of managed devices afterwards. */
     public suspend fun scan(): PatchbayResult<Int>
 

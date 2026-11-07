@@ -48,6 +48,9 @@ public interface HomeStore {
     public fun devices(): List<StoredDevice>
     public fun saveDevice(d: StoredDevice, now: Long)
     public fun forget(id: DeviceId)
+
+    /** Puts a saved device in a room, or takes it out with null. (saveDevice deliberately keeps the stored room.) */
+    public fun setRoom(id: DeviceId, room: RoomId?)
     public fun pairing(id: DeviceId): StoredPairing?
     public fun savePairing(p: StoredPairing)
     public fun setting(key: String): String?
@@ -72,6 +75,10 @@ public class SqlHomeStore(private val db: PatchbayDb) : HomeStore {
             vendor = d.vendor, model = d.model, address = d.address, port = d.port?.toLong(), control_path = d.controlPath.name,
             now = now,
         )
+    }
+
+    override fun setRoom(id: DeviceId, room: RoomId?) {
+        q.setDeviceRoom(room?.value, id.value)
     }
 
     override fun forget(id: DeviceId) {
@@ -108,6 +115,9 @@ public class InMemoryHomeStore : HomeStore {
     override fun saveDevice(d: StoredDevice, now: Long) {
         val old = devices[d.id]
         devices[d.id] = d.copy(roomId = old?.roomId ?: d.roomId, firstSeen = old?.firstSeen ?: now, lastSeen = now)
+    }
+    override fun setRoom(id: DeviceId, room: RoomId?) {
+        devices[id]?.let { devices[id] = it.copy(roomId = room) }
     }
     override fun forget(id: DeviceId) {
         devices.remove(id); pairings.remove(id)
