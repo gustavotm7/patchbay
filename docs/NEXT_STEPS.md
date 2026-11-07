@@ -11,15 +11,13 @@ Updated 2026-11-06. Two lists: what happens before the test build is handed over
 4. **Look at the real renders** from CI, fix what looks wrong, then record the new screenshot references.
 5. **Build the installable test app:** Android APK (easiest to try first) and the Windows installer, from the CI run, with direct download links.
 
-## Test build (CI run on `fac8424`, all 7 jobs green)
+## Test build (CI run on `3750824`, all 7 jobs green)
 
-Adds names, favourites, sunrise/sunset automations, home location and tray notifications (F1.x in `docs/HARDWARE_TEST.md`), on top of adaptive lighting and away mode (D1.x), tray and automations (R1.x), attention/removal/activity (N1.x), Cast (C1.x), rooms and scenes (S1.x), Settings and the portable build.
+Adds the Google TV remote (A1.x in `docs/HARDWARE_TEST.md`), on top of names, favourites and sun automations (F1.x), adaptive lighting and away mode (D1.x), tray and automations (R1.x), attention/removal/activity (N1.x), Cast (C1.x), rooms and scenes (S1.x), Settings and the portable build.
 
-- Run: https://github.com/gustavotm7/patchbay/actions/runs/42424984426
-- **Windows, no install (recommended):** https://github.com/gustavotm7/patchbay/actions/runs/42424984426/artifacts/13595491366 (79 MB zip; right-click the zip → Properties → Unblock, extract, run `Patchbay\Patchbay.exe`; delete the folder to remove everything)
-- **Android:** https://github.com/gustavotm7/patchbay/actions/runs/42424984426/artifacts/13595510709 (28 MB zip; install `app-android-debug.apk` from inside it; ignore the unsigned `release` APK)
-- **Windows installer (optional):** https://github.com/gustavotm7/patchbay/actions/runs/42424984426/artifacts/13595486310
-- Downloads need you to be signed in to GitHub. Artifacts are kept until 2026-12-07.
+- Run: https://github.com/gustavotm7/patchbay/actions/runs/42426286463
+- Artifacts: open the run above and download `patchbay-windows-portable` (no install, recommended), `patchbay-android` (install `app-android-debug.apk` from inside; ignore the unsigned `release` APK) or `patchbay-windows-msi` (optional installer). Direct artifact links are in the chat message that accompanied this build.
+- Downloads need you to be signed in to GitHub. Artifacts are kept until 2026-12-08.
 
 ## After the test build (your side, then mine)
 

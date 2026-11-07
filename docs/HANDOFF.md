@@ -6,7 +6,7 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
 
 - Work branch `ci/verification-bootstrap` holds everything. The last commits are the Android app lock (androidx.biometric added,
   verification metadata bootstrapped) and permission-allowlist updates.
-- **CI: all 7 jobs green at `fac8424`** (the latest; includes the first Windows test fixes, portable Windows build, Settings screen). Since `898e727` it adds: camera playback (Android), Tuya bulbs, Cast research, and the v2 dark-first redesign with 29 re-recorded goldens. Download links are in `docs/NEXT_STEPS.md`. (`5df65a6` failed once in the SBOM job on a transient plugin-resolution error; a re-run was green.) That run's APK/MSI artifacts are the MVP
+- **CI: all 7 jobs green at `3750824`** (the latest; includes the first Windows test fixes, portable Windows build, Settings screen). Since `898e727` it adds: camera playback (Android), Tuya bulbs, Cast research, and the v2 dark-first redesign with 29 re-recorded goldens. Download links are in `docs/NEXT_STEPS.md`. (`5df65a6` failed once in the SBOM job on a transient plugin-resolution error; a re-run was green.) That run's APK/MSI artifacts are the MVP
   builds to install.
 - Next for the MVP: the owner tests on real devices (`docs/HARDWARE_TEST.md`: G1, T1, B1, L1, plus K1 Kasa and E1 eufy), then fix what breaks.
 - Waiting on the owner: Lepro LampUX and Lefant vacuum model numbers + approval of ADR 0007 (`docs/protocols/tuya.md`).
@@ -132,6 +132,6 @@ capabilities, so most additions need no new screens.
 
 ## Notes on the two unbuilt Phase 1 adapters (2026-11-08)
 
-- **Google TV remote keys (Android TV Remote v2):** needs a generated client certificate (the JDK has no public API for X.509 creation: a small hand-written DER builder or BouncyCastle with a dependency entry), the pairing handshake (code shown on the TV, hash over both public keys), and protobuf messages for key presses. Get the exact `.proto` field numbers from the reference projects before writing code; do not write them from memory.
+- ~~Google TV remote keys~~ built (see STATUS, HARDWARE_TEST A1.x). What it needed, for reference: a generated client certificate (the JDK has no public API for X.509 creation: a small hand-written DER builder or BouncyCastle with a dependency entry), the pairing handshake (code shown on the TV, hash over both public keys), and protobuf messages for key presses. Get the exact `.proto` field numbers from the reference projects before writing code; do not write them from memory.
 - **ESPHome native API:** plaintext framing is simple, but most devices use Noise (`Noise_NNpsk0_25519_ChaChaPoly_SHA256`): X25519 and ChaCha20-Poly1305 are in the JDK; check Android's minimum API for both. Entity list and state messages need the reference `api.proto`.
 - Both can only be properly verified against real devices; a simulator built from the same reading would share any mistake.
