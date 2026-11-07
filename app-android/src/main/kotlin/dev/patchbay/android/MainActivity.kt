@@ -18,15 +18,20 @@ import androidx.compose.ui.Modifier
 import dev.patchbay.ui.designsystem.Patchbay
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import dev.patchbay.simulators.DemoHome
 import dev.patchbay.ui.designsystem.FormFactor
 import dev.patchbay.ui.designsystem.Fmt
-import dev.patchbay.ui.designsystem.PatchbayPalettes
 import dev.patchbay.ui.designsystem.PatchbayTheme
 import dev.patchbay.ui.designsystem.PatchbayTypefaces
+import dev.patchbay.ui.screens.AppSettings
+import dev.patchbay.ui.screens.Appearance
 import dev.patchbay.ui.screens.LocalCameraPlayer
 import dev.patchbay.ui.screens.LockGate
 import dev.patchbay.ui.screens.PhoneApp
@@ -67,12 +72,21 @@ class MainActivity : FragmentActivity() {
         val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
         val cameraPlayer = GuardedPlayer(app.services.netGuard)
         setContent {
-            val palette = if (isSystemInDarkTheme()) PatchbayPalettes.Dark else PatchbayPalettes.Light
-            PatchbayTheme(palette, typefaces, FormFactor.PHONE) {
+            var appearance by remember { mutableStateOf(Appearance.fromName(app.services.store.setting("ui.appearance"))) }
+            val settings = AppSettings(
+                appearance = appearance,
+                onAppearance = { appearance = it; app.services.store.putSetting("ui.appearance", it.name) },
+                onLockNow = { app.lock.lock.lockNow() },
+                keyProtection = app.services.keyKind,
+                dataLocation = "Private to this app (Android's app sandbox, not backed up)",
+                portable = false,
+                version = "0.1.0",
+            )
+            PatchbayTheme(appearance.palette(isSystemInDarkTheme()), typefaces, FormFactor.PHONE) {
                 // Edge-to-edge is enforced on current Android: keep content clear of the status bar, gesture bar and cutouts.
                 Box(Modifier.fillMaxSize().background(Patchbay.colors.background).windowInsetsPadding(WindowInsets.safeDrawing)) {
                     CompositionLocalProvider(LocalCameraPlayer provides cameraPlayer) {
-                        LockGate(app.lock) { PhoneApp(home, DemoHome.trends, now, live) }
+                        LockGate(app.lock) { PhoneApp(home, DemoHome.trends, now, live, settings) }
                     }
                 }
             }

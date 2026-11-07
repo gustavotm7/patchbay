@@ -12,11 +12,17 @@ import java.io.File
 import dev.patchbay.ui.DesktopFonts
 import dev.patchbay.ui.designsystem.FormFactor
 import dev.patchbay.ui.designsystem.Fmt
-import dev.patchbay.ui.designsystem.PatchbayPalettes
 import dev.patchbay.ui.designsystem.PatchbayTheme
+import dev.patchbay.core.store.HomeStore
+import dev.patchbay.ui.screens.AppSettings
+import dev.patchbay.ui.screens.Appearance
 import dev.patchbay.ui.screens.DesktopApp
 import dev.patchbay.ui.screens.LockGate
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import java.awt.event.WindowEvent
 import java.awt.event.WindowFocusListener
 
@@ -36,15 +42,15 @@ fun main() {
     }
     val services = DesktopBootstrap.start("windows", root)
     Runtime.getRuntime().addShutdownHook(Thread { services.close() })
-    app(services.home, DesktopLock(services.store))
+    app(services.home, DesktopLock(services.store), services.store, services.keyKind, root, portable)
 }
 
-private fun app(live: LiveHome, lock: DesktopLock) = application {
+private fun app(live: LiveHome, lock: DesktopLock, store: HomeStore, keyKind: String, root: File, portable: Boolean) = application {
     val home = DemoHome.home()
     val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
     Window(
         onCloseRequest = ::exitApplication,
-        title = "Patchbay — ${home.name}",
+        title = "Patchbay",
         state = rememberWindowState(width = 1440.dp, height = 900.dp),
     ) {
         // Auto-lock after the window has been unfocused for the auto-lock time.
@@ -56,9 +62,18 @@ private fun app(live: LiveHome, lock: DesktopLock) = application {
             window.addWindowFocusListener(l)
             onDispose { window.removeWindowFocusListener(l) }
         }
-        val palette = if (isSystemInDarkTheme()) PatchbayPalettes.Dark else PatchbayPalettes.Light
-        PatchbayTheme(palette, DesktopFonts.typefaces, FormFactor.DESKTOP) {
-            LockGate(lock) { DesktopApp(home, DemoHome.trends, now, live) }
+        var appearance by remember { mutableStateOf(Appearance.fromName(store.setting("ui.appearance"))) }
+        val settings = AppSettings(
+            appearance = appearance,
+            onAppearance = { appearance = it; store.putSetting("ui.appearance", it.name) },
+            onLockNow = lock::lockNow,
+            keyProtection = keyKind,
+            dataLocation = root.absolutePath,
+            portable = portable,
+            version = "0.1.0",
+        )
+        PatchbayTheme(appearance.palette(isSystemInDarkTheme()), DesktopFonts.typefaces, FormFactor.DESKTOP) {
+            LockGate(lock) { DesktopApp(home, DemoHome.trends, now, live, settings) }
         }
     }
 }

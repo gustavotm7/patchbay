@@ -30,7 +30,10 @@ import dev.patchbay.core.model.Reachability
 import dev.patchbay.core.net.NetGuardStats
 import dev.patchbay.core.result.PatchbayError
 import dev.patchbay.core.result.PatchbayResult
+import dev.patchbay.ui.screens.AppSettings
+import dev.patchbay.ui.screens.Appearance
 import dev.patchbay.ui.screens.NetworkScreen
+import dev.patchbay.ui.screens.SettingsScreen
 import dev.patchbay.ui.screens.PhoneApp
 import dev.patchbay.ui.screens.Section
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -144,6 +147,15 @@ class ScreenshotTest {
         }
         shot("network_phone_dark", phoneTall, PatchbayPalettes.Dark, FormFactor.PHONE) {
             Column(Modifier.fillMaxSize().background(PatchbayPalettes.Dark.background).padding(16.dp)) { NetworkScreen(FakeLiveHome(home)) }
+        }
+        val settings = AppSettings(
+            Appearance.SYSTEM, {}, {}, "windows-dpapi", "C:\\Users\\you\\Desktop\\Patchbay\\PatchbayData", portable = true, version = "0.1.0",
+        )
+        shot("settings_phone_dark", phoneTall, PatchbayPalettes.Dark, FormFactor.PHONE) {
+            Column(Modifier.fillMaxSize().background(PatchbayPalettes.Dark.background).padding(16.dp)) { SettingsScreen(settings) }
+        }
+        shot("settings_desktop_dark", desktop, PatchbayPalettes.Dark, FormFactor.DESKTOP) {
+            DesktopShell(home, trends, Focus.RoomFocus(DemoHome.Ids.WORKSHOP), now, section = Section.SETTINGS, live = FakeLiveHome(home), settings = settings)
         }
         shot("live_desktop_dark", desktop, PatchbayPalettes.Dark, FormFactor.DESKTOP) {
             DesktopShell(home, trends, Focus.RoomFocus(DemoHome.Ids.WORKSHOP), now, section = Section.INVENTORY, live = FakeLiveHome(home))

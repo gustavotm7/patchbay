@@ -50,7 +50,8 @@ import dev.patchbay.ui.designsystem.ToneMarker
 import dev.patchbay.ui.designsystem.VFill
 import dev.patchbay.ui.designsystem.VSpace
 
-enum class Section(val label: String) { HOME("Home"), INVENTORY("Inventory"), EXPOSURE("Exposure"), LEDGER("Ledger"), SETTINGS("Settings") }
+/** Desktop sections. The demo home is labelled as a demo so it can't be mistaken for your real devices. */
+enum class Section(val label: String) { INVENTORY("Devices"), EXPOSURE("Network"), HOME("Demo home"), SETTINGS("Settings") }
 
 /** What the right-hand inspector (desktop) or the pushed screen (phone) shows. */
 sealed interface Focus {
@@ -73,6 +74,7 @@ fun DesktopShell(
     onFocus: (Focus) -> Unit = {},
     onSection: (Section) -> Unit = {},
     live: LiveHome? = null,
+    settings: AppSettings? = null,
 ) {
     val c = Patchbay.colors
     val selectedRoom = when (focus) {
@@ -80,7 +82,7 @@ fun DesktopShell(
         is Focus.DeviceFocus -> home.device(focus.device)?.roomId
     }
     Row(modifier.fillMaxSize().background(c.background)) {
-        NavRail(home, section, onSection)
+        NavRail(home, section, if (live != null) Section.entries else listOf(Section.HOME, Section.SETTINGS), onSection)
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = Space.xl), verticalAlignment = Alignment.CenterVertically) {
                 PText(section.label, Patchbay.type.title)
@@ -89,12 +91,18 @@ fun DesktopShell(
                     ExposureStrip(home)
                 }
                 Fill()
-                StatusTag(if (section == Section.INVENTORY && live != null) "Live" else "Demo home", Tone.NEUTRAL)
+                StatusTag(if (section == Section.HOME || live == null) "Demo home" else "Live", Tone.NEUTRAL)
                 HSpace(Space.l)
                 PText(nowLabel, Patchbay.type.valueS, c.textSecondary)
             }
             if (section == Section.INVENTORY && live != null) {
                 LiveScreenDesktop(live)
+                return@Column
+            }
+            if (section == Section.SETTINGS) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.xl)) {
+                    if (settings != null) SettingsScreen(settings, Modifier.width(640.dp)) else PText("Settings aren't available here.", Patchbay.type.body, c.textSecondary)
+                }
                 return@Column
             }
             if (section == Section.EXPOSURE && live != null) {
@@ -119,7 +127,7 @@ fun DesktopShell(
 }
 
 @Composable
-private fun NavRail(home: Home, section: Section, onSection: (Section) -> Unit) {
+private fun NavRail(home: Home, section: Section, sections: List<Section>, onSection: (Section) -> Unit) {
     val c = Patchbay.colors
     Column(Modifier.width(220.dp).fillMaxHeight().background(c.surface).padding(vertical = Space.l, horizontal = Space.m)) {
         Column(Modifier.padding(horizontal = Space.m)) {
@@ -127,7 +135,7 @@ private fun NavRail(home: Home, section: Section, onSection: (Section) -> Unit) 
             PText(home.name, Patchbay.type.caption, c.textSecondary)
         }
         VSpace(Space.xl)
-        Section.entries.forEach { s ->
+        sections.forEach { s ->
             val sel = s == section
             Row(
                 Modifier.fillMaxWidth().height(40.dp)
@@ -248,17 +256,17 @@ fun DeviceScreenPhone(home: Home, trends: TrendSource, device: DeviceId, onBack:
 
 /** Desktop entry point: owns navigation state for the multi-pane shell. */
 @Composable
-fun DesktopApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? = null) {
+fun DesktopApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? = null, settings: AppSettings? = null) {
     var focus by remember { mutableStateOf<Focus>(Focus.RoomFocus(home.floorPlan.rooms.first().id)) }
     var section by remember { mutableStateOf(if (live != null) Section.INVENTORY else Section.HOME) }
-    DesktopShell(home, trends, focus, nowLabel, section = section, onFocus = { focus = it }, onSection = { section = it }, live = live)
+    DesktopShell(home, trends, focus, nowLabel, section = section, onFocus = { focus = it }, onSection = { section = it }, live = live, settings = settings)
 }
 
-enum class PhoneTab(val label: String) { DEVICES("Devices"), NETWORK("Network"), PLAN("Demo") }
+enum class PhoneTab(val label: String) { DEVICES("Devices"), NETWORK("Network"), PLAN("Demo"), SETTINGS("Settings") }
 
 /** Phone entry point: a bottom tab bar over Devices (tiles), Network (privacy and exposure) and the demo floor plan. */
 @Composable
-fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? = null) {
+fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? = null, settings: AppSettings? = null) {
     val c = Patchbay.colors
     if (live == null) {
         DemoPhone(home, trends, nowLabel)
@@ -271,17 +279,20 @@ fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? 
                 PhoneTab.DEVICES -> LiveScreenPhone(live)
                 PhoneTab.NETWORK -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { NetworkScreen(live) }
                 PhoneTab.PLAN -> DemoPhone(home, trends, nowLabel)
+                PhoneTab.SETTINGS -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) {
+                    if (settings != null) SettingsScreen(settings)
+                }
             }
         }
-        BottomBar(tab) { tab = it }
+        BottomBar(tab, if (settings != null) PhoneTab.entries else PhoneTab.entries - PhoneTab.SETTINGS) { tab = it }
     }
 }
 
 @Composable
-private fun BottomBar(selected: PhoneTab, onSelect: (PhoneTab) -> Unit) {
+private fun BottomBar(selected: PhoneTab, tabs: List<PhoneTab>, onSelect: (PhoneTab) -> Unit) {
     val c = Patchbay.colors
     Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal = Space.s, vertical = Space.xs)) {
-        PhoneTab.entries.forEach { t ->
+        tabs.forEach { t ->
             val sel = t == selected
             val color = if (sel) c.text else c.textSecondary
             Column(
@@ -317,6 +328,16 @@ private fun TabIcon(tab: PhoneTab, selected: Boolean, color: androidx.compose.ui
             PhoneTab.NETWORK -> {
                 drawCircle(color, s * 0.42f - sw / 2, style = st)
                 drawCircle(color, s * 0.14f)
+            }
+            PhoneTab.SETTINGS -> {
+                // Three sliders: a line each, with a knob at a different position.
+                for ((i, k) in listOf(0.3f, 0.65f, 0.45f).withIndex()) {
+                    val y = s * (0.22f + 0.28f * i)
+                    drawLine(color, androidx.compose.ui.geometry.Offset(s * 0.1f, y), androidx.compose.ui.geometry.Offset(s * 0.9f, y), sw)
+                    drawCircle(cutout, s * 0.11f, androidx.compose.ui.geometry.Offset(s * k, y))
+                    if (selected) drawCircle(color, s * 0.11f, androidx.compose.ui.geometry.Offset(s * k, y))
+                    else drawCircle(color, s * 0.11f, androidx.compose.ui.geometry.Offset(s * k, y), style = st)
+                }
             }
             PhoneTab.PLAN -> {
                 val tl = androidx.compose.ui.geometry.Offset(s * 0.1f, s * 0.14f)

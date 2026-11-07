@@ -73,7 +73,7 @@ public class GoveeLanAdapter(
     override val id: AdapterId = ID
     override val systemName: String = "Govee lights"
     override val discoveryNote: String =
-        "Turn on “LAN Control” for each light in the Govee app (not every model has it). Lights reply on UDP port 4002, so if Windows Firewall blocked Patchbay, allow it on Private networks."
+        "Turn on “LAN Control” for each light in the Govee app (not every model has it). Lights reply on UDP port 4002. On Windows, make sure your Wi-Fi is set to a Private network (Settings → Network → Wi-Fi → your network → Private) and that Windows Firewall allows Patchbay on it."
 
     private val known = ConcurrentHashMap<DeviceId, LanAddress>()
     private val pendingStatus = ConcurrentHashMap<LanAddress, CompletableDeferred<GoveeProtocol.Message.Status>>()

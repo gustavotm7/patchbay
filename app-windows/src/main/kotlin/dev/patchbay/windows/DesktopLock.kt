@@ -35,6 +35,7 @@ class DesktopLock(private val store: HomeStore) : LockController {
         }
     }
 
+    fun lockNow() = lock.lockNow()
     fun onFocusLost() = lock.onBackground()
     fun onFocusGained() = lock.onForeground()
 
