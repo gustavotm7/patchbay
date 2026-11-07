@@ -200,3 +200,15 @@ Prerequisite: the device is on, on the same network (not a guest network), and s
 | C1.8 | (If a firmware update changes its key) | Patchbay shows a trust warning rather than silently reconnecting; re-pair to accept |
 
 Please report: model (Chromecast gen, Google TV, speaker), whether C1.1 found it, and what a Cast device's volume and title looked like.
+
+## Phase 1 — Attention, removal and activity
+
+| # | Step | Expected |
+|---|---|---|
+| N1.1 | Unplug a paired light or plug, wait about 30 s | The Devices tab shows a "Needs attention" card naming it ("No reply for a while"). Opening it says it's offline, with no controls. Plug it back in: the card and notice go away by themselves |
+| N1.2 | Activity tab | "Went offline" and "Back online" lines with local times. Switching a light from Patchbay says "(from Patchbay)"; switching it at its own switch or app says "(at the device or another app)" |
+| N1.3 | **Copy as CSV**, paste into a note | `time_utc,device,event` header, then one quoted line per entry, newest first |
+| N1.4 | Restart Patchbay | The activity history is still there |
+| N1.5 | **All off** (Scenes card) | Every light and plug that was on switches off. It says how many ("Switched off 3") or "Everything is already off" |
+| N1.6 | Open a device → **Remove…** → **Confirm remove** | It disappears and its saved pairing is gone. Scan again: it comes back, and a TV, printer or Cast device asks to pair again |
+| N1.7 | (Security) A paired TV, printer or Cast device whose key changes, for example after a factory reset | A red "Security alert" page replaces its controls and the Devices tab flags it first. Patchbay doesn't talk to it until you remove it and pair again, comparing the new fingerprint |
