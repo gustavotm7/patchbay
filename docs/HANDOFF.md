@@ -6,7 +6,7 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
 
 - Work branch `ci/verification-bootstrap` holds everything. The last commits are the Android app lock (androidx.biometric added,
   verification metadata bootstrapped) and permission-allowlist updates.
-- **CI: all 7 jobs green at `e530f15`** (the latest; includes the first Windows test fixes, portable Windows build, Settings screen). Since `898e727` it adds: camera playback (Android), Tuya bulbs, Cast research, and the v2 dark-first redesign with 29 re-recorded goldens. Download links are in `docs/NEXT_STEPS.md`. (`5df65a6` failed once in the SBOM job on a transient plugin-resolution error; a re-run was green.) That run's APK/MSI artifacts are the MVP
+- **CI: all 7 jobs green at `851d391`** (the latest; includes the first Windows test fixes, portable Windows build, Settings screen). Since `898e727` it adds: camera playback (Android), Tuya bulbs, Cast research, and the v2 dark-first redesign with 29 re-recorded goldens. Download links are in `docs/NEXT_STEPS.md`. (`5df65a6` failed once in the SBOM job on a transient plugin-resolution error; a re-run was green.) That run's APK/MSI artifacts are the MVP
   builds to install.
 - Next for the MVP: the owner tests on real devices (`docs/HARDWARE_TEST.md`: G1, T1, B1, L1, plus K1 Kasa and E1 eufy), then fix what breaks.
 - Waiting on the owner: Lepro LampUX and Lefant vacuum model numbers + approval of ADR 0007 (`docs/protocols/tuya.md`).
@@ -85,7 +85,7 @@ capabilities, so most additions need no new screens.
 5. **eufy RTSP cameras**: status adapter done (HARDWARE_TEST E1.x). Still to do: in-app viewing, which needs a player and ADR 0008 (proposed: guarded sockets) (Media3 on Android; desktop TBD). TP-Link Kasa plugs are done too (K1.x). Tuya: ADR 0007 accepted; the bulb adapter (Lepro, protocol 3.3) is built (HARDWARE_TEST U1.x, key steps in `docs/TUYA_KEYS.md`). The Lefant vacuum needs its model + data-point list; protocol 3.4/3.5 is a follow-up if the bulbs use it.
 6. **Cast / Google TV.** Research done (`docs/protocols/cast.md`): pin the TLS leaf, skip the device-auth chain. No new trust design
    needed; the amendment to ADR 0005 is only a note. Build it after the LG and Bambu hardware tests confirm the TOFU flow.
-7. Rooms for live devices (the schema has `room_id`), the floor-plan editor, Jazzer fuzzing in CI, then
+7. ~~Rooms for live devices~~ done (grouped tiles, Room picker; S1.x), scenes done (lights and plugs only). Next: the floor-plan editor, Jazzer fuzzing in CI, then
    Phase 2 (ecobee HAP, scenes, automations, ledger, widgets, tray/command bar, peer sync).
 
 ## How to work in the cloud sandbox
