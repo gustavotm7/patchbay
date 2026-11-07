@@ -67,6 +67,10 @@ public class LanHome(
     private val adaptiveAppliedAt = ConcurrentHashMap<DeviceId, Long>()
     private val adaptiveOverridden = ConcurrentHashMap.newKeySet<DeviceId>()
     private val _away = MutableStateFlow(AwayState())
+    private val _location = MutableStateFlow<HomeLocation?>(null)
+    private val _favourites = MutableStateFlow<Set<DeviceId>>(emptySet())
+    private val _notifications = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
+    private val lastNotified = ConcurrentHashMap<String, Long>()
     private val nextFlip = ConcurrentHashMap<DeviceId, Long>()
     @Volatile private var simOffDay = -1L
     private val _activity = MutableStateFlow<List<LedgerEntry>>(emptyList())
@@ -161,7 +165,7 @@ public class LanHome(
 
     private fun publishAutomations() {
         _automations.value = storedAutomations.map { a ->
-            Automation(a.id, a.name, a.sceneId, storedScenes.firstOrNull { it.id == a.sceneId }?.name, a.hour, a.minute, a.days.toSet(), a.enabled)
+            Automation(a.id, a.name, a.sceneId, storedScenes.firstOrNull { it.id == a.sceneId }?.name, a.hour, a.minute, a.days.toSet(), a.enabled, a.sun, a.offset)
         }
     }
 
@@ -170,16 +174,25 @@ public class LanHome(
         publishAutomations()
     }
 
-    override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>): PatchbayResult<Unit> {
+    override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> {
         val clean = name.trim().replace(Regex("\\s+"), " ")
         if (clean.length !in 1..32 || !clean.all { it.isLetterOrDigit() || it == ' ' || it == '-' }) {
             return PatchbayResult.Err(PatchbayError.InvalidArgument("Give the automation a short name using letters, numbers, spaces or hyphens"))
         }
-        if (hour !in 0..23 || minute !in 0..59) return PatchbayResult.Err(PatchbayError.InvalidArgument("The time must be between 00:00 and 23:59"))
+        if (sun != null) {
+            if (sun != "sunrise" && sun != "sunset") return PatchbayResult.Err(PatchbayError.InvalidArgument("Choose sunrise or sunset"))
+            if (offsetMinutes !in -180..180) return PatchbayResult.Err(PatchbayError.InvalidArgument("The offset can be up to 3 hours before or after"))
+            if (_location.value == null) return PatchbayResult.Err(PatchbayError.InvalidArgument("Set your home location in Settings first"))
+        } else if (hour !in 0..23 || minute !in 0..59) {
+            return PatchbayResult.Err(PatchbayError.InvalidArgument("The time must be between 00:00 and 23:59"))
+        }
         if (days.isEmpty() || days.any { it !in 1..7 }) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick at least one day"))
         if (storedScenes.none { it.id == sceneId }) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick a scene to run"))
         synchronized(this) {
-            storedAutomations = storedAutomations + StoredAutomation(java.util.UUID.randomUUID().toString().take(8), clean, sceneId, hour, minute, days.sorted())
+            storedAutomations = storedAutomations + StoredAutomation(
+                java.util.UUID.randomUUID().toString().take(8), clean, sceneId, if (sun == null) hour else 0, if (sun == null) minute else 0,
+                days.sorted(), true, sun, if (sun == null) 0 else offsetMinutes,
+            )
             persistAutomations()
         }
         return PatchbayResult.Ok(Unit)
@@ -207,7 +220,18 @@ public class LanHome(
         val t = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
         val minuteKey = t.toLocalDate().toEpochDay() * 1_440 + t.hour * 60 + t.minute
         for (a in storedAutomations) {
-            if (!a.enabled || t.dayOfWeek.value !in a.days || t.hour != a.hour || t.minute != a.minute) continue
+            if (!a.enabled || t.dayOfWeek.value !in a.days) continue
+            val sunName = a.sun
+            if (sunName == null) {
+                if (t.hour != a.hour || t.minute != a.minute) continue
+            } else {
+                val loc = _location.value ?: continue
+                val (rise, set) = SunTimes.compute(loc.latitude, loc.longitude, t.dayOfYear) ?: continue
+                val minutes = if (sunName == "sunrise") rise else set
+                val instant = t.toLocalDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant().plusSeconds((minutes * 60).toLong() + a.offset * 60L)
+                val local = instant.atZone(zone)
+                if (local.toLocalDate() != t.toLocalDate() || local.hour != t.hour || local.minute != t.minute) continue
+            }
             if (lastAutomationRun[a.id] == minuteKey) continue
             lastAutomationRun[a.id] = minuteKey
             val scene = storedScenes.firstOrNull { it.id == a.sceneId }
@@ -308,6 +332,54 @@ public class LanHome(
             }
             t.hour < 18 -> nextFlip.clear()
         }
+    }
+
+    override val location: StateFlow<HomeLocation?> = _location.asStateFlow()
+    override val favourites: StateFlow<Set<DeviceId>> = _favourites.asStateFlow()
+    override val notifications: kotlinx.coroutines.flow.Flow<String> = _notifications
+
+    private fun loadLocationAndFavourites() {
+        store?.setting("location")?.let { raw ->
+            _location.value = try { sceneJson.decodeFromString<StoredLocation>(raw).let { HomeLocation(it.lat, it.lon) } } catch (e: Exception) { null }
+        }
+        store?.setting("favourites")?.let { raw ->
+            _favourites.value = try { sceneJson.decodeFromString<List<String>>(raw).map(::DeviceId).toSet() } catch (e: Exception) { emptySet() }
+        }
+    }
+
+    override suspend fun setLocation(latitude: Double, longitude: Double): PatchbayResult<Unit> {
+        if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return PatchbayResult.Err(PatchbayError.InvalidArgument("Latitude is -90 to 90 and longitude -180 to 180"))
+        _location.value = HomeLocation(latitude, longitude)
+        store?.putSetting("location", sceneJson.encodeToString(StoredLocation(latitude, longitude)))
+        return PatchbayResult.Ok(Unit)
+    }
+
+    override suspend fun setFavourite(device: DeviceId, on: Boolean) {
+        _favourites.update { if (on) it + device else it - device }
+        store?.putSetting("favourites", sceneJson.encodeToString(_favourites.value.map { it.value }))
+    }
+
+    override suspend fun rename(device: DeviceId, name: String): PatchbayResult<Unit> {
+        val clean = name.trim().replace(Regex("\\s+"), " ")
+        if (clean.length !in 1..32 || !clean.all { it.isLetterOrDigit() || it == ' ' || it == '-' }) {
+            return PatchbayResult.Err(PatchbayError.InvalidArgument("Use a short name with letters, numbers, spaces or hyphens"))
+        }
+        val old = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown device"))
+        synchronized(this) {
+            _devices.update { list -> list.map { if (it.device.id == device) it.copy(device = it.device.copy(name = clean)) else it } }
+        }
+        store?.devices()?.firstOrNull { it.id == device }?.let { store.saveDevice(it.copy(name = clean), clock()) }
+        if (old != clean) record(clean, "Renamed (was $old)")
+        return PatchbayResult.Ok(Unit)
+    }
+
+    /** At most one notification per device and kind per hour, so a flapping device can't spam. */
+    private fun notify(key: String, message: String) {
+        val now = clock()
+        val last = lastNotified[key]
+        if (last != null && now - last < 3_600_000) return
+        lastNotified[key] = now
+        _notifications.tryEmit(message)
     }
 
     override val rooms: StateFlow<List<String>> = _rooms.asStateFlow()
@@ -431,6 +503,7 @@ public class LanHome(
         loadLedger()
         loadAutomations()
         loadAdaptiveAndAway()
+        loadLocationAndFavourites()
         scope.launch {
             while (true) {
                 delay(15_000)
@@ -597,6 +670,7 @@ public class LanHome(
         if (trust && trustAlerted.add(snap.deviceId)) {
             record(live.device.name, "Presented a different security key than the one you paired (stopped talking to it)")
             report("${live.device.name} presented a different security key than the one you paired. Open it for details.")
+            notify("trust-${snap.deviceId.value}", "${live.device.name} presented a different security key than the one you paired.")
         } else if (!trust) {
             trustAlerted.remove(snap.deviceId)
         }
@@ -604,6 +678,9 @@ public class LanHome(
         val now = Summary(s.reachability, s.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on, s.state<dev.patchbay.core.model.CapabilityState.PrintJobState>()?.stage, s.state<dev.patchbay.core.model.CapabilityState.MediaState>()?.status)
         val before = lastSummary.put(snap.deviceId, now)
         if (before != null && before != now) describeChange(before, now, snap.deviceId)?.let { record(live.device.name, it) }
+        if (before != null && before.reach != dev.patchbay.core.model.Reachability.OFFLINE && now.reach == dev.patchbay.core.model.Reachability.OFFLINE) {
+            notify("offline-${snap.deviceId.value}", "${live.device.name} stopped answering.")
+        }
     }
 
     /** What happened, in words, or null when the change isn't worth a line (a brief "no reply" flicker). */

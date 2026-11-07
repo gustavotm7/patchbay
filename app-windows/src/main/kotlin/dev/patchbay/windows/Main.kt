@@ -24,7 +24,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.window.Notification
 import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.rememberTrayState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.window.isTraySupported
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
@@ -69,8 +72,14 @@ private fun app(live: LiveHome, lock: DesktopLock, store: HomeStore, keyKind: St
     var visible by remember { mutableStateOf(true) }
     var trayMode by remember { mutableStateOf(store.setting("ui.tray") == "true") }
     val trayOn = trayMode && isTraySupported
+    val trayState = rememberTrayState()
+    // Problems worth interrupting for (a changed security key, a device that stopped answering), as tray notifications.
+    LaunchedEffect(trayOn) {
+        if (trayOn) live.notifications.collect { trayState.sendNotification(Notification("Patchbay", it, Notification.Type.Warning)) }
+    }
     if (trayOn) {
         Tray(
+            state = trayState,
             icon = TrayIcon,
             tooltip = "Patchbay",
             onAction = { visible = true },

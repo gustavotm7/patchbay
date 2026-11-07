@@ -137,9 +137,16 @@ class ScreenshotTest {
             listOf(
                 dev.patchbay.core.home.Automation("a1", "Evening lights", "1", "Movie night", 19, 30, setOf(1, 2, 3, 4, 5, 6, 7), true),
                 dev.patchbay.core.home.Automation("a2", "Bedtime", "2", "Good night", 23, 0, setOf(1, 2, 3, 4, 5), true),
+                dev.patchbay.core.home.Automation("a3", "At dusk", "1", "Movie night", 0, 0, setOf(1, 2, 3, 4, 5, 6, 7), true, "sunset", 30),
             ),
         )
-        override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override val location: StateFlow<dev.patchbay.core.home.HomeLocation?> = MutableStateFlow(dev.patchbay.core.home.HomeLocation(51.5, -0.12))
+        override suspend fun setLocation(latitude: Double, longitude: Double): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override val favourites: StateFlow<Set<DeviceId>> = MutableStateFlow(setOf(DemoHome.Ids.FLOOR_LAMP, DemoHome.Ids.PRINTER))
+        override suspend fun setFavourite(device: DeviceId, on: Boolean) {}
+        override suspend fun rename(device: DeviceId, name: String): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override val notifications: kotlinx.coroutines.flow.Flow<String> = kotlinx.coroutines.flow.emptyFlow()
         override suspend fun setAutomationEnabled(id: String, enabled: Boolean) {}
         override suspend fun deleteAutomation(id: String) {}
         override val adaptive: StateFlow<Set<DeviceId>> = MutableStateFlow(emptySet())
@@ -191,7 +198,7 @@ class ScreenshotTest {
             Appearance.SYSTEM, {}, {}, "windows-dpapi", "C:\\Users\\you\\Desktop\\Patchbay\\PatchbayData", portable = true, version = "0.1.0",
         )
         shot("settings_phone_dark", phoneTall, PatchbayPalettes.Dark, FormFactor.PHONE) {
-            Column(Modifier.fillMaxSize().background(PatchbayPalettes.Dark.background).padding(16.dp)) { SettingsScreen(settings) }
+            Column(Modifier.fillMaxSize().background(PatchbayPalettes.Dark.background).padding(16.dp)) { SettingsScreen(settings, live = FakeLiveHome(home)) }
         }
         shot("settings_desktop_dark", desktop, PatchbayPalettes.Dark, FormFactor.DESKTOP) {
             DesktopShell(home, trends, Focus.RoomFocus(DemoHome.Ids.WORKSHOP), now, section = Section.SETTINGS, live = FakeLiveHome(home), settings = settings)

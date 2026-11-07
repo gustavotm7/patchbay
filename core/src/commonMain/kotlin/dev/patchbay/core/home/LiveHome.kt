@@ -11,6 +11,7 @@ import dev.patchbay.core.model.DeviceId
 import dev.patchbay.core.model.DeviceSnapshot
 import dev.patchbay.core.net.NetGuardStats
 import dev.patchbay.core.result.PatchbayResult
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 /** A device on the LAN plus its latest observed state. */
@@ -88,7 +89,26 @@ public interface LiveHome {
     public val automations: StateFlow<List<Automation>>
 
     /** Schedules a scene. [days] are ISO weekdays 1 to 7. Runs only while Patchbay is open or in the tray. */
-    public suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>): PatchbayResult<Unit>
+    public suspend fun saveAutomation(
+        name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String? = null, offsetMinutes: Int = 0,
+    ): PatchbayResult<Unit>
+
+    /** The home location the owner typed (for sunrise and sunset), or null. */
+    public val location: StateFlow<HomeLocation?>
+
+    public suspend fun setLocation(latitude: Double, longitude: Double): PatchbayResult<Unit>
+
+    public val favourites: StateFlow<Set<DeviceId>>
+
+    public suspend fun setFavourite(device: DeviceId, on: Boolean)
+
+    /** Gives a device a name of your own. */
+    public suspend fun rename(device: DeviceId, name: String): PatchbayResult<Unit>
+
+    /** Short messages worth interrupting for (a changed security key, a device going offline). The tray shows them as notifications. */
+    public val notifications: Flow<String>
+
+
 
     public suspend fun setAutomationEnabled(id: String, enabled: Boolean)
 

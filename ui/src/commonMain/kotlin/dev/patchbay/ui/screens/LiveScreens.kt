@@ -148,6 +148,14 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                     modifier = m,
                 )
             }
+            val favs by live.favourites.collectAsState()
+            val pinned = devices.filter { it.device.id in favs }
+            if (pinned.isNotEmpty()) {
+                PText("Favourites", Patchbay.type.title)
+                VSpace(Space.s)
+                TileGrid(pinned, tile = tileFor)
+                VSpace(Space.l)
+            }
             if (rooms.isEmpty()) {
                 TileGrid(devices, tile = tileFor)
             } else {
@@ -301,6 +309,8 @@ fun LiveDetail(live: LiveHome, id: DeviceId, modifier: Modifier = Modifier) {
         LiveDetailBody(live, id, Modifier)
         VSpace(Space.l)
         AdaptivePanel(live, id)
+        NamePanel(live, id)
+        VSpace(Space.l)
         RoomPanel(live, id)
         VSpace(Space.l)
         RemovePanel(live, id)
@@ -845,6 +855,9 @@ private fun AutomationsPanel(live: LiveHome) {
     var name by remember { mutableStateOf("") }
     var time by remember { mutableStateOf("07:30") }
     var sceneId by remember { mutableStateOf<String?>(null) }
+    var whenKind by remember { mutableStateOf("time") }
+    var offset by remember { mutableStateOf("0") }
+    val location by live.location.collectAsState()
     var days by remember { mutableStateOf(setOf(1, 2, 3, 4, 5, 6, 7)) }
     var error by remember { mutableStateOf<String?>(null) }
     Panel(Modifier.fillMaxWidth()) {
@@ -860,7 +873,8 @@ private fun AutomationsPanel(live: LiveHome) {
             PToggle(a.name, a.enabled, { on -> scope.launch { live.setAutomationEnabled(a.id, on) } })
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PText(
-                    "%02d:%02d · %s · %s".format(a.hour, a.minute, daysText(a.days), a.sceneName ?: "scene deleted"),
+                    (if (a.sun != null) "${a.sun.replaceFirstChar { ch -> ch.uppercase() }}${if (a.offsetMinutes != 0) " %+d min".format(a.offsetMinutes) else ""}" else "%02d:%02d".format(a.hour, a.minute)) +
+                        " · ${daysText(a.days)} · ${a.sceneName ?: "scene deleted"}",
                     Patchbay.type.caption, if (a.sceneName == null) c.attention else c.textSecondary, Modifier.weight(1f),
                 )
                 Box(
@@ -891,13 +905,29 @@ private fun AutomationsPanel(live: LiveHome) {
                 VSpace(Space.xs)
             }
             VSpace(Space.xs)
-            PText("Time (24 hour, HH:MM)", Patchbay.type.bodyStrong)
+            PText("When", Patchbay.type.bodyStrong)
             VSpace(Space.xs)
-            BasicTextField(
-                value = time, onValueChange = { v -> time = v.filter { it.isDigit() || it == ':' }.take(5) }, singleLine = true,
-                textStyle = Patchbay.type.valueM.copy(color = c.text),
-                modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
-            )
+            Segmented(listOf("time", "sunrise", "sunset"), whenKind, { it.replaceFirstChar { ch -> ch.uppercase() } }, { whenKind = it }, Modifier.fillMaxWidth())
+            VSpace(Space.s)
+            if (whenKind == "time") {
+                PText("Time (24 hour, HH:MM)", Patchbay.type.bodyStrong)
+                VSpace(Space.xs)
+                BasicTextField(
+                    value = time, onValueChange = { v -> time = v.filter { it.isDigit() || it == ':' }.take(5) }, singleLine = true,
+                    textStyle = Patchbay.type.valueM.copy(color = c.text),
+                    modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+                )
+            } else if (location == null) {
+                PText("Set your home location in Settings first. It's typed by you and stays on this device.", Patchbay.type.caption, c.attention)
+            } else {
+                PText("Minutes after (use a minus sign for before)", Patchbay.type.bodyStrong)
+                VSpace(Space.xs)
+                BasicTextField(
+                    value = offset, onValueChange = { v -> offset = v.filter { it.isDigit() || it == '-' }.take(4) }, singleLine = true,
+                    textStyle = Patchbay.type.valueM.copy(color = c.text),
+                    modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+                )
+            }
             VSpace(Space.s)
             PText("Days", Patchbay.type.bodyStrong)
             VSpace(Space.xs)
@@ -918,11 +948,13 @@ private fun AutomationsPanel(live: LiveHome) {
                         val parts = time.split(':')
                         val h = parts.getOrNull(0)?.toIntOrNull()
                         val m = parts.getOrNull(1)?.toIntOrNull()
+                        val off = offset.toIntOrNull()
                         val sid = sceneId
-                        if (h == null || m == null || parts.size != 2) error = "Enter the time as HH:MM, for example 07:30"
+                        if (whenKind == "time" && (h == null || m == null || parts.size != 2)) error = "Enter the time as HH:MM, for example 07:30"
+                        else if (whenKind != "time" && off == null) error = "Enter the offset in minutes, for example 30 or -15"
                         else if (sid == null) error = "Pick a scene"
                         else scope.launch {
-                            when (val r = live.saveAutomation(name, sid, h, m, days)) {
+                            when (val r = live.saveAutomation(name, sid, h ?: 0, m ?: 0, days, if (whenKind == "time") null else whenKind, off ?: 0)) {
                                 is dev.patchbay.core.result.PatchbayResult.Ok -> { creating = false; name = ""; error = null }
                                 is dev.patchbay.core.result.PatchbayResult.Err -> error = r.error.message
                             }
@@ -982,6 +1014,41 @@ private fun AdaptivePanel(live: LiveHome, id: DeviceId) {
             "Moves the white colour through the day: cool at midday, warm in the evening. Brightness and colours are never touched. If you change the colour yourself it stops until you switch the light off and on. Runs only while Patchbay is open or in the tray.",
             Patchbay.type.caption, c.textSecondary,
         )
+    }
+    VSpace(Space.l)
+}
+
+/** Give a device a name of your own, and pin it to the top of the Devices tab. */
+@Composable
+private fun NamePanel(live: LiveHome, id: DeviceId) {
+    val c = Patchbay.colors
+    val devices by live.devices.collectAsState()
+    val favs by live.favourites.collectAsState()
+    val scope = rememberCoroutineScope()
+    val current = devices.firstOrNull { it.device.id == id }?.device?.name ?: return
+    var text by remember(id, current) { mutableStateOf(current) }
+    var error by remember { mutableStateOf<String?>(null) }
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Name")
+        VSpace(Space.s)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            BasicTextField(
+                value = text, onValueChange = { v -> text = v.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.take(32) }, singleLine = true,
+                textStyle = Patchbay.type.valueM.copy(color = c.text),
+                modifier = Modifier.weight(1f).border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+            )
+            PButton("Save", {
+                scope.launch {
+                    error = (live.rename(id, text) as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.message
+                }
+            }, enabled = text.isNotBlank() && text.trim() != current)
+        }
+        error?.let {
+            VSpace(Space.xs)
+            PText(it, Patchbay.type.caption, c.alarm)
+        }
+        VSpace(Space.xs)
+        PToggle("Show in Favourites", id in favs, { on -> scope.launch { live.setFavourite(id, on) } })
     }
     VSpace(Space.l)
 }

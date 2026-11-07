@@ -101,7 +101,7 @@ fun DesktopShell(
             }
             if (section == Section.SETTINGS) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.xl)) {
-                    if (settings != null) SettingsScreen(settings, Modifier.width(640.dp)) else PText("Settings aren't available here.", Patchbay.type.body, c.textSecondary)
+                    if (settings != null) SettingsScreen(settings, Modifier.width(640.dp), live) else PText("Settings aren't available here.", Patchbay.type.body, c.textSecondary)
                 }
                 return@Column
             }
@@ -285,7 +285,7 @@ fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? 
                 PhoneTab.NETWORK -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { NetworkScreen(live) }
                 PhoneTab.PLAN -> DemoPhone(home, trends, nowLabel)
                 PhoneTab.SETTINGS -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) {
-                    if (settings != null) SettingsScreen(settings)
+                    if (settings != null) SettingsScreen(settings, live = live)
                 }
             }
         }

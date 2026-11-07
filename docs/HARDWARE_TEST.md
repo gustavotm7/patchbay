@@ -238,3 +238,15 @@ Please report: model (Chromecast gen, Google TV, speaker), whether C1.1 found it
 | D1.5 | Devices → **Away mode** on, with the imitation on | Everything switches off now. Activity says so |
 | D1.6 | Leave it on between 18:00 and 23:00 with Patchbay open or in the tray | Your lights switch on and off at irregular times (20 to 60 minutes apart) and are off at 23:00. Activity lists each switch |
 | D1.7 | Away off | The imitation stops and nothing else changes |
+
+## Phase 2 — Names, favourites, sunrise/sunset, notifications
+
+| # | Step | Expected |
+|---|---|---|
+| F1.1 | Open a device → Name → type a new name → Save | The tile, page and Activity use it. It survives a rescan and a restart |
+| F1.2 | Same page → Show in Favourites | A Favourites section appears at the top of Devices with its tile; off removes it |
+| F1.3 | Settings → Home location → your approximate latitude and longitude → Save | Saved. Nothing is read from your phone |
+| F1.4 | Make a scene, then Automations → New → When: Sunset, offset 0 or a few minutes ahead of today's sunset | It runs at sunset plus the offset (check against a weather app, within a few minutes) |
+| F1.5 | Same with Sunrise and a negative offset | It runs that many minutes before sunrise |
+| F1.6 | (Windows, tray mode on, window hidden) Unplug a plug and wait about a minute | A Windows notification says the device "stopped answering". Replugging and unplugging again within an hour doesn't repeat it |
+| F1.7 | (Security) A paired device whose key changes | A notification says it presented a different security key |

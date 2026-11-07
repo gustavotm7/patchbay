@@ -14,4 +14,7 @@ public data class Automation(
     val minute: Int,
     val days: Set<Int>,
     val enabled: Boolean,
+    /** "sunrise" or "sunset" instead of a clock time ([hour] and [minute] are then 0), shifted by [offsetMinutes]. Needs a home location. */
+    val sun: String? = null,
+    val offsetMinutes: Int = 0,
 )

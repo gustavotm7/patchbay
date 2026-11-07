@@ -24,7 +24,12 @@ internal data class StoredAutomation(
     val minute: Int,
     val days: List<Int>,
     val enabled: Boolean = true,
+    val sun: String? = null,
+    val offset: Int = 0,
 )
 
 @Serializable
 internal data class StoredAway(val active: Boolean, val simulate: List<String>)
+
+@Serializable
+internal data class StoredLocation(val lat: Double, val lon: Double)
