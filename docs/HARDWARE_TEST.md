@@ -168,3 +168,18 @@ If Watch shows a black picture or an error, tell me the camera model: a camera t
 
 Please report: camera and HomeBase models, whether the stream path was `live0`, and any error text.
 If the path differs, tell me the path VLC needed.
+
+## Phase 1 — Rooms and scenes
+
+| # | Step | Expected |
+|---|---|---|
+| S1.1 | Open a light or plug (tap › on its tile) → **Room** → type "Living room" → Add room | The device moves under a "Living room" heading on the Devices tab. Other devices stay under "Other devices" |
+| S1.2 | Put a second device in the same room, a third in a new room | Tiles group under each room heading, sorted by name |
+| S1.3 | Restart Patchbay | Rooms and assignments are still there |
+| S1.4 | Set two lights how you like them (on, a brightness, a colour or white). Scenes → **New scene** → name it → tick them → Save | The scene appears with its device count |
+| S1.5 | Change those lights, then tap **Run** | Both go back to the saved state within about a second |
+| S1.6 | Switch one light off at its switch or app, run the scene | The scene still runs; tell me if it reports a problem |
+| S1.7 | Restart, then run the scene | It's still there and still works |
+| S1.8 | Delete the scene | It's gone for good |
+
+Scenes only ever hold lights and plugs. A TV, printer, camera or lock can't be put in one.
