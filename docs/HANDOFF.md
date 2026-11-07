@@ -6,7 +6,7 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
 
 - Work branch `ci/verification-bootstrap` holds everything. The last commits are the Android app lock (androidx.biometric added,
   verification metadata bootstrapped) and permission-allowlist updates.
-- **CI: all 7 jobs green at `7c9917f`** (the latest; first Windows test fixes included: cancel isn't an error, Kasa add by address and repeated discovery, scan report, copy log). Since `898e727` it adds: camera playback (Android), Tuya bulbs, Cast research, and the v2 dark-first redesign with 29 re-recorded goldens. Download links are in `docs/NEXT_STEPS.md`. (`5df65a6` failed once in the SBOM job on a transient plugin-resolution error; a re-run was green.) That run's APK/MSI artifacts are the MVP
+- **CI: all 7 jobs green at `e530f15`** (the latest; includes the first Windows test fixes, portable Windows build, Settings screen). Since `898e727` it adds: camera playback (Android), Tuya bulbs, Cast research, and the v2 dark-first redesign with 29 re-recorded goldens. Download links are in `docs/NEXT_STEPS.md`. (`5df65a6` failed once in the SBOM job on a transient plugin-resolution error; a re-run was green.) That run's APK/MSI artifacts are the MVP
   builds to install.
 - Next for the MVP: the owner tests on real devices (`docs/HARDWARE_TEST.md`: G1, T1, B1, L1, plus K1 Kasa and E1 eufy), then fix what breaks.
 - Waiting on the owner: Lepro LampUX and Lefant vacuum model numbers + approval of ADR 0007 (`docs/protocols/tuya.md`).
