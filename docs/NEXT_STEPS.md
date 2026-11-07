@@ -11,12 +11,14 @@ Updated 2026-11-06. Two lists: what happens before the test build is handed over
 4. **Look at the real renders** from CI, fix what looks wrong, then record the new screenshot references.
 5. **Build the installable test app:** Android APK (easiest to try first) and the Windows installer, from the CI run, with direct download links.
 
-## Test build (CI run on `3ba2aed`, all 7 jobs green)
+## Test build (CI run on `7c9917f`, all 7 jobs green)
 
-- Run: https://github.com/gustavotm7/patchbay/actions/runs/42302893030
-- **Android (try this first):** https://github.com/gustavotm7/patchbay/actions/runs/42302893030/artifacts/13544398758 (27 MB zip; install `app-android-debug.apk` from inside it. Ignore the `release` APK: it is unsigned and won't install)
-- **Windows:** https://github.com/gustavotm7/patchbay/actions/runs/42302893030/artifacts/13545745178 (79 MB zip with the `.msi`; SmartScreen will warn because it's unsigned)
-- Downloads need you to be signed in to GitHub. Artifacts are kept until 2026-12-06; any later green run on the branch has fresh ones.
+Includes the fixes from the first Windows test.
+
+- Run: https://github.com/gustavotm7/patchbay/actions/runs/42319977776
+- **Android (try first):** https://github.com/gustavotm7/patchbay/actions/runs/42319977776/artifacts/13552104543 (27 MB zip; install `app-android-debug.apk` from inside it; ignore the unsigned `release` APK)
+- **Windows:** https://github.com/gustavotm7/patchbay/actions/runs/42319977776/artifacts/13552970166 (79 MB zip with the `.msi`; SmartScreen will warn because it's unsigned)
+- Downloads need you to be signed in to GitHub. Artifacts are kept until 2026-12-07.
 
 ## After the test build (your side, then mine)
 
