@@ -472,12 +472,15 @@ private fun ScanReportPanel(live: LiveHome) {
                     else -> StatusTag("${r.found} found", Tone.ACTIVE)
                 }
             }
-            if (r.note != null && (r.discoverable && r.found == 0 || !r.discoverable)) {
+            val note = r.note
+            val explanation = when {
+                !r.discoverable -> "These don't announce themselves. Add them with Add by address on the Devices tab."
+                r.found == 0 -> note
+                else -> null
+            }
+            if (explanation != null) {
                 VSpace(Space.xs)
-                PText(
-                    if (r.discoverable) r.note else "These don't announce themselves. Add them with Add by address on the Devices tab.",
-                    Patchbay.type.caption, c.textSecondary,
-                )
+                PText(explanation, Patchbay.type.caption, c.textSecondary)
             }
         }
     }
