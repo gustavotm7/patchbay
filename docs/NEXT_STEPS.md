@@ -11,14 +11,14 @@ Updated 2026-11-06. Two lists: what happens before the test build is handed over
 4. **Look at the real renders** from CI, fix what looks wrong, then record the new screenshot references.
 5. **Build the installable test app:** Android APK (easiest to try first) and the Windows installer, from the CI run, with direct download links.
 
-## Test build (CI run on `a66e69d`, all 7 jobs green)
+## Test build (CI run on `7fb22a8`, all 7 jobs green)
 
-Adds Cast / Google TV (C1.x in `docs/HARDWARE_TEST.md`), on top of rooms and scenes, Settings and the portable Windows build.
+Adds the key-change alert, Remove device, Needs attention, All off and Activity (N1.x in `docs/HARDWARE_TEST.md`), on top of Cast, rooms and scenes, Settings and the portable Windows build. Research notes: `docs/IDEAS.md`.
 
-- Run: https://github.com/gustavotm7/patchbay/actions/runs/42330760786
-- **Windows, no install (recommended):** https://github.com/gustavotm7/patchbay/actions/runs/42330760786/artifacts/13557049353 (79 MB zip; right-click the zip → Properties → Unblock, extract, run `Patchbay\Patchbay.exe`; delete the folder to remove everything)
-- **Android:** https://github.com/gustavotm7/patchbay/actions/runs/42330760786/artifacts/13557537184 (27 MB zip; install `app-android-debug.apk` from inside it; ignore the unsigned `release` APK)
-- **Windows installer (optional):** https://github.com/gustavotm7/patchbay/actions/runs/42330760786/artifacts/13557153918
+- Run: https://github.com/gustavotm7/patchbay/actions/runs/42344903235
+- **Windows, no install (recommended):** https://github.com/gustavotm7/patchbay/actions/runs/42344903235/artifacts/13563066542 (79 MB zip; right-click the zip → Properties → Unblock, extract, run `Patchbay\Patchbay.exe`; delete the folder to remove everything)
+- **Android:** https://github.com/gustavotm7/patchbay/actions/runs/42344903235/artifacts/13563850087 (28 MB zip; install `app-android-debug.apk` from inside it; ignore the unsigned `release` APK)
+- **Windows installer (optional):** https://github.com/gustavotm7/patchbay/actions/runs/42344903235/artifacts/13563176074
 - Downloads need you to be signed in to GitHub. Artifacts are kept until 2026-12-07.
 
 ## After the test build (your side, then mine)
