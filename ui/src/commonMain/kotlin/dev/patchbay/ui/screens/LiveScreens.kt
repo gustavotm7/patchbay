@@ -49,6 +49,7 @@ import dev.patchbay.ui.designsystem.PButton
 import dev.patchbay.ui.designsystem.PText
 import dev.patchbay.ui.designsystem.PToggle
 import dev.patchbay.ui.designsystem.Panel
+import dev.patchbay.ui.designsystem.Segmented
 import dev.patchbay.ui.designsystem.Shapes
 import dev.patchbay.ui.designsystem.Patchbay
 import dev.patchbay.ui.designsystem.Space
@@ -873,7 +874,7 @@ private fun AutomationsPanel(live: LiveHome) {
             PToggle(a.name, a.enabled, { on -> scope.launch { live.setAutomationEnabled(a.id, on) } })
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PText(
-                    (if (a.sun != null) "${a.sun.replaceFirstChar { ch -> ch.uppercase() }}${if (a.offsetMinutes != 0) " %+d min".format(a.offsetMinutes) else ""}" else "%02d:%02d".format(a.hour, a.minute)) +
+                    (a.sun?.let { sunName -> sunName.replaceFirstChar { ch -> ch.uppercase() } + if (a.offsetMinutes != 0) " %+d min".format(a.offsetMinutes) else "" } ?: "%02d:%02d".format(a.hour, a.minute)) +
                         " · ${daysText(a.days)} · ${a.sceneName ?: "scene deleted"}",
                     Patchbay.type.caption, if (a.sceneName == null) c.attention else c.textSecondary, Modifier.weight(1f),
                 )
