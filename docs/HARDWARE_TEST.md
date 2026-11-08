@@ -288,3 +288,16 @@ This is the first real-device test of the HomeKit code: tell me exactly which st
 | E2.9 | Restart Patchbay | It reconnects without asking for the code |
 | E2.10 | Turn the thermostat's Wi-Fi off and on | Patchbay shows it offline, then back |
 | E2.11 | Remove the thermostat in Patchbay ("Remove"), then check the thermostat | It no longer lists Patchbay as paired, and pairing again with the code works. If it still shows paired, tell me |
+
+## Phase 2 — Android background watching and alerts
+
+| # | Step | Expected |
+|---|---|---|
+| N2.1 | Settings → turn on "Keep watching in the background" | Android asks to allow notifications (Android 13+); a quiet "Patchbay is watching your devices" notification appears |
+| N2.2 | Lock the phone, wait 5 minutes, switch a plug's schedule/automation due in that time | The automation still runs |
+| N2.3 | Unplug a lamp (or switch off a Kasa plug's power at the wall) | Within a minute or two an alert "… stopped answering." appears, and its lock-screen version says only "Patchbay alert" |
+| N2.4 | Start and finish a short print on the H2D (or tell me you can't) | "… print finished after …" alert |
+| N2.5 | Tap an alert | Patchbay opens (behind the app lock) |
+| N2.6 | Notification → Stop, then check Settings | The toggle is off and the notification is gone |
+| N2.7 | Leave it on overnight | Note the battery use in Android settings and tell me; if it is high, the polling interval gets a power-saving mode |
+| N2.8 | Deny the notification permission | Watching still works; no alerts. The app does not nag |

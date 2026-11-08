@@ -59,6 +59,9 @@ class AppSettings(
     /** Windows only: keep running in the system tray when the window is closed. Null where there is no tray. */
     val trayMode: Boolean? = null,
     val onTrayMode: ((Boolean) -> Unit)? = null,
+    /** Words for the background toggle; Windows says "tray", Android says "notification". */
+    val backgroundLabel: String = "Keep running in the tray when the window is closed",
+    val backgroundNote: String = "Patchbay keeps watching your devices and running automations. It locks when the window is hidden. Quit from the tray icon.",
 )
 
 @Composable
@@ -90,12 +93,9 @@ fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier, live: dev.patc
             Panel(Modifier.fillMaxWidth()) {
                 Legend("Background")
                 VSpace(Space.xs)
-                dev.patchbay.ui.designsystem.PToggle("Keep running in the tray when the window is closed", s.trayMode, s.onTrayMode)
+                dev.patchbay.ui.designsystem.PToggle(s.backgroundLabel, s.trayMode, s.onTrayMode)
                 VSpace(Space.xs)
-                PText(
-                    "Patchbay keeps watching your devices and running automations. It locks when the window is hidden. Quit from the tray icon.",
-                    Patchbay.type.caption, c.textSecondary,
-                )
+                PText(s.backgroundNote, Patchbay.type.caption, c.textSecondary)
             }
         }
         VSpace(Space.m)

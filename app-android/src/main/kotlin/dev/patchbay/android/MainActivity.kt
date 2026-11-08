@@ -67,14 +67,25 @@ class MainActivity : FragmentActivity() {
 
         requestLocalNetworkIfNeeded()
         val app = application as PatchbayApplication
+        if (app.services.store.setting(WatchService.SETTING) == "true") WatchService.start(this)
         val live = app.services.home
         val home = DemoHome.home()
         val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
         val cameraPlayer = GuardedPlayer(app.services.netGuard)
         setContent {
             var appearance by remember { mutableStateOf(Appearance.fromName(app.services.store.setting("ui.appearance"))) }
+            var watching by remember { mutableStateOf(app.services.store.setting(WatchService.SETTING) == "true") }
             val settings = AppSettings(
                 appearance = appearance,
+                trayMode = watching,
+                onTrayMode = { on ->
+                    watching = on
+                    app.services.store.putSetting(WatchService.SETTING, on.toString())
+                    if (on) { requestNotificationsIfNeeded(); WatchService.start(this@MainActivity) } else WatchService.stop(this@MainActivity)
+                },
+                backgroundLabel = "Keep watching in the background",
+                backgroundNote = "Shows a quiet notification and keeps checking your devices and running automations with the screen off. " +
+                    "Alerts (a device stopped answering, a print finished) need the notification permission; lock-screen alerts hide the device name. Stop it here or from the notification. It does not start by itself after a restart.",
                 onAppearance = { appearance = it; app.services.store.putSetting("ui.appearance", it.name) },
                 onLockNow = { app.lock.lock.lockNow() },
                 keyProtection = app.services.keyKind,
@@ -100,6 +111,13 @@ class MainActivity : FragmentActivity() {
         requestPermissions(arrayOf(PERMISSION_LOCAL_NETWORK), 1)
     }
 
+    /** Android 13+: alerts need the notification permission. Refusing only silences alerts; watching still works. */
+    private fun requestNotificationsIfNeeded() {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (checkSelfPermission(PERMISSION_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        requestPermissions(arrayOf(PERMISSION_NOTIFICATIONS), 2)
+    }
+
     // Multicast (discovery) only while the app is visible. Holding the lock costs battery.
     override fun onStart() {
         super.onStart()
@@ -120,6 +138,7 @@ class MainActivity : FragmentActivity() {
 
     private companion object {
         const val PERMISSION_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
+        const val PERMISSION_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
     }
 
 }

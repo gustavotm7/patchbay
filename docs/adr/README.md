@@ -27,3 +27,4 @@ Status: Proposed · Date: YYYY-MM-DD
 | [0008](0008-camera-playback-guarded-sockets.md) | In-app camera playback with NetGuard-backed sockets (Media3 RTSP) | Accepted |
 | [0009](0009-visual-direction-v2.md) | Visual direction v2: modern, dark-first, rounded (owner-directed) | Accepted |
 | [0010](0010-homekit-thermostat-own-crypto.md) | HomeKit (HAP) thermostats: local pairing, own Curve25519, no new dependency | Accepted |
+| [0011](0011-android-background-watching.md) | Android: opt-in background watching and alerts (foreground service, notifications) | Accepted |

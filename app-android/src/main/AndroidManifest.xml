@@ -7,6 +7,11 @@
   CHANGE_WIFI_MULTICAST_STATE  WifiManager.MulticastLock for mDNS/SSDP/Govee discovery.
   ACCESS_LOCAL_NETWORK         Android 17+ (targetSdk 37) local network protection.
                                Runtime permission in the NEARBY_DEVICES group.
+  POST_NOTIFICATIONS           alerts (a device stopped answering, a print finished, a changed security key). Runtime
+                               permission on Android 13+; refusing it only silences alerts.
+  FOREGROUND_SERVICE           keeps Patchbay watching your devices and running automations with the screen off,
+  FOREGROUND_SERVICE_SPECIAL_USE only while "Keep watching in the background" is on. Shows a persistent notification
+                               with a Stop button (ADR 0011).
   USE_BIOMETRIC                app lock (BiometricPrompt). Normal install-time permission, no user data.
   No location permission: home presence is inferred from LAN identity, never from the SSID.
 -->
@@ -17,6 +22,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Belt and braces: strip anything a dependency might merge in. -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
@@ -50,5 +58,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".WatchService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local-network home monitoring and automations; no internet access" />
+        </service>
     </application>
 </manifest>

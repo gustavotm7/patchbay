@@ -26,7 +26,7 @@ Full brief: `docs/BRIEF.md`. Decisions: `docs/adr/`. Threat model: `docs/THREAT_
 7. **Logs are local and redacted.** No secrets, tokens, access codes or full serials. Export only on
    explicit user action.
 8. **Minimal permissions.** Android: INTERNET, ACCESS_NETWORK_STATE, ACCESS_LOCAL_NETWORK
-   (targetSdk 37+), CHANGE_WIFI_MULTICAST_STATE, USE_BIOMETRIC (app lock), POST_NOTIFICATIONS (Phase 2). **No location** — home
+   (targetSdk 37+), CHANGE_WIFI_MULTICAST_STATE, USE_BIOMETRIC (app lock), POST_NOTIFICATIONS, FOREGROUND_SERVICE + FOREGROUND_SERVICE_SPECIAL_USE (opt-in background watching, ADR 0011). **No location** — home
    presence is detected without reading the SSID. `allowBackup=false`. Only export what widgets/tiles need.
 9. **Supply chain.** Pinned versions in `gradle/libs.versions.toml`. Gradle dependency verification
    (`gradle/verification-metadata.xml`). CI actions pinned by commit SHA. Every dependency has an
