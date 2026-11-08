@@ -33,6 +33,15 @@ public class RtspSimulator(
     @Volatile public var garbage: Boolean = false
     @Volatile public var hugeHeaders: Boolean = false
 
+    /** RTP packets sent (interleaved on channel 0) right after PLAY. */
+    @Volatile public var rtpPackets: List<ByteArray> = emptyList()
+
+    /** Raw bytes written after the RTP packets (to check that a stream with junk in it is refused). */
+    @Volatile public var rawAfterPlay: ByteArray? = null
+
+    /** Request methods received, in order. */
+    public val methods: MutableList<String> = CopyOnWriteArrayList()
+
     /** Raw request texts received, to check that credentials only ever follow a challenge. */
     public val requests: MutableList<String> = CopyOnWriteArrayList()
 
@@ -53,48 +62,64 @@ public class RtspSimulator(
     private fun serve(c: java.net.Socket) = c.use {
         it.soTimeout = 2_000
         try {
-            if (offline) return@use
-            val text = readHeaders(it.getInputStream()) ?: return@use
-            requests += text
+            val inp = it.getInputStream()
             val out = it.getOutputStream()
-            if (garbage) { out.write("HELLO NOT RTSP\r\n\r\n".toByteArray()); return@use }
-            if (hugeHeaders) {
-                out.write("RTSP/1.0 200 OK\r\n".toByteArray())
-                repeat(2_000) { i -> out.write("X-Pad-$i: ${"a".repeat(20)}\r\n".toByteArray()) }
-                return@use
+            while (true) {
+                val text = readHeaders(inp) ?: return@use
+                requests += text
+                if (offline) return@use
+                if (garbage) { out.write("HELLO NOT RTSP\r\n\r\n".toByteArray()); return@use }
+                if (hugeHeaders) {
+                    out.write("RTSP/1.0 200 OK\r\n".toByteArray())
+                    repeat(2_000) { i -> out.write("X-Pad-$i: ${"a".repeat(20)}\r\n".toByteArray()) }
+                    return@use
+                }
+                val cseq = Regex("CSeq: (\\d+)").find(text)?.groupValues?.get(1) ?: "0"
+                val m = Regex("^(\\w+) (\\S+) RTSP/1.0").find(text)
+                if (m == null) { out.write(reply(400, cseq)); return@use }
+                val method = m.groupValues[1]; val uri = m.groupValues[2]
+                methods += method
+                val authed = when (mode) {
+                    Mode.NONE -> true
+                    Mode.BASIC -> Regex("Authorization: Basic (\\S+)").find(text)?.groupValues?.get(1) ==
+                        Base64.getEncoder().encodeToString("$user:$password".toByteArray())
+                    Mode.DIGEST -> digestOk(text, method, uri)
+                }
+                if (!authed) {
+                    val challenge = if (mode == Mode.BASIC) "Basic realm=\"$realm\"" else "Digest realm=\"$realm\", nonce=\"$nonce\", qop=\"auth\""
+                    out.write(reply(401, cseq, "WWW-Authenticate: $challenge"))
+                } else if (!uri.contains("/$path")) {
+                    out.write(reply(404, cseq))
+                } else when (method) {
+                    "DESCRIBE" -> {
+                        val sdp = "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=sim\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n" +
+                            "a=fmtp:96 packetization-mode=1;sprop-parameter-sets=Z2QAKKw=,aO48gA==\r\na=control:track1\r\n"
+                        out.write(reply(200, cseq, "Content-Type: application/sdp", "Content-Length: ${sdp.length}") + sdp.toByteArray())
+                    }
+                    "SETUP" -> out.write(reply(200, cseq, "Session: 12345678;timeout=60", "Transport: RTP/AVP/TCP;unicast;interleaved=0-1"))
+                    "PLAY" -> {
+                        out.write(reply(200, cseq, "Session: 12345678", "RTP-Info: url=$uri/track1;seq=1"))
+                        for (p in rtpPackets) out.write(byteArrayOf('$'.code.toByte(), 0, (p.size shr 8).toByte(), p.size.toByte()) + p)
+                        rawAfterPlay?.let { raw -> out.write(raw) }
+                    }
+                    else -> out.write(reply(200, cseq)) // OPTIONS / GET_PARAMETER keep-alives and TEARDOWN
+                }
+                out.flush()
+                if (method == "TEARDOWN") return@use
             }
-            val cseq = Regex("CSeq: (\\d+)").find(text)?.groupValues?.get(1) ?: "0"
-            val uri = Regex("^DESCRIBE (\\S+) RTSP/1.0").find(text)?.groupValues?.get(1)
-            if (uri == null) { out.write(reply(400, cseq)); return@use }
-            val authed = when (mode) {
-                Mode.NONE -> true
-                Mode.BASIC -> Regex("Authorization: Basic (\\S+)").find(text)?.groupValues?.get(1) ==
-                    Base64.getEncoder().encodeToString("$user:$password".toByteArray())
-                Mode.DIGEST -> digestOk(text, uri)
-            }
-            if (!authed) {
-                val challenge = if (mode == Mode.BASIC) "Basic realm=\"$realm\"" else "Digest realm=\"$realm\", nonce=\"$nonce\", qop=\"auth\""
-                out.write(reply(401, cseq, "WWW-Authenticate: $challenge"))
-            } else if (!uri.endsWith("/$path")) {
-                out.write(reply(404, cseq))
-            } else {
-                val sdp = "v=0\r\ns=sim\r\n"
-                out.write(reply(200, cseq, "Content-Type: application/sdp", "Content-Length: ${sdp.length}") + sdp.toByteArray())
-            }
-            out.flush()
         } catch (e: java.io.IOException) {
-            // client went away
+            // client went away or went quiet
         }
     }
 
-    private fun digestOk(text: String, uri: String): Boolean {
+    private fun digestOk(text: String, method: String, uri: String): Boolean {
         val h = Regex("Authorization: Digest (.+)").find(text)?.groupValues?.get(1) ?: return false
         fun p(k: String) = Regex("""$k="([^"]*)"""").find(h)?.groupValues?.get(1)
         val cnonce = p("cnonce") ?: return false
         if (p("username") != user || p("nonce") != nonce || p("uri") != uri) return false
         val nc = Regex("nc=(\\w+)").find(h)?.groupValues?.get(1) ?: return false
         val ha1 = md5("$user:$realm:$password")
-        val ha2 = md5("DESCRIBE:$uri")
+        val ha2 = md5("$method:$uri")
         return p("response") == md5("$ha1:$nonce:$nc:$cnonce:auth:$ha2")
     }
 

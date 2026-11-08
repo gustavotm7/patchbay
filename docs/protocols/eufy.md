@@ -42,3 +42,9 @@ A door lock is a physical-security device. Like the printer's heater and motion 
 - Exact camera models, and whether they sit behind a HomeBase (and which: 2 or 3).
 - The lock model, and whether the box or app mentions Matter.
 - Whether you're OK enabling RTSP. It's a local password-protected stream, but RTSP itself is unencrypted on the LAN.
+
+## Video (2026-11-08)
+
+`RtspStreamClient` plays H.264 over RTSP with RTP on the same TCP connection (ADR 0012). The SDP must offer an H.264 video track (`a=rtpmap:<pt> H264/90000`);
+H.265-only streams are refused with a clear message. The SDP's `sprop-parameter-sets` are sent to the decoder first. Absolute `a=control` URLs from the camera are never followed.
+Tested against the simulator only until HARDWARE_TEST C2.x.

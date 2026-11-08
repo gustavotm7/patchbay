@@ -310,3 +310,18 @@ This is the first real-device test of the HomeKit code: tell me exactly which st
 | S2.2 | Change the thermostat mode/setpoint, then run the scene | Mode and setpoints return to what you saved within ~5 s |
 | S2.3 | Create a scene that includes a Cast/Google TV or speaker at a low volume, then raise the volume and run it | Volume (and mute) return; power, input and playback are not touched |
 | S2.4 | Add the scene to an automation at a time a minute away | It runs at that minute and the Activity list records it |
+
+## Phase 2 — Camera video on Windows
+
+Prerequisites: RTSP is switched on for the eufy camera (eufy app → camera settings → NAS/RTSP) and the camera is added with its RTSP login. Download any recent Windows build of **ffmpeg** (the "essentials" `ffmpeg.exe` from a well-known builds site), and put just `ffmpeg.exe` next to `Patchbay.exe`. Patchbay never downloads it.
+This is the first real-camera test of the RTSP/H.264 code: tell me exactly what you see.
+
+| # | Step | Expected |
+|---|---|---|
+| C2.1 | Open the camera → Watch (without ffmpeg.exe) | A message says video needs ffmpeg and where to put it |
+| C2.2 | Add ffmpeg.exe, restart Patchbay, Watch | Live picture within a few seconds; about a second of delay |
+| C2.3 | Leave it playing for 5 minutes | The picture keeps updating; CPU use is reasonable (tell me the number from Task Manager) |
+| C2.4 | Stop, Watch again | Works again |
+| C2.5 | Unplug the camera while watching | Within ~10 s it says the camera stopped sending |
+| C2.6 | A wrong RTSP password | The panel says the login was rejected |
+| C2.7 | If the picture is blank or green | Tell me the camera model and its video settings (codec H.264 vs H.265): H.265 is not supported yet |

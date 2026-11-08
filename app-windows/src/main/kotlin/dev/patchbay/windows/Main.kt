@@ -53,7 +53,8 @@ fun main() {
     }
     val services = DesktopBootstrap.start("windows", root)
     Runtime.getRuntime().addShutdownHook(Thread { services.close() })
-    app(services.home, DesktopLock(services.store), services.store, services.keyKind, root, portable)
+    val ffmpeg = dev.patchbay.core.media.FfmpegLocator.find(listOfNotNull(exeDir, root))
+    app(services.home, DesktopLock(services.store), services.store, services.keyKind, root, portable, dev.patchbay.core.media.CameraVideo(services.netGuard, ffmpeg))
 }
 
 /** The tray icon: a teal disc with a dark centre, drawn in code so there is no image file to ship. */
@@ -65,7 +66,7 @@ private object TrayIcon : Painter() {
     }
 }
 
-private fun app(live: LiveHome, lock: DesktopLock, store: HomeStore, keyKind: String, root: File, portable: Boolean) = application {
+private fun app(live: LiveHome, lock: DesktopLock, store: HomeStore, keyKind: String, root: File, portable: Boolean, video: dev.patchbay.core.media.CameraVideo) = application {
     val home = DemoHome.home()
     val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
     val scope = rememberCoroutineScope()
@@ -121,7 +122,9 @@ private fun app(live: LiveHome, lock: DesktopLock, store: HomeStore, keyKind: St
             onTrayMode = { trayMode = it; store.putSetting("ui.tray", it.toString()) },
         )
         PatchbayTheme(appearance.palette(isSystemInDarkTheme()), DesktopFonts.typefaces, FormFactor.DESKTOP) {
-            LockGate(lock) { DesktopApp(home, DemoHome.trends, now, live, settings) }
+            androidx.compose.runtime.CompositionLocalProvider(dev.patchbay.ui.screens.LocalCameraPlayer provides remember { DesktopCameraPlayer(video) }) {
+                LockGate(lock) { DesktopApp(home, DemoHome.trends, now, live, settings) }
+            }
         }
     }
 }
