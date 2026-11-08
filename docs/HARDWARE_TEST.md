@@ -301,3 +301,12 @@ This is the first real-device test of the HomeKit code: tell me exactly which st
 | N2.6 | Notification → Stop, then check Settings | The toggle is off and the notification is gone |
 | N2.7 | Leave it on overnight | Note the battery use in Android settings and tell me; if it is high, the polling interval gets a power-saving mode |
 | N2.8 | Deny the notification permission | Watching still works; no alerts. The app does not nag |
+
+## Phase 2 — Scenes with the thermostat and TV volume
+
+| # | Step | Expected |
+|---|---|---|
+| S2.1 | Set the thermostat to a mode and setpoints you like, create a scene that includes it ("New scene" lists it) | The scene saves |
+| S2.2 | Change the thermostat mode/setpoint, then run the scene | Mode and setpoints return to what you saved within ~5 s |
+| S2.3 | Create a scene that includes a Cast/Google TV or speaker at a low volume, then raise the volume and run it | Volume (and mute) return; power, input and playback are not touched |
+| S2.4 | Add the scene to an automation at a time a minute away | It runs at that minute and the Activity list records it |

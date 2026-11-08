@@ -14,6 +14,9 @@ internal data class StoredStep(
     val hvacMode: String? = null,
     val heat: Double? = null,
     val cool: Double? = null,
+    /** TV, streamer and speaker steps: only volume and mute are restored (never power, input, apps or playback). */
+    val volume: Int? = null,
+    val muted: Boolean? = null,
 )
 
 @Serializable

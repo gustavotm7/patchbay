@@ -601,7 +601,9 @@ private fun ScenesPanel(live: LiveHome) {
     val eligible = devices.filter {
         (it.device.kind == DeviceKind.LIGHT || it.device.kind == DeviceKind.PLUG) &&
             it.snapshot?.reachability == Reachability.ONLINE && it.snapshot?.state<CapabilityState.PowerState>() != null ||
-            it.device.kind == DeviceKind.THERMOSTAT && it.snapshot?.reachability == Reachability.ONLINE && it.snapshot?.state<CapabilityState.ThermostatState>() != null
+            it.device.kind == DeviceKind.THERMOSTAT && it.snapshot?.reachability == Reachability.ONLINE && it.snapshot?.state<CapabilityState.ThermostatState>() != null ||
+            (it.device.kind == DeviceKind.TV || it.device.kind == DeviceKind.MEDIA_RECEIVER || it.device.kind == DeviceKind.SPEAKER) &&
+            it.snapshot?.reachability == Reachability.ONLINE && it.snapshot?.state<CapabilityState.VolumeState>() != null
     }
     if (scenes.isEmpty() && eligible.isEmpty()) return
     var creating by remember { mutableStateOf(false) }

@@ -425,11 +425,17 @@ public class LanHome(
         }
         val steps = devices.mapNotNull { id ->
             val live = _devices.value.firstOrNull { it.device.id == id } ?: return@mapNotNull null
-            // Lights, plugs and thermostats only: nothing that moves, records, locks or heats a printer can be part of a scene.
-            val isThermostat = live.device.kind == dev.patchbay.core.model.DeviceKind.THERMOSTAT
-            if (live.device.kind != dev.patchbay.core.model.DeviceKind.LIGHT && live.device.kind != dev.patchbay.core.model.DeviceKind.PLUG && !isThermostat) return@mapNotNull null
+            // Lights, plugs, thermostats and the volume of TVs and speakers only: nothing that moves, records, locks or heats a printer can be part of a scene.
+            val kind = live.device.kind
+            val isThermostat = kind == dev.patchbay.core.model.DeviceKind.THERMOSTAT
+            val isVolume = kind == dev.patchbay.core.model.DeviceKind.TV || kind == dev.patchbay.core.model.DeviceKind.MEDIA_RECEIVER || kind == dev.patchbay.core.model.DeviceKind.SPEAKER
+            if (kind != dev.patchbay.core.model.DeviceKind.LIGHT && kind != dev.patchbay.core.model.DeviceKind.PLUG && !isThermostat && !isVolume) return@mapNotNull null
             val snap = live.snapshot ?: return@mapNotNull null
             if (snap.reachability != dev.patchbay.core.model.Reachability.ONLINE) return@mapNotNull null
+            if (isVolume) {
+                val v = snap.state<dev.patchbay.core.model.CapabilityState.VolumeState>() ?: return@mapNotNull null
+                return@mapNotNull StoredStep(device = id.value, power = true, volume = v.level, muted = v.muted)
+            }
             if (isThermostat) {
                 val t = snap.state<dev.patchbay.core.model.CapabilityState.ThermostatState>() ?: return@mapNotNull null
                 return@mapNotNull StoredStep(device = id.value, power = t.mode != dev.patchbay.core.model.HvacMode.OFF, hvacMode = t.mode.name, heat = t.heatSetpoint?.value, cool = t.coolSetpoint?.value)
@@ -461,7 +467,10 @@ public class LanHome(
         for (step in scene.steps) {
             val target = DeviceId(step.device)
             val hvac = step.hvacMode?.let { m -> dev.patchbay.core.model.HvacMode.entries.firstOrNull { it.name == m } }
-            val commands = if (step.hvacMode != null) buildList<Command> {
+            val commands = if (step.volume != null) buildList<Command> {
+                add(Command.SetVolume(step.volume.coerceIn(0, 100)))
+                step.muted?.let { add(Command.SetMute(it)) }
+            } else if (step.hvacMode != null) buildList<Command> {
                 if (hvac != null) {
                     add(Command.SetHvacMode(hvac))
                     // Setpoints only for the mode being restored; the thermostat ignores the rest anyway.
