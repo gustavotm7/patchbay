@@ -49,7 +49,8 @@ public class VideoDecoder private constructor(private val command: List<String>)
 
     /** Starts the process; [onFrame] runs on a reader thread for each JPEG. */
     public fun start(onFrame: (ByteArray) -> Unit) {
-        val p = ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        val p = ProcessBuilder(command).start()
+        thread(isDaemon = true, name = "video-decoder-err") { try { p.errorStream.use { e -> val b = ByteArray(4096); while (e.read(b) >= 0) { } } } catch (_: IOException) {} }
         process = p; stdin = p.outputStream
         thread(isDaemon = true, name = "video-decoder-out") {
             val splitter = MjpegSplitter(onFrame)

@@ -78,7 +78,7 @@ class HapCodecTest {
     fun srpGroupIsA3072BitSafePrimeAndKMatchesTheFixedValue() {
         assertEquals(3072, SrpClient.N.bitLength())
         assertTrue(SrpClient.N.isProbablePrime(40))
-        assertTrue(((SrpClient.N - BigInteger.ONE) / BigInteger.TWO).isProbablePrime(40))
+        assertTrue(((SrpClient.N - BigInteger.ONE) / BigInteger.valueOf(2)).isProbablePrime(40))
         // aiohomekit hard-codes this k; ours is computed as H(N | PAD(g)), so agreement cross-checks N, g and the padding.
         assertEquals(
             "a9c2e2559bf0ebb53f0cbbf62282906bede7f2182f00678211fbd5bde5b285033a4993503b87397f9be5ec02080fedbc0835587ad039060879b8621e8c3659e0",

@@ -52,7 +52,7 @@ internal object Curve25519 {
             z2 = (e * (aa + A24 * e).mod(P)).mod(P)
         }
         if (swap) { val tx = x2; x2 = x3; x3 = tx; val tz = z2; z2 = z3; z3 = tz }
-        val result = (x2 * z2.modPow(P - BigInteger.TWO, P)).mod(P)
+        val result = (x2 * z2.modPow(P - BigInteger.valueOf(2), P)).mod(P)
         return toLittleEndian(result, 32)
     }
 
@@ -63,7 +63,7 @@ internal object Curve25519 {
 
     private val D: BigInteger = (BigInteger.valueOf(-121665) * BigInteger.valueOf(121666).modInverse(P)).mod(P)
     private val L: BigInteger = BigInteger.ONE.shiftLeft(252) + BigInteger("27742317777372353535851937790883648493")
-    private val SQRT_M1: BigInteger = BigInteger.TWO.modPow((P - BigInteger.ONE).shiftRight(2), P)
+    private val SQRT_M1: BigInteger = BigInteger.valueOf(2).modPow((P - BigInteger.ONE).shiftRight(2), P)
 
     /** Extended homogeneous coordinates (X:Y:Z:T), x = X/Z, y = Y/Z, xy = T/Z. */
     private class Pt(val x: BigInteger, val y: BigInteger, val z: BigInteger, val t: BigInteger)
@@ -73,8 +73,8 @@ internal object Curve25519 {
     private fun add(p: Pt, q: Pt): Pt {
         val a = ((p.y - p.x) * (q.y - q.x)).mod(P)
         val b = ((p.y + p.x) * (q.y + q.x)).mod(P)
-        val c = (p.t * BigInteger.TWO * D * q.t).mod(P)
-        val d = (p.z * BigInteger.TWO * q.z).mod(P)
+        val c = (p.t * BigInteger.valueOf(2) * D * q.t).mod(P)
+        val d = (p.z * BigInteger.valueOf(2) * q.z).mod(P)
         val e = b - a; val f = d - c; val g = d + c; val h = b + a
         return Pt((e * f).mod(P), (g * h).mod(P), (f * g).mod(P), (e * h).mod(P))
     }
