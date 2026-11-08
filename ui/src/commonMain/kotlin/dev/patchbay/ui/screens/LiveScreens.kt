@@ -396,8 +396,56 @@ private fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = Mo
         }
     } else if (d.device.kind == DeviceKind.PLUG || d.device.capability<dev.patchbay.core.model.Capability.Power>() != null) {
         PlugPanel(d, onCommand = send, modifier = modifier)
+    } else if (d.device.kind == DeviceKind.APPLIANCE) {
+        DataPointsPanel(live, d, modifier)
     } else {
         Column(modifier) { PText(d.device.name, Patchbay.type.title) }
+    }
+}
+
+/** A device in read-only "learn" mode: pair with its local key, then list the data points it reports so the right controls can be built for it. */
+@Composable
+private fun DataPointsPanel(live: LiveHome, d: LiveDevice, modifier: Modifier) {
+    val c = Patchbay.colors
+    val scope = rememberCoroutineScope()
+    val pairing = remember { PairingDialogState() }
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    val values = d.snapshot?.state<CapabilityState.DiagnosticValues>()
+    Column(modifier) {
+        PairingPanel(pairing)
+        if (pairing.step != null) VSpace(Space.m)
+        PText(d.device.name, Patchbay.type.title)
+        PText("Read-only: Patchbay shows what this device reports and sends it nothing.", Patchbay.type.caption, c.textSecondary)
+        VSpace(Space.m)
+        if (d.needsPairing) {
+            PText("Enter the device's 16-character local key (see docs/TUYA_KEYS.md).", Patchbay.type.body, c.textSecondary)
+            VSpace(Space.s)
+            PButton("Enter local key", {
+                scope.launch {
+                    val r = live.pair(d.device.id, pairing)
+                    pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.takeIf { it !is dev.patchbay.core.result.PatchbayError.Cancelled }?.message)
+                }
+            })
+        } else if (values == null) {
+            PText("Waiting for the first reading…", Patchbay.type.body, c.textSecondary)
+        } else {
+            Panel(Modifier.fillMaxWidth(), padding = Space.m) {
+                Legend(values.title)
+                VSpace(Space.xs)
+                values.values.forEach { (k, v) ->
+                    Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
+                        PText("DP $k", Patchbay.type.mono, c.textSecondary, Modifier.width(72.dp))
+                        PText(v, Patchbay.type.mono, c.text)
+                    }
+                }
+            }
+            VSpace(Space.s)
+            PButton(if (copied) "Copied" else "Copy data points", {
+                clipboard.setText(AnnotatedString(values.values.entries.joinToString("\n") { (k, v) -> "DP $k = $v" }))
+                copied = true
+            })
+        }
     }
 }
 

@@ -3,6 +3,7 @@ package dev.patchbay.core.adapter.tuya
 import dev.patchbay.core.model.Capability
 import dev.patchbay.core.model.CapabilityState
 import dev.patchbay.core.model.Command
+import dev.patchbay.core.model.DeviceKind
 import dev.patchbay.core.model.Kelvin
 import dev.patchbay.core.model.Percent
 import dev.patchbay.core.model.Rgb
@@ -24,8 +25,8 @@ import kotlin.math.roundToInt
  * are about 2700 to 6500 K) that hardware testing should calibrate.
  */
 public class TuyaBulbProfile private constructor(
-    public val id: String,
-    public val label: String,
+    override val id: String,
+    override val label: String,
     private val power: String,
     private val mode: String,
     private val bright: String,
@@ -36,15 +37,17 @@ public class TuyaBulbProfile private constructor(
     private val colourIsV2: Boolean,
     public val warmest: Int = 2_700,
     public val coolest: Int = 6_500,
-) {
+) : TuyaProfile {
     public val powerDp: String get() = power
+    override val kind: DeviceKind = DeviceKind.LIGHT
+    override fun recognises(dps: Map<String, JsonPrimitive>): Boolean = power in dps
 
-    public val capabilities: List<Capability> = listOf(
+    override val capabilities: List<Capability> = listOf(
         Capability.Power, Capability.Brightness(), Capability.ColourTemperature(Kelvin(warmest), Kelvin(coolest)), Capability.RgbColour,
     )
 
     /** Translates a command into the data points to write. Returns Unsupported for anything outside the allowlist. */
-    public fun toDps(command: Command): PatchbayResult<Map<String, JsonPrimitive>> = when (command) {
+    override fun toDps(command: Command): PatchbayResult<Map<String, JsonPrimitive>> = when (command) {
         is Command.SetPower -> ok(power to JsonPrimitive(command.on))
         is Command.SetBrightness -> {
             val p = command.level.value.roundToInt().coerceIn(1, 100)
@@ -60,7 +63,7 @@ public class TuyaBulbProfile private constructor(
     }
 
     /** Reads the allowlisted data points into capability states. */
-    public fun states(dps: Map<String, JsonPrimitive>): List<CapabilityState> {
+    override fun states(dps: Map<String, JsonPrimitive>): List<CapabilityState> {
         val out = ArrayList<CapabilityState>()
         dps[power]?.booleanOrNull?.let { out += CapabilityState.PowerState(it) }
         dps[bright]?.intOrNull?.takeIf { it in brightRange }?.let {

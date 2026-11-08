@@ -33,3 +33,13 @@ temperature and colour data points.
 - "may use a protocol version Patchbay doesn't support": the bulb is 3.4 or 3.5. Tell me; support is a follow-up.
 - "didn't accept the local key": the key or device ID is wrong, or the bulb was re-added to the app after you fetched them.
 - Only one connection works at a time on many bulbs; close other apps or integrations talking to the same bulb.
+
+
+## Robot vacuum (Lefant LS1 and similar): read-only "learn" mode
+
+A vacuum's start/pause/dock data points differ per model and firmware, and a wrong write moves a motor, so Patchbay does not guess them.
+Add it as **Robot vacuum or other (read-only: shows its data points)**: Add by address, the vacuum's LAN IP, its device ID (for the Lefant LS1 the
+"serial number" in the app is the Tuya device ID, e.g. `ebf5889331f7b82250fasi`), then Pair with the local key (steps above). Patchbay lists every data point
+the vacuum reports (status, battery, mode, ...) and sends it nothing. Press **Copy data points** and send them to me together with what the vacuum was doing
+(docked, cleaning, paused); with that I build the real start/pause/dock profile.
+If it says the reply "wasn't a protocol 3.3 message", the vacuum uses 3.4/3.5, and that support is the next step.

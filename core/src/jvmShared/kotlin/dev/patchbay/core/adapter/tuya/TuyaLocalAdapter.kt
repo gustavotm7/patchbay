@@ -65,10 +65,10 @@ public class TuyaLocalAdapter(
     override val discoverable: Boolean = false
     override val requiresPairing: Boolean = true
     override val manualAdd: ManualAdd = ManualAdd(
-        ID, "Tuya bulb (Lepro and others)", "Device ID (20–24 letters and numbers)", TuyaBulbProfile.ALL.map { it.label },
+        ID, "Tuya bulb (Lepro and others)", "Device ID (20–24 letters and numbers)", TuyaProfiles.ALL.map { it.label },
     )
 
-    private class Known(val address: LanAddress, val profile: TuyaBulbProfile, val localKey: ByteArray?)
+    private class Known(val address: LanAddress, val profile: TuyaProfile, val localKey: ByteArray?)
 
     private val known = ConcurrentHashMap<DeviceId, Known>()
     private val locks = ConcurrentHashMap<LanAddress, Mutex>()
@@ -90,10 +90,10 @@ public class TuyaLocalAdapter(
         if (!deviceId.matches(Regex("^[A-Za-z0-9]{20,24}$"))) {
             return PatchbayResult.Err(PatchbayError.InvalidArgument("A Tuya device ID is 20 to 24 letters and numbers"))
         }
-        val profile = TuyaBulbProfile.byLabel(choice) ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("Choose a device type"))
+        val profile = TuyaProfiles.byLabel(choice) ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("Choose a device type"))
         return PatchbayResult.Ok(
             DiscoveredDevice(
-                adapter = ID, key = deviceId, address = a.literal, port = config.port, kind = DeviceKind.LIGHT,
+                adapter = ID, key = deviceId, address = a.literal, port = config.port, kind = profile.kind,
                 vendor = "Tuya", model = profile.id, displayName = null,
                 controlPath = ControlPath.LOCAL_AFTER_SETUP, seenAt = EpochMillis(clock()),
             ),
@@ -110,7 +110,7 @@ public class TuyaLocalAdapter(
             is PatchbayResult.Err -> return r
         }
         val parts = pairing?.secret?.toString(Charsets.UTF_8)?.split('\n')
-        val profile = parts?.getOrNull(0)?.let(TuyaBulbProfile::byId) ?: known[device]?.profile ?: TuyaBulbProfile.V2
+        val profile = parts?.getOrNull(0)?.let(TuyaProfiles::byId) ?: known[device]?.profile ?: TuyaBulbProfile.V2
         val key = parts?.getOrNull(1)?.takeIf { it.length == 16 }?.toByteArray(Charsets.UTF_8)
         known[device] = Known(a, profile, key)
         return PatchbayResult.Ok(Unit)
@@ -121,7 +121,7 @@ public class TuyaLocalAdapter(
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
         }
-        val profile = TuyaBulbProfile.byId(device.model ?: "") ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown device type"))
+        val profile = TuyaProfiles.byId(device.model ?: "") ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown device type"))
         val keyText = prompt.askForCode("Local key (16 characters from the Tuya developer console or tinytuya)", 16..16)
             ?: return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         if (keyText.length != 16 || keyText.any { it.code !in 33..126 }) {
@@ -133,7 +133,7 @@ public class TuyaLocalAdapter(
         return when (val r = query(id, k, device.key)) {
             is PatchbayResult.Err -> r
             is PatchbayResult.Ok -> {
-                if (profile.powerDp !in r.value) {
+                if (!profile.recognises(r.value)) {
                     return PatchbayResult.Err(PatchbayError.Unsupported("The device didn't report a power switch where this device type expects it; try the other type"))
                 }
                 known[id] = k

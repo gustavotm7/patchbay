@@ -67,6 +67,9 @@ public sealed interface CapabilityState {
     public data class LockState(val state: LockPosition, val battery: Percent?) : CapabilityState
 
     /** Whether a local stream is reachable right now. The URL is never part of state. */
+    /** Raw name/value readings shown as they are (a device in read-only "learn" mode). Values are clipped and stripped of control characters. */
+    public data class DiagnosticValues(val title: String, val values: Map<String, String>) : CapabilityState
+
     public data class StreamState(val available: Boolean, val resolution: String?) : CapabilityState
 }
 

@@ -325,3 +325,11 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | C2.5 | Unplug the camera while watching | Within ~10 s it says the camera stopped sending |
 | C2.6 | A wrong RTSP password | The panel says the login was rejected |
 | C2.7 | If the picture is blank or green | Tell me the camera model and its video settings (codec H.264 vs H.265): H.265 is not supported yet |
+
+## Phase 2 — Lefant LS1 vacuum (read-only)
+
+| # | Step | Expected |
+|---|---|---|
+| V1.1 | Get the vacuum's local key (`docs/TUYA_KEYS.md`); Network → Add by address → Tuya → "Robot vacuum or other (read-only…)" → its IP and device ID | A tile appears, "Tap to pair" |
+| V1.2 | Pair with the local key | The page lists "DP 1 = …" style rows. If it says "wasn't a protocol 3.3 message", tell me: it is 3.4/3.5 |
+| V1.3 | Copy data points while it is docked, again while it cleans, again while paused | Send me the three lists. Nothing is ever sent to the vacuum |

@@ -59,7 +59,7 @@ class TuyaContractTest {
         val d = found()
         assertEquals("tuya-$devId", adapter.deviceId(d).value)
         assertEquals("bulb-v2", d.model)
-        assertEquals(listOf("Bulb (standard)", "Bulb (older)"), adapter.manualAdd.choices)
+        assertEquals(listOf("Bulb (standard)", "Bulb (older)", "Robot vacuum or other (read-only: shows its data points)"), adapter.manualAdd.choices)
         assertIs<PatchbayError.InvalidArgument>(adapter.manualDevice("127.0.0.50", "short", "Bulb (standard)").errorOrNull())
         assertIs<PatchbayError.InvalidArgument>(adapter.manualDevice("127.0.0.50", devId, "Vacuum").errorOrNull())
         assertIs<PatchbayError.InvalidArgument>(adapter.manualDevice("127.0.0.50", devId, null).errorOrNull())
@@ -169,5 +169,19 @@ class TuyaContractTest {
         assertTrue(adapter.rejectedMessages >= 3)
         bulb.garbage = false
         assertTrue(adapter.command(id, Command.SetPower(true)) is PatchbayResult.Ok) // still fine afterwards
+    }
+
+    @Test
+    fun learnModeShowsDataPointsAndWritesNothing(): Unit = runBlocking {
+        val d = adapter.manualDevice("127.0.0.50", devId, dev.patchbay.core.adapter.tuya.TuyaLearnProfile.label).getOrNull()!!
+        assertEquals(dev.patchbay.core.model.DeviceKind.APPLIANCE, d.kind)
+        val p = adapter.pair(d, Prompt(key)).getOrNull()!!
+        adapter.restore(p.deviceId, "127.0.0.50", p)
+        assertTrue(adapter.capabilities(p.deviceId).isEmpty())
+        val snap = withTimeout(5_000) { adapter.observe(p.deviceId).first { it.reachability == Reachability.ONLINE } }
+        val dps = snap.state<dev.patchbay.core.model.CapabilityState.DiagnosticValues>()!!.values
+        assertTrue("20" in dps && "24" in dps)
+        assertIs<PatchbayError.Unsupported>(adapter.command(p.deviceId, dev.patchbay.core.model.Command.SetPower(true)).errorOrNull())
+        assertIs<PatchbayError.Unsupported>(adapter.command(p.deviceId, dev.patchbay.core.model.Command.SetVolume(3)).errorOrNull())
     }
 }
