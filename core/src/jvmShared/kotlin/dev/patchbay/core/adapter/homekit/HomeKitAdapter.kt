@@ -69,7 +69,7 @@ public class HomeKitAdapter(
     override val discoveryNote: String =
         "The thermostat must be on this network. If it is paired to Apple Home, remove it there first (it accepts one pairing family at a time). Its setup code is under Settings > HomeKit on the thermostat."
 
-    private class Known(val address: LanAddress, val port: Int, var keys: HapPairingKeys?, val name: String)
+    private class Known(val address: LanAddress, @Volatile var port: Int, var keys: HapPairingKeys?, val name: String)
 
     private class Link(val conn: HapConnection, val layout: ThermostatLayout)
 
@@ -119,7 +119,7 @@ public class HomeKitAdapter(
         val keys = pairing?.secret?.let { HapPairingKeys.decode(it) }
         val prev = known[device]
         if (prev != null && prev.address != a) drop(device) // the thermostat moved (new DHCP lease): reconnect there
-        known[device] = Known(a, prev?.port ?: DEFAULT_PORT, keys ?: prev?.keys, prev?.name ?: "thermostat")
+        known[device] = Known(a, prev?.port ?: keys?.port?.takeIf { it > 0 } ?: DEFAULT_PORT, keys ?: prev?.keys, prev?.name ?: "thermostat")
         return PatchbayResult.Ok(Unit)
     }
 
@@ -156,13 +156,14 @@ public class HomeKitAdapter(
                 }
             }
         }
+        val storedKeys = keys.withPort(port)
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(keys.accessoryPublicKey).joinToString("") { "%02x".format(it) }
         if (!prompt.confirmFingerprint(name, fingerprint)) {
             removePairing(addr, port, keys) // best effort: don't leave a pairing the user rejected
             return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         }
-        known[id] = Known(addr, port, keys, name)
-        return PatchbayResult.Ok(Pairing(id, keys.encode(), fingerprint))
+        known[id] = Known(addr, port, storedKeys, name)
+        return PatchbayResult.Ok(Pairing(id, storedKeys.encode(), fingerprint))
     }
 
     private suspend fun removePairing(addr: LanAddress, port: Int, keys: HapPairingKeys) {
@@ -200,6 +201,21 @@ public class HomeKitAdapter(
             is PatchbayResult.Err -> r
         }
 
+    private val lastPortRefresh = ConcurrentHashMap<DeviceId, Long>()
+
+    /** HomeKit accessories may choose a new port after a reboot: when the stored one refuses us, look at what the thermostat announces now (at most every 30 s). */
+    private suspend fun connectKnown(device: DeviceId, k: Known): PatchbayResult<HapConnection> {
+        val first = connect(k.address, k.port)
+        if (first is PatchbayResult.Ok) return first
+        val now = clock()
+        if (now - (lastPortRefresh[device] ?: 0L) < 30_000) return first
+        lastPortRefresh[device] = now
+        val advertised = finder.find().firstOrNull { it.address == k.address.literal && it.hap != null }?.hap?.port ?: return first
+        if (advertised == k.port) return first
+        k.port = advertised
+        return connect(k.address, k.port)
+    }
+
     /** Runs [block] on the verified session for [device], connecting (pair-verify + accessory list) first when needed. */
     private suspend fun <T> withLink(device: DeviceId, block: (Link) -> T): PatchbayResult<T> {
         val k = known[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown thermostat"))
@@ -207,7 +223,7 @@ public class HomeKitAdapter(
         if (device in trustBroken) return PatchbayResult.Err(PatchbayError.TrustChanged(k.name, "${k.name} presented a different key than the one you paired"))
         return locks.getOrPut(device) { Mutex() }.withLock {
             try {
-                val link = links[device] ?: when (val c = connect(k.address, k.port)) {
+                val link = links[device] ?: when (val c = connectKnown(device, k)) {
                     is PatchbayResult.Err -> return@withLock c
                     is PatchbayResult.Ok -> withContext(Dispatchers.IO) {
                         try {

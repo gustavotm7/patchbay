@@ -15,8 +15,13 @@ internal class HapException(val kind: Kind, message: String) : IOException(messa
 }
 
 /** What a paired accessory lets us do again later: our identity, our long-term key and the accessory's. Secret at rest. */
-internal class HapPairingKeys(val controllerId: String, val controllerSeed: ByteArray, val accessoryId: String, val accessoryPublicKey: ByteArray) {
-    fun encode(): ByteArray = Tlv8.encode(listOf(1 to controllerId.toByteArray(), 2 to accessoryId.toByteArray(), 3 to accessoryPublicKey, 4 to controllerSeed))
+internal class HapPairingKeys(val controllerId: String, val controllerSeed: ByteArray, val accessoryId: String, val accessoryPublicKey: ByteArray, val port: Int = 0) {
+    fun withPort(p: Int) = HapPairingKeys(controllerId, controllerSeed, accessoryId, accessoryPublicKey, p)
+
+    fun encode(): ByteArray = Tlv8.encode(
+        listOf(1 to controllerId.toByteArray(), 2 to accessoryId.toByteArray(), 3 to accessoryPublicKey, 4 to controllerSeed) +
+            if (port in 1..65_535) listOf(5 to byteArrayOf((port shr 8).toByte(), port.toByte())) else emptyList(),
+    )
 
     companion object {
         fun decode(bytes: ByteArray): HapPairingKeys? {
@@ -25,7 +30,8 @@ internal class HapPairingKeys(val controllerId: String, val controllerSeed: Byte
             val aid = m[2]?.toString(Charsets.UTF_8) ?: return null
             val pk = m[3]?.takeIf { it.size == 32 } ?: return null
             val seed = m[4]?.takeIf { it.size == 32 } ?: return null
-            return HapPairingKeys(cid, seed, aid, pk)
+            val port = m[5]?.takeIf { it.size == 2 }?.let { ((it[0].toInt() and 0xff) shl 8) or (it[1].toInt() and 0xff) }?.takeIf { it in 1..65_535 } ?: 0
+            return HapPairingKeys(cid, seed, aid, pk, port)
         }
     }
 }

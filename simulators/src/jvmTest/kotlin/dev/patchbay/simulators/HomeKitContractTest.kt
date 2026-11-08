@@ -197,4 +197,23 @@ class HomeKitContractTest {
         adapter.unpair(id)
         assertFalse(thermostat.isPaired) // so it can be paired again with the setup code
     }
+
+    @Test
+    fun aRestartRemembersThePortAndFindsANewOneWhenItChanges(): Unit = runBlocking {
+        findings = listOf(finding(thermostat))
+        val d = adapter.discover().toList().single()
+        val p = adapter.pair(d, Prompt("314-15-926")).getOrNull()!!
+
+        // A fresh adapter (a restart) gets the port from what was stored with the pairing.
+        val restarted = HomeKitAdapter(NetGuard(), CastAdapter.CastFinder { findings }, HomeKitAdapter.Config(connectTimeoutMs = 2_000, ioTimeoutMs = 3_000, pollIntervalMs = 100))
+        restarted.restore(p.deviceId, d.address, p)
+        withTimeout(10_000) { restarted.observe(p.deviceId).first { it.reachability == Reachability.ONLINE } }
+
+        // The stored port is stale (the thermostat picked another after a reboot): the announced port is used.
+        val stale = p.copy(secret = p.secret + byteArrayOf(5, 2, 0, 1)) // later TLV wins: port 1
+        val third = HomeKitAdapter(NetGuard(), CastAdapter.CastFinder { findings }, HomeKitAdapter.Config(connectTimeoutMs = 2_000, ioTimeoutMs = 3_000, pollIntervalMs = 100))
+        third.restore(p.deviceId, d.address, stale)
+        withTimeout(10_000) { third.observe(p.deviceId).first { it.reachability == Reachability.ONLINE } }
+        restarted.close(); third.close()
+    }
 }
