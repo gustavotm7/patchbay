@@ -11,6 +11,14 @@ Written 2026-11-05 at the end of the first long session. Read this first, then `
 - Next for the MVP: the owner tests on real devices (`docs/HARDWARE_TEST.md`: G1, T1, B1, L1, plus K1 Kasa and E1 eufy), then fix what breaks.
 - Waiting on the owner: Lepro LampUX and Lefant vacuum model numbers + approval of ADR 0007 (`docs/protocols/tuya.md`).
 
+## Update 2026-11-08 ("premium, go build all")
+
+Built since the last test build: print-finished alerts (Bambu), the ecobee over HomeKit (own Curve25519/SRP/HKDF in `core/.../adapter/homekit/`, ADR 0010),
+thermostat and TV volume in scenes, Android background watching with notifications (ADR 0011, adds POST_NOTIFICATIONS and a foreground service), and Windows
+camera video through a guarded RTSP client + a user-supplied ffmpeg (ADR 0012). New hardware checks: E2.x (ecobee), N2.x (Android background), S2.x (scenes), C2.x (camera video).
+Unverified assumptions to check first on real hardware: the ecobee `/pair-setup` path and plain PairSetup method, the 1 degree minimum setpoint gap, whether ecobee sensors appear as extra accessories,
+and whether the eufy stream is H.264 (H.265 is refused). Not built: ESPHome, the Lefant vacuum, Tuya 3.4/3.5, HomeKit event subscriptions (polling every 5 s instead), Android start-at-boot.
+
 ## Paste this to start a new session
 
 > Continue the Patchbay project in https://github.com/gustavotm7/patchbay. Work on the branch

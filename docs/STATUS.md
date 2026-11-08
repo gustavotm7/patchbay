@@ -40,6 +40,11 @@ Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bo
 | Add by address | Network screen panel: Bambu printer (IP + serial), RTSP camera (IP + name) | Bambu contract tests; UI compiles in CI |
 | Pairing UI | Inline panel: fingerprint → Trust/Cancel, on-device prompt, masked code entry; "Pair" on devices that need it | Compiles in CI |
 | Adapter registry | Adding a system = factory + adapter + simulator + contract tests (`docs/ADDING_AN_ADAPTER.md`) | Used by Bootstrap |
+| **ecobee over HomeKit** | HAP over IP: pair with the setup code (SRP-6a), fingerprint shown (TOFU), pair-verify each session, encrypted frames. Temperature, humidity, mode, setpoints, occupancy sensors; thermostat scenes. Own X25519/Ed25519 (no new dependency, ADR 0010). Removing it also unpairs it from the thermostat | RFC 7748/8032/7539 vectors, aiohomekit HKDF/TLV vectors, JDK cross-checks, 10 contract tests vs a simulator whose crypto is the JDK's. **Not yet tried on your ecobee** (HARDWARE_TEST E2.x); `/pair-setup` path and method value unconfirmed against a real one |
+| **Print finished alerts** | "Printer: finished/failed after 2 h 14 min" in Activity plus a notification | `PrintAlertTest` vs the simulated H2D |
+| **Scenes: thermostat and TV volume** | A scene can restore thermostat mode and setpoints, and TV/speaker volume and mute (never power, input or playback) | `ThermostatSceneTest`, `TvSceneTest` |
+| **Android background watching** | Opt-in foreground service keeps polling and automations running with the screen off; alerts as notifications (lock-screen text generic); new permissions POST_NOTIFICATIONS, FOREGROUND_SERVICE(+SPECIAL_USE) (ADR 0011) | Builds in CI, permission allowlist updated. **Not yet tried on a phone** (HARDWARE_TEST N2.x) |
+| **Camera video on Windows** | Guarded RTSP client (Digest/Basic, interleaved RTP, H.264 depacketizer) feeds a local ffmpeg you place next to Patchbay.exe (ADR 0012) | 12 depacketizer/SDP/MJPEG tests (25 000-input mutation), 7 stream tests vs the simulated camera, 3 pipeline tests. **Not yet tried on a real camera** (HARDWARE_TEST C2.x) |
 
 ## Get the builds
 
