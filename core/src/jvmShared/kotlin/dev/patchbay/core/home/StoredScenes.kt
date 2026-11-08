@@ -10,6 +10,10 @@ internal data class StoredStep(
     val brightness: Double? = null,
     val kelvin: Int? = null,
     val rgb: List<Int>? = null,
+    /** Thermostat steps: an [dev.patchbay.core.model.HvacMode] name and the setpoints for it. */
+    val hvacMode: String? = null,
+    val heat: Double? = null,
+    val cool: Double? = null,
 )
 
 @Serializable

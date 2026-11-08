@@ -425,10 +425,15 @@ public class LanHome(
         }
         val steps = devices.mapNotNull { id ->
             val live = _devices.value.firstOrNull { it.device.id == id } ?: return@mapNotNull null
-            // Lights and plugs only: nothing that moves, heats, records or locks can be part of a scene.
-            if (live.device.kind != dev.patchbay.core.model.DeviceKind.LIGHT && live.device.kind != dev.patchbay.core.model.DeviceKind.PLUG) return@mapNotNull null
+            // Lights, plugs and thermostats only: nothing that moves, records, locks or heats a printer can be part of a scene.
+            val isThermostat = live.device.kind == dev.patchbay.core.model.DeviceKind.THERMOSTAT
+            if (live.device.kind != dev.patchbay.core.model.DeviceKind.LIGHT && live.device.kind != dev.patchbay.core.model.DeviceKind.PLUG && !isThermostat) return@mapNotNull null
             val snap = live.snapshot ?: return@mapNotNull null
             if (snap.reachability != dev.patchbay.core.model.Reachability.ONLINE) return@mapNotNull null
+            if (isThermostat) {
+                val t = snap.state<dev.patchbay.core.model.CapabilityState.ThermostatState>() ?: return@mapNotNull null
+                return@mapNotNull StoredStep(device = id.value, power = t.mode != dev.patchbay.core.model.HvacMode.OFF, hvacMode = t.mode.name, heat = t.heatSetpoint?.value, cool = t.coolSetpoint?.value)
+            }
             val power = snap.state<dev.patchbay.core.model.CapabilityState.PowerState>() ?: return@mapNotNull null
             StoredStep(
                 device = id.value, power = power.on,
@@ -455,7 +460,21 @@ public class LanHome(
         var failed = 0
         for (step in scene.steps) {
             val target = DeviceId(step.device)
-            val commands = buildList<Command> {
+            val hvac = step.hvacMode?.let { m -> dev.patchbay.core.model.HvacMode.entries.firstOrNull { it.name == m } }
+            val commands = if (step.hvacMode != null) buildList<Command> {
+                if (hvac != null) {
+                    add(Command.SetHvacMode(hvac))
+                    // Setpoints only for the mode being restored; the thermostat ignores the rest anyway.
+                    val h = step.heat?.takeIf { it.isFinite() && it in dev.patchbay.core.model.Celsius.MIN..dev.patchbay.core.model.Celsius.MAX }?.let { dev.patchbay.core.model.Celsius(it) }
+                    val k = step.cool?.takeIf { it.isFinite() && it in dev.patchbay.core.model.Celsius.MIN..dev.patchbay.core.model.Celsius.MAX }?.let { dev.patchbay.core.model.Celsius(it) }
+                    when (hvac) {
+                        dev.patchbay.core.model.HvacMode.HEAT -> if (h != null) add(Command.SetSetpoints(h, null))
+                        dev.patchbay.core.model.HvacMode.COOL -> if (k != null) add(Command.SetSetpoints(null, k))
+                        dev.patchbay.core.model.HvacMode.AUTO -> if (h != null || k != null) add(Command.SetSetpoints(h, k))
+                        dev.patchbay.core.model.HvacMode.OFF -> {}
+                    }
+                }
+            } else buildList<Command> {
                 add(Command.SetPower(step.power))
                 if (step.power) {
                     step.brightness?.let { add(Command.SetBrightness(dev.patchbay.core.model.Percent(it))) }

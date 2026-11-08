@@ -600,7 +600,8 @@ private fun ScenesPanel(live: LiveHome) {
     val scope = rememberCoroutineScope()
     val eligible = devices.filter {
         (it.device.kind == DeviceKind.LIGHT || it.device.kind == DeviceKind.PLUG) &&
-            it.snapshot?.reachability == Reachability.ONLINE && it.snapshot?.state<CapabilityState.PowerState>() != null
+            it.snapshot?.reachability == Reachability.ONLINE && it.snapshot?.state<CapabilityState.PowerState>() != null ||
+            it.device.kind == DeviceKind.THERMOSTAT && it.snapshot?.reachability == Reachability.ONLINE && it.snapshot?.state<CapabilityState.ThermostatState>() != null
     }
     if (scenes.isEmpty() && eligible.isEmpty()) return
     var creating by remember { mutableStateOf(false) }
