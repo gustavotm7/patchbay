@@ -71,6 +71,7 @@ public class LanHome(
     private val _favourites = MutableStateFlow<Set<DeviceId>>(emptySet())
     private val _notifications = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
     private val lastNotified = ConcurrentHashMap<String, Long>()
+    private val printStartedAt = ConcurrentHashMap<DeviceId, Long>()
     private val nextFlip = ConcurrentHashMap<DeviceId, Long>()
     @Volatile private var simOffDay = -1L
     private val _activity = MutableStateFlow<List<LedgerEntry>>(emptyList())
@@ -374,10 +375,10 @@ public class LanHome(
     }
 
     /** At most one notification per device and kind per hour, so a flapping device can't spam. */
-    private fun notify(key: String, message: String) {
+    private fun notify(key: String, message: String, windowMs: Long = 3_600_000) {
         val now = clock()
         val last = lastNotified[key]
-        if (last != null && now - last < 3_600_000) return
+        if (last != null && now - last < windowMs) return
         lastNotified[key] = now
         _notifications.tryEmit(message)
     }
@@ -677,9 +678,27 @@ public class LanHome(
         val s = live.snapshot ?: return
         val now = Summary(s.reachability, s.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on, s.state<dev.patchbay.core.model.CapabilityState.PrintJobState>()?.stage, s.state<dev.patchbay.core.model.CapabilityState.MediaState>()?.status)
         val before = lastSummary.put(snap.deviceId, now)
+        if (now.stage == dev.patchbay.core.model.PrintStage.PRINTING && before?.stage != dev.patchbay.core.model.PrintStage.PRINTING) printStartedAt.putIfAbsent(snap.deviceId, clock())
+        if (before != null && before.stage != null && before.stage != now.stage &&
+            (now.stage == dev.patchbay.core.model.PrintStage.FINISHED || now.stage == dev.patchbay.core.model.PrintStage.FAILED) &&
+            (before.stage == dev.patchbay.core.model.PrintStage.PRINTING || before.stage == dev.patchbay.core.model.PrintStage.PREPARING || before.stage == dev.patchbay.core.model.PrintStage.PAUSED)
+        ) {
+            val took = printStartedAt[snap.deviceId]?.let { " after " + durationText(clock() - it) } ?: ""
+            notify("print-${snap.deviceId.value}", "${live.device.name}: print ${if (now.stage == dev.patchbay.core.model.PrintStage.FAILED) "failed" else "finished"}$took.", windowMs = 60_000)
+        }
         if (before != null && before != now) describeChange(before, now, snap.deviceId)?.let { record(live.device.name, it) }
+        if (now.stage != dev.patchbay.core.model.PrintStage.PRINTING && now.stage != dev.patchbay.core.model.PrintStage.PAUSED && now.stage != dev.patchbay.core.model.PrintStage.PREPARING) printStartedAt.remove(snap.deviceId)
         if (before != null && before.reach != dev.patchbay.core.model.Reachability.OFFLINE && now.reach == dev.patchbay.core.model.Reachability.OFFLINE) {
             notify("offline-${snap.deviceId.value}", "${live.device.name} stopped answering.")
+        }
+    }
+
+    private fun durationText(ms: Long): String {
+        val minutes = (ms / 60_000).toInt()
+        return when {
+            minutes >= 60 -> "${minutes / 60} h ${minutes % 60} min"
+            minutes >= 1 -> "$minutes min"
+            else -> "under a minute"
         }
     }
 
@@ -690,7 +709,10 @@ public class LanHome(
         if (a.reach != dev.patchbay.core.model.Reachability.OFFLINE && b.reach == dev.patchbay.core.model.Reachability.OFFLINE) parts += "Went offline"
         if (a.reach == dev.patchbay.core.model.Reachability.OFFLINE && b.reach == dev.patchbay.core.model.Reachability.ONLINE) parts += "Back online"
         if (a.power != null && b.power != null && a.power != b.power) { parts += if (b.power) "Turned on" else "Turned off"; stateChange = true }
-        if (b.stage != null && a.stage != b.stage) { parts += "Printer: ${b.stage.name.lowercase()}"; stateChange = true }
+        if (b.stage != null && a.stage != b.stage) {
+            val took = if (b.stage == dev.patchbay.core.model.PrintStage.FINISHED || b.stage == dev.patchbay.core.model.PrintStage.FAILED) printStartedAt[id]?.let { " after " + durationText(clock() - it) } ?: "" else ""
+            parts += "Printer: ${b.stage.name.lowercase()}$took"; stateChange = true
+        }
         if (b.media != null && a.media != b.media && b.media != dev.patchbay.core.model.PlaybackStatus.BUFFERING) {
             parts += when (b.media) {
                 dev.patchbay.core.model.PlaybackStatus.PLAYING -> "Playing"

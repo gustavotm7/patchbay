@@ -74,7 +74,7 @@ public class BambuSimulator(
     /** Pushes a progress update to connected clients, like the printer does every few seconds. */
     public fun tick(newPercent: Int, newLayer: Int) {
         percent = newPercent; layer = newLayer
-        broadcast("""{"print":{"mc_percent":$percent,"layer_num":$layer}}""")
+        broadcast("""{"print":{"gcode_state":"$gcodeState","mc_percent":$percent,"layer_num":$layer}}""")
     }
 
     private fun full(): String =
