@@ -11,13 +11,15 @@ Updated 2026-11-06. Two lists: what happens before the test build is handed over
 4. **Look at the real renders** from CI, fix what looks wrong, then record the new screenshot references.
 5. **Build the installable test app:** Android APK (easiest to try first) and the Windows installer, from the CI run, with direct download links.
 
-## Test build (CI run on `3750824`, all 7 jobs green)
+## Test build (CI run on `8d7be5e`, all 7 jobs green)
 
-Adds the Google TV remote (A1.x in `docs/HARDWARE_TEST.md`), on top of names, favourites and sun automations (F1.x), adaptive lighting and away mode (D1.x), tray and automations (R1.x), attention/removal/activity (N1.x), Cast (C1.x), rooms and scenes (S1.x), Settings and the portable build.
+Adds the ecobee over HomeKit (E2.x), thermostat and TV-volume scenes (S2.x), Android background watching (N2.x, ADR 0011, approved by the owner 2026-11-08), print-finished alerts and Windows camera video (C2.x, needs ffmpeg.exe next to Patchbay.exe), on top of everything earlier.
 
-- Run: https://github.com/gustavotm7/patchbay/actions/runs/42426286463
-- Artifacts: open the run above and download `patchbay-windows-portable` (no install, recommended), `patchbay-android` (install `app-android-debug.apk` from inside; ignore the unsigned `release` APK) or `patchbay-windows-msi` (optional installer). Direct artifact links are in the chat message that accompanied this build.
-- Downloads need you to be signed in to GitHub. Artifacts are kept until 2026-12-08.
+- Run: https://github.com/gustavotm7/patchbay/actions/runs/42432501053
+- Windows portable (no install): https://github.com/gustavotm7/patchbay/actions/runs/42432501053/artifacts/13597709613
+- Android: https://github.com/gustavotm7/patchbay/actions/runs/42432501053/artifacts/13597807809 (install `app-android-debug.apk` from inside)
+- Windows MSI (optional): https://github.com/gustavotm7/patchbay/actions/runs/42432501053/artifacts/13598640951
+- Downloads need you to be signed in to GitHub.
 
 ## After the test build (your side, then mine)
 

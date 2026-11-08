@@ -1,6 +1,6 @@
 # 0011 — Android: opt-in background watching and alerts
 
-Status: Accepted (owner asked for Android notifications and background running: "premium, go build all") · Date: 2026-11-08
+Status: Accepted (owner asked for Android notifications and background running, then approved this ADR: "approve ADR 0011, keep going", 2026-11-08) · Date: 2026-11-08
 
 ## Context
 
