@@ -30,8 +30,9 @@ authoritative transitive list.
 | `net.zetetic:sqlcipher-android` | 4.20.0 | app-android | SQLCipher (encrypted SQLite) | BSD-style (Zetetic) | No |
 | IBM Plex Sans / Mono (TTF, vendored) | upstream commit `48e8676` | ui, app-android | Typeface (ADR 0004) | OFL-1.1 (RFN "Plex") | No |
 
+HomeKit (ADR 0010) needed no dependency: its Curve25519, SRP and HKDF are in `core` and tested against RFC vectors. BouncyCastle is no longer planned for it.
+
 Planned, not yet added. Each needs this table updated and verification metadata regenerated:
-`org.bouncycastle:bcprov-jdk18on` (X25519, Ed25519, ChaCha20-Poly1305, HKDF, SRP-6a for HAP and Noise),
 `androidx.glance`, Jazzer (test).
 
 Build-only transitive tooling seen in the verification metadata, not shipped (absent from the runtime SBOM):

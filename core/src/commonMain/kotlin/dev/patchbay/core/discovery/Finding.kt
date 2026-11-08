@@ -10,6 +10,8 @@ public data class Finding(
     val friendlyName: String?,
     val model: String?,
     val server: String?,
+    /** What a HomeKit (`_hap._tcp`) announcement said, when there was one. */
+    val hap: HapAdvert? = null,
 ) {
     /** What the advertised services say about local control (for the Exposure Map). */
     val hints: List<String> get() = services.mapNotNull { ServiceHints.SERVICE_HINTS[it] ?: ServiceHints.SERVICE_HINTS.entries.firstOrNull { (k, _) -> it.startsWith(k) }?.value }.distinct()
@@ -36,3 +38,6 @@ public object ServiceHints {
         "urn:schemas-upnp-org:device:MediaRenderer" to "UPnP media renderer",
     )
 }
+
+/** The parts of a HomeKit mDNS announcement we use. Untrusted. [category] is the accessory category ("ci"; 9 = thermostat); [unpaired] is status flag bit 0 ("sf"). */
+public data class HapAdvert(val port: Int, val deviceId: String?, val category: Int?, val unpaired: Boolean?)

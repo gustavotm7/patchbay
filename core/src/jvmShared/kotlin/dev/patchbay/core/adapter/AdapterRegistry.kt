@@ -4,6 +4,7 @@ import dev.patchbay.core.adapter.androidtv.AndroidTvRemoteAdapter
 import dev.patchbay.core.adapter.bambu.BambuAdapter
 import dev.patchbay.core.adapter.cast.CastAdapter
 import dev.patchbay.core.adapter.govee.GoveeLanAdapter
+import dev.patchbay.core.adapter.homekit.HomeKitAdapter
 import dev.patchbay.core.adapter.kasa.KasaAdapter
 import dev.patchbay.core.adapter.rtsp.RtspCameraAdapter
 import dev.patchbay.core.adapter.tuya.TuyaLocalAdapter
@@ -65,6 +66,12 @@ public object AdapterRegistry {
     /** Tuya bulbs (Lepro and others) on local protocol 3.3, added by address with a user-supplied local key (ADR 0007). */
     public val TUYA_LOCAL: AdapterFactory = AdapterFactory { ctx -> TuyaLocalAdapter(ctx.netGuard) }
 
+    /** HomeKit thermostats (ecobee): HAP over the LAN with the setup code; found through the network census (mDNS). */
+    public val HOMEKIT: AdapterFactory = AdapterFactory { ctx ->
+        val census = NetworkCensus(ctx.netGuard)
+        HomeKitAdapter(ctx.netGuard, CastAdapter.CastFinder { (census.run() as? PatchbayResult.Ok)?.value.orEmpty() })
+    }
+
     /** Local adapters enabled by default, in discovery order. */
-    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, CAST, ANDROID_TV_REMOTE, KASA, RTSP_CAMERA, TUYA_LOCAL)
+    public val LOCAL: List<AdapterFactory> = listOf(GOVEE, LG_WEBOS, BAMBU, CAST, ANDROID_TV_REMOTE, KASA, RTSP_CAMERA, TUYA_LOCAL, HOMEKIT)
 }

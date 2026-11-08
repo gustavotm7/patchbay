@@ -365,6 +365,35 @@ private fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = Mo
                 },
             )
         }
+    } else if (d.device.kind == DeviceKind.THERMOSTAT) {
+        val pairing = remember { PairingDialogState() }
+        val snap = d.snapshot
+        Column(modifier) {
+            PairingPanel(pairing)
+            if (pairing.step != null) VSpace(Space.m)
+            if (d.needsPairing || snap == null || snap.state<CapabilityState.ThermostatState>() == null) {
+                PText(d.device.name, Patchbay.type.title)
+                PText(
+                    if (d.needsPairing) "Enter the setup code from the thermostat (Settings, HomeKit). If it is in Apple Home, remove it there first." else "Waiting for the first reading…",
+                    Patchbay.type.body, Patchbay.colors.textSecondary,
+                )
+                if (d.needsPairing) {
+                    VSpace(Space.m)
+                    PButton("Pair with setup code", {
+                        scope.launch {
+                            val r = live.pair(id, pairing)
+                            pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.takeIf { it !is dev.patchbay.core.result.PatchbayError.Cancelled }?.message)
+                        }
+                    })
+                }
+            } else {
+                ThermostatPanel(
+                    d.device, snap, dev.patchbay.core.model.TrendSource { _, _ -> null }, roomName = null,
+                    onMode = { send(dev.patchbay.core.model.Command.SetHvacMode(it)) },
+                    onSetpoints = SetpointListener { h, k -> send(dev.patchbay.core.model.Command.SetSetpoints(h, k)) },
+                )
+            }
+        }
     } else if (d.device.kind == DeviceKind.PLUG || d.device.capability<dev.patchbay.core.model.Capability.Power>() != null) {
         PlugPanel(d, onCommand = send, modifier = modifier)
     } else {

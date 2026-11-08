@@ -269,3 +269,22 @@ Prerequisite: the Google TV or Android TV is on, on the same network. This is th
 | A1.10 | In the TV's settings, remove the remote | Patchbay shows it as not answering; remove it in Patchbay and pair again |
 
 Unverified until now (the references don't say): whether the TV presents the same key on the pairing port (6467) and the remote port (6466). If A1.3 pairs but the tile never says "Remote ready", that is the first thing to check.
+
+## Phase 2 — ecobee over HomeKit
+
+Prerequisites: the thermostat is on this network. **If it is in Apple Home, remove it there first** (Home app → the thermostat → Remove Accessory), otherwise it refuses a second pairing and Apple Home loses it. Have the setup code ready (thermostat: Main menu → Settings → Installation settings/HomeKit, or the sticker); it may need the thermostat to be online once to show it.
+This is the first real-device test of the HomeKit code: tell me exactly which step fails.
+
+| # | Step | Expected |
+|---|---|---|
+| E2.1 | Scan | A thermostat tile appears (vendor ecobee), "Tap to pair". If it says "paired to another controller", remove it from Apple Home |
+| E2.2 | Open it → Pair with setup code → type the code | A fingerprint is shown; Trust it. The tile shows the room temperature within seconds |
+| E2.3 | A wrong code on purpose | "did not accept that setup code" and the thermostat is not paired |
+| E2.4 | Compare with the thermostat's screen | Temperature, humidity, mode and setpoints agree |
+| E2.5 | Change the heat setpoint with the −/+ buttons | The thermostat's screen follows within ~5 s |
+| E2.6 | Switch Off / Heat / Cool / Auto | The thermostat follows; in Auto both setpoints are editable |
+| E2.7 | Occupancy sensors (if you have SmartSensors) | They are listed with Occupied/Clear; tell me if none appear |
+| E2.8 | Change something on the thermostat itself | Patchbay shows it within ~5 s |
+| E2.9 | Restart Patchbay | It reconnects without asking for the code |
+| E2.10 | Turn the thermostat's Wi-Fi off and on | Patchbay shows it offline, then back |
+| E2.11 | Remove the pairing in Patchbay ("Remove"), then check the thermostat | Tell me whether it still shows as paired (it should be re-pairable with the code) |

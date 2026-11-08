@@ -65,6 +65,10 @@ public class NetworkCensus(
         var friendly: String? = null
         var model: String? = null
         var server: String? = null
+        var hapPort: Int? = null
+        var hapId: String? = null
+        var hapCategory: Int? = null
+        var hapUnpaired: Boolean? = null
 
         fun add(m: Dns.Message) {
             seen = true
@@ -73,10 +77,18 @@ public class NetworkCensus(
                     // Meta-query answers name service types; others name instances of a type.
                     if (r.name == META) services += serviceType(r.target) else services += serviceType(r.name)
                 }
-                is Dns.Record.Srv -> { ports += r.port; hosts += r.target.removeSuffix(".local") }
+                is Dns.Record.Srv -> {
+                    ports += r.port; hosts += r.target.removeSuffix(".local")
+                    if ("._hap._tcp" in r.name) hapPort = hapPort ?: r.port
+                }
                 is Dns.Record.Txt -> {
                     friendly = friendly ?: r.entries["fn"]?.takeIf { it.isNotBlank() }
                     model = model ?: (r.entries["md"] ?: r.entries["model"])?.takeIf { it.isNotBlank() }
+                    if ("._hap._tcp" in r.name) {
+                        hapId = hapId ?: r.entries["id"]?.take(32)
+                        hapCategory = hapCategory ?: r.entries["ci"]?.toIntOrNull()
+                        hapUnpaired = hapUnpaired ?: r.entries["sf"]?.toIntOrNull()?.let { it and 1 == 1 }
+                    }
                 }
                 is Dns.Record.A, is Dns.Record.Aaaa -> hosts += r.name.removeSuffix(".local")
             }
@@ -88,7 +100,7 @@ public class NetworkCensus(
             server = server ?: r.server
         }
 
-        fun build() = Finding(address, hosts, services, ports, friendly, model, server)
+        fun build() = Finding(address, hosts, services, ports, friendly, model, server, hapPort?.let { HapAdvert(it, hapId, hapCategory, hapUnpaired) })
     }
 
     public companion object {
