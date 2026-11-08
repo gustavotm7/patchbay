@@ -61,6 +61,12 @@ public interface DeviceAdapter {
      */
     public suspend fun pair(device: DiscoveredDevice, prompt: PairingPrompt): PatchbayResult<Pairing>
 
+    /**
+     * Called when the user removes a paired device, before the local pairing is deleted. Adapters whose devices keep a record of
+     * us (HomeKit) ask the device to forget us too, so it can be paired again. Best effort: never throws, and the local removal goes ahead regardless.
+     */
+    public suspend fun unpair(device: DeviceId) {}
+
     /** The stable [DeviceId] this adapter uses for a discovered device (adapters own their ID scheme). */
     public fun deviceId(found: DiscoveredDevice): DeviceId
 

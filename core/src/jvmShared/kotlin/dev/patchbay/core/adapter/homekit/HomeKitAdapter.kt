@@ -172,6 +172,15 @@ public class HomeKitAdapter(
         }
     }
 
+    /** Asks the thermostat to drop our pairing, so removing it here doesn't leave it unable to be paired again. */
+    override suspend fun unpair(device: DeviceId) {
+        val k = known[device] ?: return
+        val keys = k.keys ?: return
+        drop(device)
+        removePairing(k.address, k.port, keys)
+        known.remove(device)
+    }
+
     private fun mapPairingError(e: HapException): PatchbayError = when (e.kind) {
         HapException.Kind.WRONG_CODE -> PatchbayError.Unauthorized("The thermostat did not accept that setup code. Check it on the thermostat and try again.")
         HapException.Kind.ALREADY_PAIRED -> PatchbayError.Unsupported("The thermostat is already paired. Remove it from Apple Home (or other HomeKit apps) first, then try again.")

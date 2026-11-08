@@ -129,6 +129,7 @@ public class LanHome(
     override suspend fun forget(device: DeviceId) {
         val name = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return
         observers.remove(device)?.cancel()
+        try { owners[device]?.unpair(device) } catch (e: Exception) { log?.warn("home", "could not ask a device to forget us: ${e.javaClass.simpleName}") }
         owners.remove(device); pendingPairing.remove(device); lastSummary.remove(device); trustAlerted.remove(device)
         synchronized(this) {
             _devices.update { list -> list.filterNot { it.device.id == device } }

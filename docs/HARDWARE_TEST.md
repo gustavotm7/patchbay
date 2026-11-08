@@ -287,4 +287,4 @@ This is the first real-device test of the HomeKit code: tell me exactly which st
 | E2.8 | Change something on the thermostat itself | Patchbay shows it within ~5 s |
 | E2.9 | Restart Patchbay | It reconnects without asking for the code |
 | E2.10 | Turn the thermostat's Wi-Fi off and on | Patchbay shows it offline, then back |
-| E2.11 | Remove the pairing in Patchbay ("Remove"), then check the thermostat | Tell me whether it still shows as paired (it should be re-pairable with the code) |
+| E2.11 | Remove the thermostat in Patchbay ("Remove"), then check the thermostat | It no longer lists Patchbay as paired, and pairing again with the code works. If it still shows paired, tell me |

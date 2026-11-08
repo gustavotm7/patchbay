@@ -188,4 +188,13 @@ class HomeKitContractTest {
         val gone = withTimeout(15_000) { adapter.observe(id).first { it.reachability == Reachability.OFFLINE } }
         assertTrue(gone.states.isEmpty())
     }
+
+    @Test
+    fun removingTheDeviceMakesTheThermostatForgetUs(): Unit = runBlocking {
+        val id = paired()
+        snapshot(id)
+        assertTrue(thermostat.isPaired)
+        adapter.unpair(id)
+        assertFalse(thermostat.isPaired) // so it can be paired again with the setup code
+    }
 }
