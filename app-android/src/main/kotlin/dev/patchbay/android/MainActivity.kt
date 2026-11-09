@@ -72,6 +72,8 @@ class MainActivity : FragmentActivity() {
         val home = DemoHome.home()
         val now = Fmt.timeOfDay(DemoHome.DEMO_NOW.value)
         val cameraPlayer = GuardedPlayer(app.services.netGuard)
+        // "Remove animations" in Android settings sets the animator scale to 0.
+        val reducedMotion = android.provider.Settings.Global.getFloat(contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         setContent {
             var appearance by remember { mutableStateOf(Appearance.fromName(app.services.store.setting("ui.appearance"))) }
             var watching by remember { mutableStateOf(app.services.store.setting(WatchService.SETTING) == "true") }
@@ -93,7 +95,7 @@ class MainActivity : FragmentActivity() {
                 portable = false,
                 version = "0.1.0",
             )
-            PatchbayTheme(appearance.palette(isSystemInDarkTheme()), typefaces, FormFactor.PHONE) {
+            PatchbayTheme(appearance.palette(isSystemInDarkTheme()), typefaces, FormFactor.PHONE, reducedMotion = reducedMotion) {
                 // Edge-to-edge is enforced on current Android: keep content clear of the status bar, gesture bar and cutouts.
                 Box(Modifier.fillMaxSize().background(Patchbay.colors.background).windowInsetsPadding(WindowInsets.safeDrawing)) {
                     CompositionLocalProvider(LocalCameraPlayer provides cameraPlayer) {

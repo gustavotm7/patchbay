@@ -283,7 +283,11 @@ fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? 
     var tab by remember { mutableStateOf(PhoneTab.DEVICES) }
     Column(Modifier.fillMaxSize().background(c.background)) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (tab) {
+            androidx.compose.animation.Crossfade(
+                targetState = tab,
+                animationSpec = androidx.compose.animation.core.tween(Patchbay.motion.medium, easing = Patchbay.motion.easing),
+                label = "tab",
+            ) { shownTab -> when (shownTab) {
                 PhoneTab.DEVICES -> LiveScreenPhone(live)
                 PhoneTab.AUTOMATIONS -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { AutomationsScreen(live) }
                 PhoneTab.ACTIVITY -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { ActivityScreen(live) }
@@ -292,7 +296,7 @@ fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? 
                 PhoneTab.SETTINGS -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) {
                     if (settings != null) SettingsScreen(settings, live = live, onOpenDemo = { tab = PhoneTab.PLAN })
                 }
-            }
+            } }
         }
         BottomBar(tab, (if (settings != null) PhoneTab.entries else PhoneTab.entries - PhoneTab.SETTINGS) - PhoneTab.PLAN) { tab = it }
     }

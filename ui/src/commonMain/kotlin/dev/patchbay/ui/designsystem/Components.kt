@@ -3,7 +3,13 @@ package dev.patchbay.ui.designsystem
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -244,14 +250,14 @@ fun <T> Segmented(
         options.forEach { opt ->
             val isSel = opt == selected
             val t = tone(opt)
-            val fill = if (!isSel) null else if (t == Tone.NEUTRAL) c.inverse else t.color(c)
-            val fg = if (!isSel) c.textSecondary else if (t == Tone.NEUTRAL) c.onInverse else c.onSignal
+            val fill = animatedColor(if (!isSel) c.raised else if (t == Tone.NEUTRAL) c.inverse else t.color(c))
+            val fg = animatedColor(if (!isSel) c.textSecondary else if (t == Tone.NEUTRAL) c.onInverse else c.onSignal)
             Box(
                 Modifier
                     .weight(1f)
                     .height(height - Space.s)
                     .clip(Shapes.pill)
-                    .then(if (fill != null) Modifier.background(fill, Shapes.pill) else Modifier)
+                    .background(fill, Shapes.pill)
                     .semantics { this.selected = isSel; stateDescription = if (isSel) "selected" else "" }
                     .clickable(role = Role.Tab) { onSelect(opt) },
                 contentAlignment = Alignment.Center,
@@ -275,30 +281,44 @@ fun PButton(
     modifier: Modifier = Modifier,
     kind: ButtonKind = ButtonKind.SECONDARY,
     enabled: Boolean = true,
+    /** Shows a small spinner before the label while something is in progress. */
+    busy: Boolean = false,
 ) {
     val c = Patchbay.colors
-    val fill = when {
-        !enabled -> c.raised.copy(alpha = 0.6f)
-        kind == ButtonKind.PRIMARY -> c.inverse
-        else -> c.raised
-    }
-    val fg = when {
-        !enabled -> c.textTertiary
-        kind == ButtonKind.PRIMARY -> c.onInverse
-        kind == ButtonKind.DESTRUCTIVE -> c.alarm
-        else -> c.text
-    }
+    val fill = animatedColor(
+        when {
+            !enabled -> c.raised.copy(alpha = 0.6f)
+            kind == ButtonKind.PRIMARY -> c.inverse
+            else -> c.raised
+        },
+    )
+    val fg = animatedColor(
+        when {
+            !enabled -> c.textTertiary
+            kind == ButtonKind.PRIMARY -> c.onInverse
+            kind == ButtonKind.DESTRUCTIVE -> c.alarm
+            else -> c.text
+        },
+    )
     val minH = if (Patchbay.formFactor == FormFactor.PHONE) Space.touchTarget else 40.dp
+    val source = remember { MutableInteractionSource() }
     Box(
         modifier
+            .pressScale(source)
             .defaultMinSize(minWidth = 88.dp, minHeight = minH)
             .clip(Shapes.pill)
             .background(fill, Shapes.pill)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(interactionSource = source, indication = LocalIndication.current, enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = Space.xl),
         contentAlignment = Alignment.Center,
     ) {
-        PText(text, Patchbay.type.bodyStrong, fg)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (busy) {
+                BusyArc(fg, Modifier.size(16.dp))
+                Spacer(Modifier.width(Space.s))
+            }
+            PText(text, Patchbay.type.bodyStrong, fg)
+        }
     }
 }
 
@@ -307,12 +327,16 @@ fun PButton(
 fun PToggle(label: String, on: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val c = Patchbay.colors
     val minH = if (Patchbay.formFactor == FormFactor.PHONE) Space.touchTarget else 40.dp
+    val haptic = LocalHapticFeedback.current
+    val track = animatedColor(if (on) c.active else c.raised)
+    val thumb = animatedColor(if (on) c.onSignal else c.outline)
+    val travel = animatedFloat(if (on) 20f else 0f)
     Row(
         modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = minH)
             .clip(Shapes.control)
-            .clickable(role = Role.Switch) { onChange(!on) }
+            .clickable(role = Role.Switch) { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onChange(!on) }
             .semantics { stateDescription = if (on) "on" else "off" },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -320,11 +344,11 @@ fun PToggle(label: String, on: Boolean, onChange: (Boolean) -> Unit, modifier: M
         PText(label, Patchbay.type.body, c.text)
         Box(
             Modifier.size(width = 52.dp, height = 32.dp)
-                .background(if (on) c.active else c.raised, Shapes.pill)
+                .background(track, Shapes.pill)
                 .padding(3.dp),
-            contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+            contentAlignment = Alignment.CenterStart,
         ) {
-            Box(Modifier.size(26.dp).background(if (on) c.onSignal else c.outline, Shapes.pill))
+            Box(Modifier.offset(x = travel.dp).size(26.dp).background(thumb, Shapes.pill))
         }
     }
 }

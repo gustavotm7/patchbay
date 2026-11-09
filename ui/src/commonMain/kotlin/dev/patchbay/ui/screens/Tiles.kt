@@ -1,6 +1,11 @@
 package dev.patchbay.ui.screens
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.remember
+import dev.patchbay.ui.designsystem.animatedColor
+import dev.patchbay.ui.designsystem.pressScale
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -90,17 +95,21 @@ fun DeviceTile(
     onPrimary: () -> Unit,
     onDetails: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    /** What the user just asked for, shown at once while the device catches up (null = show the device's own state). */
+    optimisticOn: Boolean? = null,
 ) {
     val c = Patchbay.colors
     val s = d.snapshot
-    val on = s?.state<CapabilityState.PowerState>()?.on == true && s.reachability == Reachability.ONLINE
-    val fill = if (on) c.inverse else c.surface
-    val fg = if (on) c.onInverse else c.text
+    val on = optimisticOn ?: (s?.state<CapabilityState.PowerState>()?.on == true && s.reachability == Reachability.ONLINE)
+    val fill = animatedColor(if (on) c.inverse else c.surface)
+    val fg = animatedColor(if (on) c.onInverse else c.text)
+    val source = remember { MutableInteractionSource() }
     val status = tileStatus(d)
     val attention = d.needsPairing || s?.reachability == Reachability.OFFLINE || s?.reachability == Reachability.DEGRADED
     val alarm = d.trustChanged
     Column(
         modifier
+            .pressScale(source, 0.96f)
             .defaultMinSize(minHeight = 120.dp)
             .clip(Shapes.tile)
             .background(fill, Shapes.tile)
@@ -109,12 +118,12 @@ fun DeviceTile(
                 contentDescription = "${d.device.name}, $status"
                 if (onDetails != null) stateDescription = if (on) "on" else "off"
             }
-            .clickable(role = if (onDetails != null) Role.Switch else Role.Button, onClick = onPrimary)
+            .clickable(interactionSource = source, indication = LocalIndication.current, role = if (onDetails != null) Role.Switch else Role.Button, onClick = onPrimary)
             .padding(Space.l),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(40.dp).background(if (on) c.onInverse.copy(alpha = 0.10f) else c.raised, Shapes.pill),
+                Modifier.size(40.dp).background(animatedColor(if (on) c.onInverse.copy(alpha = 0.10f) else c.raised), Shapes.pill),
                 contentAlignment = Alignment.Center,
             ) {
                 DeviceGlyph(

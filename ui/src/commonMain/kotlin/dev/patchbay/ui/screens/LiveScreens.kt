@@ -1,5 +1,6 @@
 package dev.patchbay.ui.screens
 
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,6 +61,18 @@ import dev.patchbay.ui.designsystem.ToneMarker
 import dev.patchbay.ui.designsystem.VSpace
 import kotlinx.coroutines.launch
 
+/** One glanceable line under the title: how many devices, what is on, the indoor temperature, a print in progress. */
+internal fun homeSummary(devices: List<LiveDevice>): String {
+    val parts = mutableListOf(if (devices.size == 1) "1 device" else "${devices.size} devices")
+    val online = devices.filter { it.snapshot?.reachability == Reachability.ONLINE }
+    val on = online.count { (it.device.kind == DeviceKind.LIGHT || it.device.kind == DeviceKind.PLUG) && it.snapshot?.state<CapabilityState.PowerState>()?.on == true }
+    if (on > 0) parts += "$on on"
+    online.firstNotNullOfOrNull { it.snapshot?.state<CapabilityState.ThermostatState>() }?.let { parts += "${Fmt.celsius(it.current.value)} °C inside" }
+    online.firstNotNullOfOrNull { it.snapshot?.state<CapabilityState.PrintJobState>()?.takeIf { j -> j.stage == dev.patchbay.core.model.PrintStage.PRINTING } }
+        ?.let { parts += "printing ${Fmt.percent(it.progress.value)} %" }
+    return parts.joinToString(" · ")
+}
+
 /** The home: a large title, a Scan button, and one tile per device found on this network. */
 @Composable
 fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> Unit, modifier: Modifier = Modifier) {
@@ -78,9 +91,9 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
                 PText("Home", Patchbay.type.largeTitle)
                 PText(
                     when (scan) {
-                        ScanState.IDLE -> if (devices.isEmpty()) "Scan to find your devices" else "${devices.size} devices"
+                        ScanState.IDLE -> if (devices.isEmpty()) "Scan to find your devices" else homeSummary(devices)
                         ScanState.SCANNING -> "Scanning your network…"
-                        ScanState.DONE -> "${devices.size} devices"
+                        ScanState.DONE -> homeSummary(devices)
                         ScanState.FAILED -> "Scan failed"
                     },
                     Patchbay.type.body, c.textSecondary,
@@ -92,7 +105,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
             }
             PButton(
                 if (scan == ScanState.SCANNING) "Scanning…" else "Scan", { scope.launch { live.scan() } },
-                kind = ButtonKind.PRIMARY, enabled = scan != ScanState.SCANNING,
+                kind = ButtonKind.PRIMARY, enabled = scan != ScanState.SCANNING, busy = scan == ScanState.SCANNING,
             )
         }
         problem?.let {
@@ -128,25 +141,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
             NeedsAttention(devices, onSelect)
             SceneStrip(live)
             val tileFor: @Composable (LiveDevice, Modifier) -> Unit = { d, m ->
-                val toggles = tileToggles(d)
-                DeviceTile(
-                    d, d.device.id == selected,
-                    onPrimary = {
-                        when {
-                            d.needsPairing -> scope.launch {
-                                val r = live.pair(d.device.id, pairing)
-                                pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.takeIf { it !is dev.patchbay.core.result.PatchbayError.Cancelled }?.message)
-                            }
-                            toggles -> scope.launch {
-                                val on = d.snapshot?.state<CapabilityState.PowerState>()?.on == true
-                                live.send(d.device.id, dev.patchbay.core.model.Command.SetPower(!on))
-                            }
-                            else -> onSelect(d.device.id)
-                        }
-                    },
-                    onDetails = if (toggles) ({ onSelect(d.device.id) }) else null,
-                    modifier = m,
-                )
+                LiveTile(live, d, d.device.id == selected, onSelect, pairing, m)
             }
             val favs by live.favourites.collectAsState()
             val pinned = devices.filter { it.device.id in favs }
@@ -217,6 +212,20 @@ private fun SceneStrip(live: LiveHome) {
     VSpace(Space.l)
 }
 
+/** Delete needs a second tap within three seconds, so it can't be hit by accident next to Run. */
+@Composable
+private fun ConfirmingDelete(what: String, onConfirm: () -> Unit) {
+    val c = Patchbay.colors
+    var armed by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(armed) { if (armed) { kotlinx.coroutines.delay(3_000); armed = false } }
+    Box(
+        Modifier.height(Space.touchTarget).clip(Shapes.pill)
+            .clickable(role = Role.Button, onClickLabel = if (armed) "Confirm delete $what" else "Delete $what") { if (armed) onConfirm() else armed = true }
+            .padding(horizontal = Space.m),
+        contentAlignment = Alignment.Center,
+    ) { PText(if (armed) "Tap again to delete" else "Delete", Patchbay.type.caption, if (armed) c.alarm else c.textSecondary) }
+}
+
 /** Scenes, schedules and away mode: the things you set up once, kept off the home screen. */
 @Composable
 fun AutomationsScreen(live: LiveHome, modifier: Modifier = Modifier) {
@@ -229,6 +238,44 @@ fun AutomationsScreen(live: LiveHome, modifier: Modifier = Modifier) {
         ScenesPanel(live)
         AutomationsPanel(live)
     }
+}
+
+/**
+ * A device tile with optimistic switching: a tap flips a light or plug on screen at once (with a light haptic tick) and the
+ * device's own report confirms it a moment later. If the command fails, or nothing confirms within three seconds, it flips back.
+ */
+@Composable
+private fun LiveTile(live: LiveHome, d: LiveDevice, selected: Boolean, onSelect: (DeviceId) -> Unit, pairing: PairingDialogState, modifier: Modifier) {
+    val scope = rememberCoroutineScope()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val toggles = tileToggles(d)
+    val actualOn = d.snapshot?.state<CapabilityState.PowerState>()?.on == true
+    var pending by remember(d.device.id) { mutableStateOf<Boolean?>(null) }
+    androidx.compose.runtime.LaunchedEffect(actualOn) { pending = null }
+    androidx.compose.runtime.LaunchedEffect(pending) { if (pending != null) { kotlinx.coroutines.delay(3_000); pending = null } }
+    DeviceTile(
+        d, selected,
+        onPrimary = {
+            when {
+                d.needsPairing -> scope.launch {
+                    val r = live.pair(d.device.id, pairing)
+                    pairing.done((r as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.takeIf { it !is dev.patchbay.core.result.PatchbayError.Cancelled }?.message)
+                }
+                toggles -> {
+                    val target = !(pending ?: actualOn)
+                    pending = target
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    scope.launch {
+                        if (live.send(d.device.id, dev.patchbay.core.model.Command.SetPower(target)) is dev.patchbay.core.result.PatchbayResult.Err) pending = null
+                    }
+                }
+                else -> onSelect(d.device.id)
+            }
+        },
+        onDetails = if (toggles) ({ onSelect(d.device.id) }) else null,
+        modifier = modifier,
+        optimisticOn = if (toggles) pending else null,
+    )
 }
 
 /** What Patchbay can see and what it keeps to itself: the NetGuard counters, everything else that answered, the exposure report. */
@@ -510,11 +557,31 @@ fun LiveScreenPhone(live: LiveHome, modifier: Modifier = Modifier) {
     androidx.compose.runtime.LaunchedEffect(all, selected) { if (selected != null && all.none { it.device.id == selected }) selected = null }
     Column(modifier.fillMaxSize().background(c.background)) {
         val sel = selected
-        if (sel == null) {
+        val m = Patchbay.motion
+        androidx.compose.animation.AnimatedContent(
+            targetState = sel,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                val forward = targetState != null
+                val slide = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntOffset>(m.medium + 60, easing = m.easing)
+                val fade = androidx.compose.animation.core.tween<Float>(m.medium, easing = m.easing)
+                if (forward) {
+                    (androidx.compose.animation.slideInHorizontally(slide) { it / 5 } + androidx.compose.animation.fadeIn(fade)) togetherWith
+                        (androidx.compose.animation.slideOutHorizontally(slide) { -it / 8 } + androidx.compose.animation.fadeOut(fade))
+                } else {
+                    (androidx.compose.animation.slideInHorizontally(slide) { -it / 8 } + androidx.compose.animation.fadeIn(fade)) togetherWith
+                        (androidx.compose.animation.slideOutHorizontally(slide) { it / 5 } + androidx.compose.animation.fadeOut(fade))
+                }
+            },
+            label = "device-page",
+        ) { shown ->
+          if (shown == null) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) {
                 LiveDeviceList(live, null, { selected = it })
             }
-        } else {
+          } else {
+            val device = shown
+            Column(Modifier.fillMaxSize()) {
             Row(
                 Modifier.padding(start = Space.s, top = Space.s).height(Space.touchTarget).clip(Shapes.pill)
                     .clickable(role = Role.Button) { selected = null }.padding(horizontal = Space.m),
@@ -525,8 +592,10 @@ fun LiveScreenPhone(live: LiveHome, modifier: Modifier = Modifier) {
                 PText("Home", Patchbay.type.bodyStrong, c.textSecondary)
             }
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) {
-                LiveDetail(live, sel)
+                LiveDetail(live, device)
             }
+            }
+        }
         }
     }
 }
@@ -735,12 +804,7 @@ private fun ScenesPanel(live: LiveHome) {
                     PText(sc.name, Patchbay.type.bodyStrong)
                     PText("${sc.devices.size} devices", Patchbay.type.caption, c.textSecondary)
                 }
-                Box(
-                    Modifier.height(Space.touchTarget).clip(Shapes.pill)
-                        .clickable(role = Role.Button, onClickLabel = "Delete ${sc.name}") { scope.launch { live.deleteScene(sc.id) } }
-                        .padding(horizontal = Space.m),
-                    contentAlignment = Alignment.Center,
-                ) { PText("Delete", Patchbay.type.caption, c.textSecondary) }
+                ConfirmingDelete(sc.name) { scope.launch { live.deleteScene(sc.id) } }
                 HSpace(Space.xs)
                 PButton("Run", {
                     scope.launch {
@@ -1011,12 +1075,7 @@ private fun AutomationsPanel(live: LiveHome) {
                         " · ${daysText(a.days)} · ${a.sceneName ?: "scene deleted"}",
                     Patchbay.type.caption, if (a.sceneName == null) c.attention else c.textSecondary, Modifier.weight(1f),
                 )
-                Box(
-                    Modifier.height(Space.touchTarget).clip(Shapes.pill)
-                        .clickable(role = Role.Button, onClickLabel = "Delete ${a.name}") { scope.launch { live.deleteAutomation(a.id) } }
-                        .padding(horizontal = Space.m),
-                    contentAlignment = Alignment.Center,
-                ) { PText("Delete", Patchbay.type.caption, c.textSecondary) }
+                ConfirmingDelete(a.name) { scope.launch { live.deleteAutomation(a.id) } }
             }
         }
         if (creating) {
