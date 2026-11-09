@@ -61,15 +61,15 @@ import dev.patchbay.ui.designsystem.ToneMarker
 import dev.patchbay.ui.designsystem.VSpace
 import kotlinx.coroutines.launch
 
-/** One glanceable line under the title: how many devices, what is on, the indoor temperature, a print in progress. */
+/** One glanceable line under the title: how many devices, what is on, the temperature, a print in progress. */
 internal fun homeSummary(devices: List<LiveDevice>): String {
     val parts = mutableListOf(if (devices.size == 1) "1 device" else "${devices.size} devices")
     val online = devices.filter { it.snapshot?.reachability == Reachability.ONLINE }
     val on = online.count { (it.device.kind == DeviceKind.LIGHT || it.device.kind == DeviceKind.PLUG) && it.snapshot?.state<CapabilityState.PowerState>()?.on == true }
     if (on > 0) parts += "$on on"
-    online.firstNotNullOfOrNull { it.snapshot?.state<CapabilityState.ThermostatState>() }?.let { parts += "${Fmt.celsius(it.current.value)}\u00A0°C inside" }
+    online.firstNotNullOfOrNull { it.snapshot?.state<CapabilityState.ThermostatState>() }?.let { parts += "${Fmt.celsius(it.current.value)}\u00A0°C" }
     online.firstNotNullOfOrNull { it.snapshot?.state<CapabilityState.PrintJobState>()?.takeIf { j -> j.stage == dev.patchbay.core.model.PrintStage.PRINTING } }
-        ?.let { parts += "printing ${Fmt.percent(it.progress.value)}\u00A0%" }
+        ?.let { parts += "print ${Fmt.percent(it.progress.value)}\u00A0%" }
     return parts.joinToString(" · ")
 }
 
