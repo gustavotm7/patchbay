@@ -67,9 +67,9 @@ internal fun homeSummary(devices: List<LiveDevice>): String {
     val online = devices.filter { it.snapshot?.reachability == Reachability.ONLINE }
     val on = online.count { (it.device.kind == DeviceKind.LIGHT || it.device.kind == DeviceKind.PLUG) && it.snapshot?.state<CapabilityState.PowerState>()?.on == true }
     if (on > 0) parts += "$on on"
-    online.firstNotNullOfOrNull { it.snapshot?.state<CapabilityState.ThermostatState>() }?.let { parts += "${Fmt.celsius(it.current.value)} °C inside" }
+    online.firstNotNullOfOrNull { it.snapshot?.state<CapabilityState.ThermostatState>() }?.let { parts += "${Fmt.celsius(it.current.value)}\u00A0°C inside" }
     online.firstNotNullOfOrNull { it.snapshot?.state<CapabilityState.PrintJobState>()?.takeIf { j -> j.stage == dev.patchbay.core.model.PrintStage.PRINTING } }
-        ?.let { parts += "printing ${Fmt.percent(it.progress.value)} %" }
+        ?.let { parts += "printing ${Fmt.percent(it.progress.value)}\u00A0%" }
     return parts.joinToString(" · ")
 }
 
