@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -125,9 +126,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
             }
         } else {
             NeedsAttention(devices, onSelect)
-            ScenesPanel(live)
-            AutomationsPanel(live)
-            AwayPanel(live)
+            SceneStrip(live)
             val tileFor: @Composable (LiveDevice, Modifier) -> Unit = { d, m ->
                 val toggles = tileToggles(d)
                 DeviceTile(
@@ -177,6 +176,58 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
             }
         }
         ManualAddPanel(live)
+    }
+}
+
+/**
+ * Scenes as one row of pills under the header: one tap runs a scene, so the home screen leads with devices instead of setup panels.
+ * Making, deleting and scheduling scenes lives on the Automations screen.
+ */
+@Composable
+private fun SceneStrip(live: LiveHome) {
+    val c = Patchbay.colors
+    val scenes by live.scenes.collectAsState()
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
+    if (scenes.isEmpty()) return
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+        scenes.forEach { sc ->
+            PButton(sc.name, {
+                scope.launch {
+                    message = when (val r = live.runScene(sc.id)) {
+                        is dev.patchbay.core.result.PatchbayResult.Ok -> "${sc.name}: done"
+                        is dev.patchbay.core.result.PatchbayResult.Err -> r.error.message
+                    }
+                }
+            })
+        }
+        PButton("All off", {
+            scope.launch {
+                message = when (val r = live.allOff()) {
+                    is dev.patchbay.core.result.PatchbayResult.Ok -> if (r.value == 0) "Everything is already off" else "Switched off ${r.value}"
+                    is dev.patchbay.core.result.PatchbayResult.Err -> r.error.message
+                }
+            }
+        }, kind = ButtonKind.SECONDARY)
+    }
+    message?.let {
+        VSpace(Space.xs)
+        PText(it, Patchbay.type.caption, c.textSecondary)
+    }
+    VSpace(Space.l)
+}
+
+/** Scenes, schedules and away mode: the things you set up once, kept off the home screen. */
+@Composable
+fun AutomationsScreen(live: LiveHome, modifier: Modifier = Modifier) {
+    val c = Patchbay.colors
+    Column(modifier) {
+        PText("Automations", Patchbay.type.largeTitle)
+        PText("Scenes, schedules and away mode.", Patchbay.type.body, c.textSecondary)
+        VSpace(Space.l)
+        AwayPanel(live)
+        ScenesPanel(live)
+        AutomationsPanel(live)
     }
 }
 
@@ -947,7 +998,7 @@ private fun AutomationsPanel(live: LiveHome) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Legend("Automations")
-                PText("Run a scene at a set time. Only while Patchbay is open or in the tray.", Patchbay.type.caption, c.textSecondary)
+                PText("Run a scene at a set time or at sunrise or sunset. Runs while Patchbay is open, in the tray, or watching in the background (Settings).", Patchbay.type.caption, c.textSecondary)
             }
             if (!creating && scenes.isNotEmpty()) PButton("New", { creating = true; error = null; sceneId = scenes.first().id })
         }

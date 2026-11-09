@@ -51,7 +51,7 @@ import dev.patchbay.ui.designsystem.VFill
 import dev.patchbay.ui.designsystem.VSpace
 
 /** Desktop sections. The demo home is labelled as a demo so it can't be mistaken for your real devices. */
-enum class Section(val label: String) { INVENTORY("Devices"), LEDGER("Activity"), EXPOSURE("Network"), HOME("Demo home"), SETTINGS("Settings") }
+enum class Section(val label: String) { INVENTORY("Devices"), AUTOMATIONS("Automations"), LEDGER("Activity"), EXPOSURE("Network"), HOME("Demo home"), SETTINGS("Settings") }
 
 /** What the right-hand inspector (desktop) or the pushed screen (phone) shows. */
 sealed interface Focus {
@@ -103,6 +103,10 @@ fun DesktopShell(
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.xl)) {
                     if (settings != null) SettingsScreen(settings, Modifier.width(640.dp), live) else PText("Settings aren't available here.", Patchbay.type.body, c.textSecondary)
                 }
+                return@Column
+            }
+            if (section == Section.AUTOMATIONS && live != null) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.xl)) { AutomationsScreen(live, Modifier.width(720.dp)) }
                 return@Column
             }
             if (section == Section.LEDGER && live != null) {
@@ -266,7 +270,7 @@ fun DesktopApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome
     DesktopShell(home, trends, focus, nowLabel, section = section, onFocus = { focus = it }, onSection = { section = it }, live = live, settings = settings)
 }
 
-enum class PhoneTab(val label: String) { DEVICES("Devices"), ACTIVITY("Activity"), NETWORK("Network"), PLAN("Demo"), SETTINGS("Settings") }
+enum class PhoneTab(val label: String) { DEVICES("Devices"), AUTOMATIONS("Automations"), ACTIVITY("Activity"), NETWORK("Network"), PLAN("Demo"), SETTINGS("Settings") }
 
 /** Phone entry point: a bottom tab bar over Devices (tiles), Network (privacy and exposure) and the demo floor plan. */
 @Composable
@@ -281,15 +285,16 @@ fun PhoneApp(home: Home, trends: TrendSource, nowLabel: String, live: LiveHome? 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 PhoneTab.DEVICES -> LiveScreenPhone(live)
+                PhoneTab.AUTOMATIONS -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { AutomationsScreen(live) }
                 PhoneTab.ACTIVITY -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { ActivityScreen(live) }
                 PhoneTab.NETWORK -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) { NetworkScreen(live) }
                 PhoneTab.PLAN -> DemoPhone(home, trends, nowLabel)
                 PhoneTab.SETTINGS -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.l)) {
-                    if (settings != null) SettingsScreen(settings, live = live)
+                    if (settings != null) SettingsScreen(settings, live = live, onOpenDemo = { tab = PhoneTab.PLAN })
                 }
             }
         }
-        BottomBar(tab, if (settings != null) PhoneTab.entries else PhoneTab.entries - PhoneTab.SETTINGS) { tab = it }
+        BottomBar(tab, (if (settings != null) PhoneTab.entries else PhoneTab.entries - PhoneTab.SETTINGS) - PhoneTab.PLAN) { tab = it }
     }
 }
 
@@ -333,6 +338,14 @@ private fun TabIcon(tab: PhoneTab, selected: Boolean, color: androidx.compose.ui
             PhoneTab.NETWORK -> {
                 drawCircle(color, s * 0.42f - sw / 2, style = st)
                 drawCircle(color, s * 0.14f)
+            }
+            PhoneTab.AUTOMATIONS -> {
+                // A ring with a play triangle: "run this".
+                drawCircle(color, s * 0.42f - sw / 2, style = st)
+                val tri = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(s * 0.42f, s * 0.32f); lineTo(s * 0.70f, s * 0.5f); lineTo(s * 0.42f, s * 0.68f); close()
+                }
+                if (selected) drawPath(tri, color) else drawPath(tri, color, style = st)
             }
             PhoneTab.ACTIVITY -> {
                 // A clock: a ring with two hands.

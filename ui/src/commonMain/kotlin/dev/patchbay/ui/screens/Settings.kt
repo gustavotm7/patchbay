@@ -65,7 +65,7 @@ class AppSettings(
 )
 
 @Composable
-fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier, live: dev.patchbay.core.home.LiveHome? = null) {
+fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier, live: dev.patchbay.core.home.LiveHome? = null, onOpenDemo: (() -> Unit)? = null) {
     val c = Patchbay.colors
     Column(modifier) {
         PText("Settings", Patchbay.type.largeTitle)
@@ -96,6 +96,16 @@ fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier, live: dev.patc
                 dev.patchbay.ui.designsystem.PToggle(s.backgroundLabel, s.trayMode, s.onTrayMode)
                 VSpace(Space.xs)
                 PText(s.backgroundNote, Patchbay.type.caption, c.textSecondary)
+            }
+        }
+        if (onOpenDemo != null) {
+            VSpace(Space.m)
+            Panel(Modifier.fillMaxWidth()) {
+                Legend("Demo home")
+                VSpace(Space.xs)
+                PText("A made-up home for trying the layouts. It is not your devices.", Patchbay.type.body, c.textSecondary)
+                VSpace(Space.s)
+                PButton("Open demo home", onOpenDemo)
             }
         }
         VSpace(Space.m)

@@ -35,6 +35,7 @@ import dev.patchbay.ui.screens.AppSettings
 import dev.patchbay.ui.screens.Appearance
 import dev.patchbay.ui.screens.NetworkScreen
 import dev.patchbay.ui.screens.SettingsScreen
+import dev.patchbay.ui.screens.AutomationsScreen
 import dev.patchbay.ui.screens.PhoneApp
 import dev.patchbay.ui.screens.Section
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -202,6 +203,9 @@ class ScreenshotTest {
         }
         shot("settings_desktop_dark", desktop, PatchbayPalettes.Dark, FormFactor.DESKTOP) {
             DesktopShell(home, trends, Focus.RoomFocus(DemoHome.Ids.WORKSHOP), now, section = Section.SETTINGS, live = FakeLiveHome(home), settings = settings)
+        }
+        shot("automations_phone_dark", phoneTall, PatchbayPalettes.Dark, FormFactor.PHONE) {
+            Column(Modifier.fillMaxSize().background(PatchbayPalettes.Dark.background).padding(16.dp)) { AutomationsScreen(FakeLiveHome(home)) }
         }
         shot("activity_phone_dark", phoneTall, PatchbayPalettes.Dark, FormFactor.PHONE) {
             Column(Modifier.fillMaxSize().background(PatchbayPalettes.Dark.background).padding(16.dp)) { ActivityScreen(FakeLiveHome(home)) }
