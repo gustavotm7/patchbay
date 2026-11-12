@@ -20,8 +20,11 @@ class PaletteTest {
         val items = listOf(item("Shelf strip"), item("Floor lamp"), item("Living room lamp"), item("Lamp post"))
         assertEquals(listOf("Lamp post", "Floor lamp", "Living room lamp"), Palette.filter(items, "lamp").map { it.title })
         // letters in order (a typo-friendly match) come after real substrings
-        assertEquals(listOf("Floor lamp", "Shelf strip"), Palette.filter(items, "fl").map { it.title }.take(2))
-        assertTrue(Palette.filter(items, "flm").map { it.title }.contains("Floor lamp"))
+        assertEquals(listOf("Floor lamp"), Palette.filter(items, "fl").map { it.title })
+        assertEquals(listOf("Living room lamp"), Palette.filter(items, "lvg").map { it.title }) // l, v, g in order
+        // a real substring ranks above a letters-in-order match
+        val mixed = listOf(item("lots of amazing pizza"), item("clamp"))
+        assertEquals(listOf("clamp", "lots of amazing pizza"), Palette.filter(mixed, "lamp").map { it.title })
     }
 
     @Test
