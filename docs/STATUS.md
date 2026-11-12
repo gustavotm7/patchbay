@@ -48,12 +48,13 @@ Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bo
 
 ## Get the builds
 
-GitHub → Actions → **ci** → the latest green run on `ci/verification-bootstrap` → Artifacts:
+Latest build: CI run on `0567ae0` (all jobs green). You need to be signed in to GitHub; artifacts are kept about 30 days. If the links have expired, open the latest green `ci` run on `ci/verification-bootstrap` and download from its Artifacts.
 
-- `patchbay-android` → `app-android-debug.apk`. Install directly, or sign the release APK (`docs/RELEASE.md`).
-- `patchbay-windows-msi` → `Patchbay-0.1.0.msi`
+- Windows portable (no install, recommended): https://github.com/gustavotm7/patchbay/actions/runs/43152004291/artifacts/13913693290
+- Android (install `app-android-debug.apk` from inside; ignore the unsigned release one): https://github.com/gustavotm7/patchbay/actions/runs/43152004291/artifacts/13914656295
+- Windows MSI (optional installer): https://github.com/gustavotm7/patchbay/actions/runs/43152004291/artifacts/13913279426
 
-Then run `docs/HARDWARE_TEST.md`. Phase 0 checks, then **Phase 1 — Govee** (G1.1–G1.8).
+Then run `docs/HARDWARE_TEST.md`: app lock, Govee, TV, Bambu, Kasa, then ecobee (E2.x) and the vacuum (V1.x). Older notes, ideas and the Phase 0 report are in `docs/archive/`.
 
 ## Waiting on you: Lefant vacuum
 
@@ -85,7 +86,7 @@ before any command is allowed; see `docs/protocols/tuya.md` and `docs/TUYA_KEYS.
 - The model already has `Capability.CameraStream` and a read-only `Capability.LockStatus`. The demo home
   shows a eufy camera and lock.
 
-## Decisions still waiting on you (from `docs/PHASE0_REPORT.md` §5)
+## Decisions still waiting on you (from `docs/archive/PHASE0_REPORT.md` §5)
 
 Decided 2026-11-05:
 - `applicationId` stays `dev.patchbay`.

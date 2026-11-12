@@ -5,7 +5,7 @@ A local-only, privacy-first home control app for Android and Windows. It discove
 exposure: which devices are local, which depend on a vendor cloud, and what unknown things are on your network.
 
 > Status: **Phase 0 (foundation)**. The apps render a simulated demo home; no real devices yet.
-> See `docs/PHASE0_REPORT.md`.
+> See `docs/archive/PHASE0_REPORT.md`.
 
 - Brief: [`docs/BRIEF.md`](docs/BRIEF.md) · Rules for contributors (human or AI): [`CLAUDE.md`](CLAUDE.md)
 - Decisions: [`docs/adr/`](docs/adr/) · Threat model: [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)
