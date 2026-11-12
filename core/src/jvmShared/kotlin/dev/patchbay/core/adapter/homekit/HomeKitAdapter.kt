@@ -162,6 +162,7 @@ public class HomeKitAdapter(
             removePairing(addr, port, keys) // best effort: don't leave a pairing the user rejected
             return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
         }
+        trustBroken -= id // a fresh pairing is a fresh decision to trust this accessory
         known[id] = Known(addr, port, storedKeys, name)
         return PatchbayResult.Ok(Pairing(id, storedKeys.encode(), fingerprint))
     }
@@ -180,6 +181,7 @@ public class HomeKitAdapter(
         drop(device)
         removePairing(k.address, k.port, keys)
         known.remove(device)
+        trustBroken -= device
     }
 
     private fun mapPairingError(e: HapException): PatchbayError = when (e.kind) {
@@ -218,10 +220,18 @@ public class HomeKitAdapter(
 
     /** Runs [block] on the verified session for [device], connecting (pair-verify + accessory list) first when needed. */
     private suspend fun <T> withLink(device: DeviceId, block: (Link) -> T): PatchbayResult<T> {
+        val first = withLinkOnce(device, block, mayRetry = true)
+        // An idle connection may have been closed by the thermostat since we last used it: reconnect once, so the first tap after a quiet spell works.
+        return first ?: withLinkOnce(device, block, mayRetry = false)!!
+    }
+
+    /** Null means "the reused connection was dead; try again on a fresh one". */
+    private suspend fun <T> withLinkOnce(device: DeviceId, block: (Link) -> T, mayRetry: Boolean): PatchbayResult<T>? {
         val k = known[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown thermostat"))
         val keys = k.keys ?: return PatchbayResult.Err(PatchbayError.Unauthorized("not paired"))
         if (device in trustBroken) return PatchbayResult.Err(PatchbayError.TrustChanged(k.name, "${k.name} presented a different key than the one you paired"))
         return locks.getOrPut(device) { Mutex() }.withLock {
+            val reused = links.containsKey(device)
             try {
                 val link = links[device] ?: when (val c = connectKnown(device, k)) {
                     is PatchbayResult.Err -> return@withLock c
@@ -241,16 +251,22 @@ public class HomeKitAdapter(
                 PatchbayResult.Ok(withContext(Dispatchers.IO) { block(link) })
             } catch (e: HapException) {
                 drop(device)
-                if (e.kind == HapException.Kind.UNTRUSTED_ACCESSORY) {
-                    trustBroken += device
-                    PatchbayResult.Err(PatchbayError.TrustChanged(k.name, e.message ?: "untrusted accessory"))
-                } else {
-                    PatchbayResult.Err(PatchbayError.Unreachable("HomeKit session failed: ${e.message}"))
+                when {
+                    e.kind == HapException.Kind.UNTRUSTED_ACCESSORY -> {
+                        trustBroken += device
+                        PatchbayResult.Err(PatchbayError.TrustChanged(k.name, e.message ?: "untrusted accessory"))
+                    }
+                    e.kind == HapException.Kind.UNAUTHENTICATED ->
+                        PatchbayResult.Err(PatchbayError.Unauthorized("The thermostat no longer recognises Patchbay (it was reset, or removed it). Remove it here and pair again with the setup code."))
+                    e.kind == HapException.Kind.IO && reused && mayRetry -> null
+                    else -> PatchbayResult.Err(PatchbayError.Unreachable("HomeKit session failed: ${e.message}"))
                 }
             } catch (e: java.net.SocketTimeoutException) {
-                drop(device); PatchbayResult.Err(PatchbayError.Timeout("thermostat didn't answer"))
+                drop(device)
+                if (reused && mayRetry) null else PatchbayResult.Err(PatchbayError.Timeout("thermostat didn't answer"))
             } catch (e: IOException) {
-                drop(device); PatchbayResult.Err(PatchbayError.Unreachable("connection failed: ${e.javaClass.simpleName}"))
+                drop(device)
+                if (reused && mayRetry) null else PatchbayResult.Err(PatchbayError.Unreachable("connection failed: ${e.javaClass.simpleName}"))
             }
         }
     }

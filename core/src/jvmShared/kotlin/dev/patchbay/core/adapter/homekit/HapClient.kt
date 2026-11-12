@@ -135,6 +135,7 @@ internal class HapConnection(private val socket: Socket, private val host: Strin
         val isEvent = status.startsWith("EVENT/1.0")
         if (!isEvent && !status.startsWith("HTTP/1.1 ")) throw HapException(HapException.Kind.PROTOCOL, "unexpected reply")
         var length = 0
+        var chunked = false
         var headers = 0
         while (true) {
             val line = readLine()
@@ -146,9 +147,16 @@ internal class HapConnection(private val socket: Socket, private val host: Strin
             val value = line.substring(i + 1).trim()
             when (name) {
                 "content-length" -> length = value.toIntOrNull()?.takeIf { it in 0..MAX_BODY } ?: throw HapException(HapException.Kind.PROTOCOL, "bad content length")
-                "transfer-encoding" -> throw HapException(HapException.Kind.PROTOCOL, "chunked replies are not part of HAP")
+                "transfer-encoding" -> if (value.lowercase() == "chunked") chunked = true else throw HapException(HapException.Kind.PROTOCOL, "unsupported transfer encoding")
             }
         }
+        val body = if (chunked) readChunked() else readExactly(length)
+        if (isEvent) return null
+        val code = status.substring(9).take(3).toIntOrNull() ?: throw HapException(HapException.Kind.PROTOCOL, "bad status")
+        return HapResponse(code, body)
+    }
+
+    private fun readExactly(length: Int): ByteArray {
         val body = ByteArray(length)
         var got = 0
         while (got < length) {
@@ -156,9 +164,24 @@ internal class HapConnection(private val socket: Socket, private val host: Strin
             if (r < 0) throw HapException(HapException.Kind.IO, "connection closed")
             got += r
         }
-        if (isEvent) return null
-        val code = status.substring(9).take(3).toIntOrNull() ?: throw HapException(HapException.Kind.PROTOCOL, "bad status")
-        return HapResponse(code, body)
+        return body
+    }
+
+    /** Some accessories send `Transfer-Encoding: chunked`. Total size stays under [MAX_BODY]; trailers are not accepted. */
+    private fun readChunked(): ByteArray {
+        val out = ByteArrayOutputStream()
+        var chunks = 0
+        while (true) {
+            if (++chunks > 4096) throw HapException(HapException.Kind.PROTOCOL, "too many chunks")
+            val size = readLine().substringBefore(';').trim().toIntOrNull(16)?.takeIf { it >= 0 } ?: throw HapException(HapException.Kind.PROTOCOL, "bad chunk size")
+            if (size == 0) {
+                if (readLine().isNotEmpty()) throw HapException(HapException.Kind.PROTOCOL, "unexpected trailer")
+                return out.toByteArray()
+            }
+            if (out.size() + size > MAX_BODY) throw HapException(HapException.Kind.PROTOCOL, "reply too large")
+            out.write(readExactly(size))
+            if (readLine().isNotEmpty()) throw HapException(HapException.Kind.PROTOCOL, "bad chunk end")
+        }
     }
 
     private fun readLine(): String {
@@ -194,10 +217,14 @@ internal object HapPairing {
 
     private fun hkdf(key: ByteArray, salt: String, info: String) = Hkdf.sha512(key, salt.toByteArray(), info.toByteArray())
 
-    private fun tlvExchange(c: HapConnection, path: String, items: List<Pair<Int, ByteArray>>, expectState: Int): Map<Int, ByteArray> {
+    private fun tlvExchange(c: HapConnection, path: String, items: List<Pair<Int, ByteArray>>, expectState: Int, verifying: Boolean = false): Map<Int, ByteArray> {
         val resp = c.request("POST", path, HapConnection.TLV, Tlv8.encode(items))
         val m = Tlv8.map(resp.body) ?: throw HapException(HapException.Kind.PROTOCOL, "malformed TLV")
-        m[Tlv8.ERROR]?.let { throw errorFor(it.firstOrNull()?.toInt()) }
+        m[Tlv8.ERROR]?.let {
+            val code = it.firstOrNull()?.toInt()
+            // During pair-verify, "authentication failed" means the accessory no longer knows us (it was reset or the pairing removed), not a wrong setup code.
+            throw if (verifying && code == 2) HapException(HapException.Kind.UNAUTHENTICATED, "the thermostat no longer recognises this app") else errorFor(code)
+        }
         if (resp.status != 200) throw HapException(HapException.Kind.REJECTED, "accessory answered HTTP ${resp.status}")
         if (m[Tlv8.STATE]?.singleOrNull()?.toInt() != expectState) throw HapException(HapException.Kind.PROTOCOL, "unexpected pairing state")
         return m
@@ -252,7 +279,7 @@ internal object HapPairing {
     /** Pair-verify M1..M4; on success the connection switches to encrypted frames. */
     fun verify(c: HapConnection, keys: HapPairingKeys, ephemeral: ByteArray = ByteArray(32).also(random::nextBytes)) {
         val myPub = Curve25519.x25519PublicKey(ephemeral)
-        val m2 = tlvExchange(c, "/pair-verify", listOf(Tlv8.STATE to byteArrayOf(1), Tlv8.PUBLIC_KEY to myPub), 2)
+        val m2 = tlvExchange(c, "/pair-verify", listOf(Tlv8.STATE to byteArrayOf(1), Tlv8.PUBLIC_KEY to myPub), 2, verifying = true)
         val accPub = m2[Tlv8.PUBLIC_KEY]?.takeIf { it.size == 32 } ?: throw HapException(HapException.Kind.PROTOCOL, "bad public key")
         val sealed = m2[Tlv8.ENCRYPTED_DATA] ?: throw HapException(HapException.Kind.PROTOCOL, "no encrypted data")
         val shared = Curve25519.x25519(ephemeral, accPub)
@@ -269,7 +296,7 @@ internal object HapPairing {
         val inner = Tlv8.encode(listOf(Tlv8.IDENTIFIER to keys.controllerId.toByteArray(), Tlv8.SIGNATURE to mySig))
         tlvExchange(
             c, "/pair-verify",
-            listOf(Tlv8.STATE to byteArrayOf(3), Tlv8.ENCRYPTED_DATA to Aead.seal(sessionKey, Aead.labelNonce("PV-Msg03"), ByteArray(0), inner)), 4,
+            listOf(Tlv8.STATE to byteArrayOf(3), Tlv8.ENCRYPTED_DATA to Aead.seal(sessionKey, Aead.labelNonce("PV-Msg03"), ByteArray(0), inner)), 4, verifying = true,
         )
         c.switchToEncrypted(
             writeKey = hkdf(shared, "Control-Salt", "Control-Write-Encryption-Key"),

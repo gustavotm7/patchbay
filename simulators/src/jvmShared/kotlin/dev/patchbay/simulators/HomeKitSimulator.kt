@@ -49,6 +49,9 @@ public class HomeKitSimulator(
     @Volatile public var offline: Boolean = false
     @Volatile public var setupCodeAttemptsAllowed: Int = 5
 
+    /** Send every reply with `Transfer-Encoding: chunked` (many real accessories do). */
+    @Volatile public var chunkedReplies: Boolean = false
+
     /** Every write the accessory accepted, as "iid=value". */
     public val writes: MutableList<String> = CopyOnWriteArrayList()
     @Volatile public var unencryptedAccessoryRequests: Int = 0
@@ -78,6 +81,12 @@ public class HomeKitSimulator(
         }
     }
 
+    /** The accessory forgets every controller (a factory reset, or removal from its own menu). */
+    public fun forgetAllControllers() { paired.clear() }
+
+    /** Cuts every open connection, so the next request must pair-verify again. */
+    public fun dropConnections() { sockets.forEach { try { it.close() } catch (_: Exception) {} }; sockets.clear() }
+
     override fun close() { try { server.close() } catch (_: Exception) {}; sockets.forEach { try { it.close() } catch (_: Exception) {} } }
 
     // ---- connection state ----
@@ -97,8 +106,16 @@ public class HomeKitSimulator(
         while (true) {
             val req = readRequest(s) ?: return
             val (status, ctype, body) = route(s, req)
-            val head = "HTTP/1.1 $status\r\nContent-Type: $ctype\r\nContent-Length: ${body.size}\r\n\r\n"
-            writeOut(s, head.toByteArray() + body)
+            if (chunkedReplies) {
+                val head = "HTTP/1.1 $status\r\nContent-Type: $ctype\r\nTransfer-Encoding: chunked\r\n\r\n"
+                val chunks = ByteArrayOutputStream()
+                body.toList().chunked(7).forEach { part -> chunks.write("${part.size.toString(16)}\r\n".toByteArray()); chunks.write(part.toByteArray()); chunks.write("\r\n".toByteArray()) }
+                chunks.write("0\r\n\r\n".toByteArray())
+                writeOut(s, head.toByteArray() + chunks.toByteArray())
+            } else {
+                val head = "HTTP/1.1 $status\r\nContent-Type: $ctype\r\nContent-Length: ${body.size}\r\n\r\n"
+                writeOut(s, head.toByteArray() + body)
+            }
             if (pendingKeys?.first === s) activatePending()
         }
     }

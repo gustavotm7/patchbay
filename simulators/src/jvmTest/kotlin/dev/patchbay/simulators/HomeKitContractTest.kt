@@ -216,4 +216,38 @@ class HomeKitContractTest {
         withTimeout(10_000) { third.observe(p.deviceId).first { it.reachability == Reachability.ONLINE } }
         restarted.close(); third.close()
     }
+
+    @Test
+    fun chunkedRepliesWork(): Unit = runBlocking {
+        thermostat.chunkedReplies = true
+        val id = paired()
+        val snap = snapshot(id)
+        assertEquals(Celsius(19.5), snap.state<CapabilityState.ThermostatState>()!!.current)
+        assertTrue(adapter.command(id, Command.SetHvacMode(HvacMode.COOL)) is PatchbayResult.Ok)
+        assertEquals(2, thermostat.mode)
+    }
+
+    @Test
+    fun aThermostatThatForgotUsSaysToPairAgain(): Unit = runBlocking {
+        val id = paired()
+        snapshot(id)
+        thermostat.forgetAllControllers()
+        thermostat.dropConnections()
+        val e = adapter.command(id, Command.SetHvacMode(HvacMode.OFF)).errorOrNull()
+        assertIs<PatchbayError.Unauthorized>(e)
+        assertTrue("pair again" in e.message)
+        assertFalse("did not accept" in e.message) // not the pairing-time "wrong code" message
+        assertFalse(adapter.trustChanged(id)) // forgotten is not impostor
+    }
+
+    @Test
+    fun removingAFlaggedThermostatClearsTheKeyAlert(): Unit = runBlocking {
+        val id = paired()
+        snapshot(id)
+        adapter.restore(id, other.address, null)
+        withTimeout(10_000) { adapter.observe(id).first { it.reachability != Reachability.ONLINE } }
+        assertTrue(adapter.trustChanged(id))
+        adapter.unpair(id)
+        assertFalse(adapter.trustChanged(id))
+    }
 }
