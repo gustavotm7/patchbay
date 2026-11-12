@@ -42,6 +42,7 @@ import dev.patchbay.core.model.DeviceId
 import dev.patchbay.core.model.DeviceKind
 import dev.patchbay.core.model.Reachability
 import dev.patchbay.ui.designsystem.ButtonKind
+import dev.patchbay.ui.designsystem.animatedColor
 import dev.patchbay.ui.designsystem.DeviceGlyph
 import dev.patchbay.ui.designsystem.Fmt
 import dev.patchbay.ui.designsystem.HSpace
@@ -62,6 +63,55 @@ import dev.patchbay.ui.designsystem.VSpace
 import kotlinx.coroutines.launch
 
 // The home screen: header and summary, needs-attention list, scene pills, device tiles by room, and the phone/desktop list-and-detail layouts.
+
+/**
+ * What a new user sees before anything is found: three numbered steps that tick off as they happen, and what to have ready for the
+ * systems that need something first. Nothing here is a wall of text: one primary action (Scan), then plain next steps.
+ */
+@Composable
+internal fun FirstRunPanel(scan: ScanState, scanning: Boolean, onScan: () -> Unit) {
+    val c = Patchbay.colors
+    val scanned = scan == ScanState.DONE
+    Panel(Modifier.fillMaxWidth()) {
+        PText(if (scanned) "Nothing answered yet" else "Let's find your devices", Patchbay.type.title)
+        VSpace(Space.xs)
+        PText(
+            if (scanned) "That is common the first time. Check the notes below, then scan again."
+            else "Patchbay looks for devices on this Wi-Fi. Nothing leaves your home network.",
+            Patchbay.type.body, c.textSecondary,
+        )
+        VSpace(Space.m)
+        FirstRunStep(1, "Scan your network", "Lights, TVs, plugs, thermostats and printers announce themselves.", done = scanned)
+        FirstRunStep(2, "Pair what needs it", "Some devices show “Tap to pair”: a code, a button press or an access code, once.", done = false)
+        FirstRunStep(3, "Add the quiet ones by address", "Cameras, Tuya bulbs and vacuums don't announce themselves. Use “Add by address” below.", done = false)
+        VSpace(Space.m)
+        PButton(if (scanning) "Scanning…" else if (scanned) "Scan again" else "Scan now", onScan, kind = ButtonKind.PRIMARY, enabled = !scanning, busy = scanning)
+        if (scanned) {
+            VSpace(Space.m)
+            Legend("Have these ready")
+            VSpace(Space.xs)
+            PText("Govee: “LAN Control” switched on in the Govee app.", Patchbay.type.caption, c.textSecondary)
+            PText("ecobee: removed from Apple Home first; its setup code at hand.", Patchbay.type.caption, c.textSecondary)
+            PText("TVs: switched on, on the same Wi-Fi (not a guest network).", Patchbay.type.caption, c.textSecondary)
+        }
+    }
+}
+
+@Composable
+private fun FirstRunStep(number: Int, title: String, detail: String, done: Boolean) {
+    val c = Patchbay.colors
+    Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), verticalAlignment = Alignment.Top) {
+        Box(
+            Modifier.size(28.dp).background(animatedColor(if (done) c.active else c.raised), Shapes.pill),
+            contentAlignment = Alignment.Center,
+        ) { PText(if (done) "✓" else "$number", Patchbay.type.bodyStrong, if (done) c.onSignal else c.textSecondary) }
+        HSpace(Space.m)
+        Column(Modifier.weight(1f)) {
+            PText(title, Patchbay.type.bodyStrong)
+            PText(detail, Patchbay.type.caption, c.textSecondary)
+        }
+    }
+}
 
 /** One glanceable line under the title: how many devices, what is on, the temperature, a print in progress. */
 internal fun homeSummary(devices: List<LiveDevice>): String {
@@ -127,18 +177,7 @@ fun LiveDeviceList(live: LiveHome, selected: DeviceId?, onSelect: (DeviceId) -> 
         PairingPanel(pairing)
         if (pairing.step != null) VSpace(Space.m)
         if (devices.isEmpty()) {
-            Panel(Modifier.fillMaxWidth()) {
-                PText(
-                    if (scan == ScanState.DONE) "Nothing answered" else "No devices yet",
-                    Patchbay.type.title,
-                )
-                VSpace(Space.xs)
-                PText(
-                    if (scan == ScanState.DONE) "Govee lights need “LAN Control” switched on in the Govee app. Cameras, Tuya bulbs and printers can also be added by address below."
-                    else "Tap Scan to look for devices on your Wi-Fi.",
-                    Patchbay.type.body, c.textSecondary,
-                )
-            }
+            FirstRunPanel(scan, scanning = scan == ScanState.SCANNING) { scope.launch { live.scan() } }
         } else {
             NeedsAttention(devices, onSelect)
             SceneStrip(live)
