@@ -8,8 +8,8 @@ Patchbay is a local-only home control app (Android + Windows). Nothing in it tal
 4. **If something fails:** `docs/TROUBLESHOOTING.md`, then send me the step number from HARDWARE_TEST and what you saw.
 5. **Continuing in a new session:** `docs/HANDOFF.md`.
 
-## Known gaps against the written rules (decisions wanted)
+## Decisions taken (2026-11-12)
 
-- `CLAUDE.md` says parsers are fuzzed with Jazzer. Today they have random-mutation unit tests (25 000 inputs each) but no Jazzer. Either add Jazzer (a test-only dependency) or reword the rule.
-- `CLAUDE.md` says Windows Hello or PIN. Only the PIN exists.
-- Unit-tested but never run on a real device: every adapter, the Android service, the animations.
+- Parsers are mutation-tested (tens of thousands of random and damaged inputs each); Jazzer is a possible later addition. `CLAUDE.md` now says so.
+- The Windows app lock is a PIN; Windows Hello is a possible later addition. `CLAUDE.md` now says so.
+- Still true: every adapter, the Android service and the animations are unit-tested but have never run on a real device.

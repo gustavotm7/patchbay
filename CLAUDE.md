@@ -21,7 +21,7 @@ Full brief: `docs/BRIEF.md`. Decisions: `docs/adr/`. Threat model: `docs/THREAT_
 5. **Explicit device trust.** TOFU + certificate/key pinning. Show the fingerprint at pairing, store it,
    and alert loudly if it changes. Never use trust-all managers or bypass hostname verification
    (CI grep enforces this).
-6. **App lock.** Biometric/PIN on Android, Windows Hello/PIN on Windows. Configurable auto-lock.
+6. **App lock.** Biometric/PIN on Android, a PIN on Windows (Windows Hello is a possible later addition). Configurable auto-lock.
    Codes are masked; Android secret screens use `FLAG_SECURE`.
 7. **Logs are local and redacted.** No secrets, tokens, access codes or full serials. Export only on
    explicit user action.
@@ -47,7 +47,7 @@ user-owned WireGuard), **anything that controls the Kidde smoke/CO alarm**, prin
 - **Kotlin style.** Coroutines + Flow. Explicit error types (`PatchbayResult`/sealed errors) — never swallow
   exceptions. `kotlinx.serialization`. Manual constructor DI (ADR 0001) — no DI framework.
 - **Untrusted input.** Treat everything a device sends as hostile. Parsers are strict, size-bounded and
-  fuzzed (Jazzer).
+  mutation-tested (random and damaged inputs, tens of thousands per parser). Jazzer coverage-guided fuzzing is a possible later addition.
 - **Tests.** Unit tests for core logic. Contract tests for every adapter against its simulator. A fuzz test
   for every parser. Screenshot tests for UI (`ui` desktopTest → `docs/design/screens/`).
   A phase is done only when CI is green.
