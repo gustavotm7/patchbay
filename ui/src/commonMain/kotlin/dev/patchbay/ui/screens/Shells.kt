@@ -1,6 +1,16 @@
 package dev.patchbay.ui.screens
 
 import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,8 +91,20 @@ fun DesktopShell(
         is Focus.RoomFocus -> focus.room
         is Focus.DeviceFocus -> home.device(focus.device)?.roomId
     }
-    Row(modifier.fillMaxSize().background(c.background)) {
-        NavRail(home, section, if (live != null) Section.entries else listOf(Section.HOME, Section.SETTINGS), onSection)
+    var barOpen by remember { mutableStateOf(false) }
+    var liveSelected by remember { mutableStateOf<DeviceId?>(null) }
+    val rootFocus = remember { FocusRequester() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(barOpen) { if (!barOpen) rootFocus.requestFocus() }
+    Box(
+        modifier.fillMaxSize().background(c.background)
+            .focusRequester(rootFocus).focusable()
+            .onPreviewKeyEvent { e ->
+                if (live != null && e.type == KeyEventType.KeyDown && e.isCtrlPressed && e.key == Key.K) { barOpen = !barOpen; true } else false
+            },
+    ) {
+    Row(Modifier.fillMaxSize()) {
+        NavRail(home, section, if (live != null) Section.entries else listOf(Section.HOME, Section.SETTINGS), onSection, onCommandBar = if (live != null) ({ barOpen = true }) else null)
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = Space.xl), verticalAlignment = Alignment.CenterVertically) {
                 PText(section.label, Patchbay.type.title)
@@ -96,7 +118,7 @@ fun DesktopShell(
                 PText(nowLabel, Patchbay.type.valueS, c.textSecondary)
             }
             if (section == Section.INVENTORY && live != null) {
-                LiveScreenDesktop(live)
+                LiveScreenDesktop(live, externalSelected = liveSelected, onExternalSelect = { liveSelected = it })
                 return@Column
             }
             if (section == Section.SETTINGS) {
@@ -132,10 +154,35 @@ fun DesktopShell(
             }
         }
     }
+    if (barOpen && live != null) {
+        CommandBar(paletteItems(live, scope, onOpenDevice = { id -> liveSelected = id; onSection(Section.INVENTORY) }, onSection = onSection)) { barOpen = false }
+    }
+    }
+}
+
+/** Everything the command bar offers: screens, scenes, "all off", and every device (open it; lights and plugs can also be switched). */
+private fun paletteItems(
+    live: LiveHome,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onOpenDevice: (DeviceId) -> Unit,
+    onSection: (Section) -> Unit,
+): List<PaletteItem> = buildList {
+    live.scenes.value.forEach { sc -> add(PaletteItem("Run scene: ${sc.name}", "scene") { scope.launch { live.runScene(sc.id) } }) }
+    add(PaletteItem("Switch everything off", "lights and plugs") { scope.launch { live.allOff() } })
+    live.devices.value.forEach { d ->
+        add(PaletteItem(d.device.name, "open") { onOpenDevice(d.device.id) })
+        if (tileToggles(d)) {
+            val on = d.snapshot?.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on == true
+            add(PaletteItem((if (on) "Turn off " else "Turn on ") + d.device.name, if (on) "off" else "on") {
+                scope.launch { live.send(d.device.id, dev.patchbay.core.model.Command.SetPower(!on)) }
+            })
+        }
+    }
+    Section.entries.forEach { sec -> add(PaletteItem("Go to ${sec.label}", "screen") { onSection(sec) }) }
 }
 
 @Composable
-private fun NavRail(home: Home, section: Section, sections: List<Section>, onSection: (Section) -> Unit) {
+private fun NavRail(home: Home, section: Section, sections: List<Section>, onSection: (Section) -> Unit, onCommandBar: (() -> Unit)? = null) {
     val c = Patchbay.colors
     Column(Modifier.width(220.dp).fillMaxHeight().background(c.surface).padding(vertical = Space.l, horizontal = Space.m)) {
         Column(Modifier.padding(horizontal = Space.m)) {
@@ -167,7 +214,10 @@ private fun NavRail(home: Home, section: Section, sections: List<Section>, onSec
             }
             PText("0 internet connections", Patchbay.type.caption, c.textTertiary)
             VSpace(Space.m)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.clip(Shapes.control).then(if (onCommandBar != null) Modifier.clickable(role = Role.Button, onClickLabel = "Open the command bar") { onCommandBar() } else Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 PText("Ctrl K", Patchbay.type.mono, c.text)
                 HSpace(Space.s)
                 PText("Command bar", Patchbay.type.caption, c.textSecondary)

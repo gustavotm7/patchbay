@@ -376,11 +376,19 @@ fun LiveScreenPhone(live: LiveHome, modifier: Modifier = Modifier) {
 
 /** Desktop: list and detail side by side. */
 @Composable
-fun LiveScreenDesktop(live: LiveHome, modifier: Modifier = Modifier) {
-    var selected by remember { mutableStateOf<DeviceId?>(null) }
+fun LiveScreenDesktop(
+    live: LiveHome,
+    modifier: Modifier = Modifier,
+    /** Pass both to let the caller (the command bar) choose the open device; leave them out and the screen keeps its own selection. */
+    externalSelected: DeviceId? = null,
+    onExternalSelect: ((DeviceId?) -> Unit)? = null,
+) {
+    var local by remember { mutableStateOf<DeviceId?>(null) }
+    val selected = if (onExternalSelect != null) externalSelected else local
+    val select: (DeviceId?) -> Unit = { if (onExternalSelect != null) onExternalSelect(it) else local = it }
     Row(modifier.fillMaxSize().padding(Space.xl)) {
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-            LiveDeviceList(live, selected, { selected = it })
+            LiveDeviceList(live, selected, { select(it) })
         }
         HSpace(Space.xl)
         Box(Modifier.width(408.dp).fillMaxHeight()) {
