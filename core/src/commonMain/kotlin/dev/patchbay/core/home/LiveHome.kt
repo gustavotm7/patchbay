@@ -93,6 +93,10 @@ public interface LiveHome {
         name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String? = null, offsetMinutes: Int = 0,
     ): PatchbayResult<Unit>
 
+    /** The daily window when alerts stay silent, or null for none. */
+    public val quietHours: StateFlow<QuietHours?>
+    public suspend fun setQuietHours(quiet: QuietHours?)
+
     /** The home location the owner typed (for sunrise and sunset), or null. */
     public val location: StateFlow<HomeLocation?>
 

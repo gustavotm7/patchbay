@@ -129,4 +129,27 @@ class SunNameAndNotifyTest {
         assertEquals(1, got.size) // same hour: no second notification
         job.cancel(); s.close(); lamp.close()
     }
+
+    @Test
+    fun quietHoursSilenceAlertsButNotTheActivityLog(): Unit = runBlocking {
+        val db = File(Files.createTempDirectory("pbquiet").toFile(), "q.db")
+        val lamp = GoveeSimulator("127.0.0.12", "1F:80:C5:32:32:36:72:4E", "H6076", replyPort = 0)
+        val now = Instant.parse("2026-11-02T23:30:00Z").toEpochMilli() // 23:30 in London (GMT)
+        val s = open(db, lamp, london) { now }; ready(s)
+        s.home.setQuietHours(dev.patchbay.core.home.QuietHours(22 * 60, 7 * 60))
+        val got = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val job = CoroutineScope(Dispatchers.IO).launch { s.home.notifications.collect { got += it } }
+        delay(200)
+        lamp.offline = true
+        withTimeout(10_000) { while (s.home.activity.value.none { it.event.contains("offline", ignoreCase = true) }) delay(50) }
+        delay(500)
+        assertTrue(got.isEmpty(), "no alert during quiet hours: $got")
+        job.cancel(); s.close(); lamp.close()
+
+        // The setting survives a restart.
+        val lamp2 = GoveeSimulator("127.0.0.12", "1F:80:C5:32:32:36:72:4E", "H6076", replyPort = 0)
+        val s2 = open(db, lamp2, london) { now }
+        assertEquals(dev.patchbay.core.home.QuietHours(22 * 60, 7 * 60), s2.home.quietHours.value)
+        s2.close(); lamp2.close()
+    }
 }

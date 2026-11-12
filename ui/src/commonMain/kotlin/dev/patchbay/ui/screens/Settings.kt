@@ -78,6 +78,7 @@ fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier, live: dev.patc
             PText("System follows your device. Night is a warm, very dim theme for a dark bedroom.", Patchbay.type.caption, c.textSecondary)
         }
         if (live != null) HomeLocationPanel(live)
+        if (live != null) QuietHoursPanel(live)
         if (s.onLockNow != null) {
             VSpace(Space.m)
             Panel(Modifier.fillMaxWidth()) {
@@ -174,6 +175,49 @@ private fun HomeLocationPanel(live: dev.patchbay.core.home.LiveHome) {
             if (la == null || lo == null) error = "Enter numbers, for example 51.5 and -0.12"
             else scope.launch { error = (live.setLocation(la, lo) as? dev.patchbay.core.result.PatchbayResult.Err)?.error?.message }
         })
+    }
+}
+
+/** Alerts (offline, print finished) stay silent between two times; a changed device key still gets through. */
+@Composable
+private fun QuietHoursPanel(live: dev.patchbay.core.home.LiveHome) {
+    val c = Patchbay.colors
+    val quiet by live.quietHours.collectAsState()
+    val scope = rememberCoroutineScope()
+    var from by remember(quiet) { mutableStateOf(quiet?.text()?.substringBefore('-') ?: "22:00") }
+    var to by remember(quiet) { mutableStateOf(quiet?.text()?.substringAfter('-') ?: "07:00") }
+    var error by remember { mutableStateOf<String?>(null) }
+    VSpace(Space.m)
+    Panel(Modifier.fillMaxWidth()) {
+        dev.patchbay.ui.designsystem.PToggle(
+            "Quiet hours", quiet != null,
+            { on -> scope.launch { live.setQuietHours(if (on) dev.patchbay.core.home.QuietHours.parse("$from-$to") ?: dev.patchbay.core.home.QuietHours(22 * 60, 7 * 60) else null) } },
+        )
+        VSpace(Space.xs)
+        PText("No alerts for a device that stops answering or a print that finishes. A changed security key still alerts, and everything is still in Activity.", Patchbay.type.caption, c.textSecondary)
+        if (quiet != null) {
+            VSpace(Space.s)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                for ((label, value, set) in listOf(Triple("From", from, { v: String -> from = v }), Triple("Until", to, { v: String -> to = v }))) {
+                    Column(Modifier.weight(1f)) {
+                        PText(label, Patchbay.type.bodyStrong)
+                        VSpace(Space.xs)
+                        BasicTextField(
+                            value = value, onValueChange = { v -> set(v.filter { it.isDigit() || it == ':' }.take(5)) }, singleLine = true,
+                            textStyle = Patchbay.type.valueM.copy(color = c.text),
+                            modifier = Modifier.fillMaxWidth().androidx_border(c),
+                        )
+                    }
+                }
+            }
+            error?.let { VSpace(Space.xs); PText(it, Patchbay.type.caption, c.alarm) }
+            VSpace(Space.s)
+            PButton("Save times", {
+                val q = dev.patchbay.core.home.QuietHours.parse("$from-$to")
+                if (q == null) error = "Use 24-hour times like 22:00 and 07:00, and make them different"
+                else { error = null; scope.launch { live.setQuietHours(q) } }
+            })
+        }
     }
 }
 

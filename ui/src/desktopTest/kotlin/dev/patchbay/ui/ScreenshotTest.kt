@@ -142,6 +142,8 @@ class ScreenshotTest {
             ),
         )
         override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+        override val quietHours: StateFlow<dev.patchbay.core.home.QuietHours?> = MutableStateFlow(dev.patchbay.core.home.QuietHours(22 * 60, 7 * 60))
+        override suspend fun setQuietHours(quiet: dev.patchbay.core.home.QuietHours?) {}
         override val location: StateFlow<dev.patchbay.core.home.HomeLocation?> = MutableStateFlow(dev.patchbay.core.home.HomeLocation(51.5, -0.12))
         override suspend fun setLocation(latitude: Double, longitude: Double): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
         override val favourites: StateFlow<Set<DeviceId>> = MutableStateFlow(setOf(DemoHome.Ids.FLOOR_LAMP, DemoHome.Ids.PRINTER))

@@ -333,3 +333,14 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | V1.1 | Get the vacuum's local key (`docs/TUYA_KEYS.md`); Network → Add by address → Tuya → "Robot vacuum or other (read-only…)" → its IP and device ID | A tile appears, "Tap to pair" |
 | V1.2 | Pair with the local key | The page lists "DP 1 = …" style rows. If it says "wasn't a protocol 3.3 message", tell me: it is 3.4/3.5 |
 | V1.3 | Copy data points while it is docked, again while it cleans, again while paused | Send me the three lists. Nothing is ever sent to the vacuum |
+
+## Phase 2 — Command bar and quiet hours
+
+| # | Step | Expected |
+|---|---|---|
+| Q1.1 | Windows: press Ctrl+K (or click "Ctrl K" at the bottom of the rail) | A search box opens over the app |
+| Q1.2 | Type part of a device name, Down, Enter | The device page opens |
+| Q1.3 | Type "turn" and choose "Turn on <a lamp>" | The lamp switches |
+| Q1.4 | Type the name of a scene and Enter | The scene runs. Esc closes the bar without doing anything |
+| Q2.1 | Settings → Quiet hours on, set it to include the current time, then switch a Kasa plug off at the wall | No alert appears; the Activity list still shows it went offline |
+| Q2.2 | Set quiet hours to a window that does not include now and repeat | The alert appears |

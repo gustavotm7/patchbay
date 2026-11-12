@@ -71,6 +71,8 @@ public class LanHome(
     private val _favourites = MutableStateFlow<Set<DeviceId>>(emptySet())
     private val _notifications = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
     private val lastNotified = ConcurrentHashMap<String, Long>()
+    private val _quiet = MutableStateFlow<QuietHours?>(null)
+    override val quietHours: StateFlow<QuietHours?> = _quiet.asStateFlow()
     private val printStartedAt = ConcurrentHashMap<DeviceId, Long>()
     private val nextFlip = ConcurrentHashMap<DeviceId, Long>()
     @Volatile private var simOffDay = -1L
@@ -341,6 +343,7 @@ public class LanHome(
     override val notifications: kotlinx.coroutines.flow.Flow<String> = _notifications
 
     private fun loadLocationAndFavourites() {
+        store?.setting("quiet")?.let { _quiet.value = QuietHours.parse(it) }
         store?.setting("location")?.let { raw ->
             _location.value = try { sceneJson.decodeFromString<StoredLocation>(raw).let { HomeLocation(it.lat, it.lon) } } catch (e: Exception) { null }
         }
@@ -375,9 +378,24 @@ public class LanHome(
         return PatchbayResult.Ok(Unit)
     }
 
-    /** At most one notification per device and kind per hour, so a flapping device can't spam. */
-    private fun notify(key: String, message: String, windowMs: Long = 3_600_000) {
+    override suspend fun setQuietHours(quiet: QuietHours?) {
+        _quiet.value = quiet
+        store?.putSetting("quiet", quiet?.text() ?: "")
+    }
+
+    /**
+     * At most one notification per device and kind per hour, so a flapping device can't spam. Outside [urgent] alerts, nothing is sent during quiet
+     * hours (it is still in Activity).
+     */
+    private fun notify(key: String, message: String, windowMs: Long = 3_600_000, urgent: Boolean = false) {
         val now = clock()
+        if (!urgent) {
+            val q = _quiet.value
+            if (q != null) {
+                val t = java.time.Instant.ofEpochMilli(now).atZone(zone)
+                if (q.contains(t.hour * 60 + t.minute)) return
+            }
+        }
         val last = lastNotified[key]
         if (last != null && now - last < windowMs) return
         lastNotified[key] = now
@@ -700,7 +718,7 @@ public class LanHome(
         if (trust && trustAlerted.add(snap.deviceId)) {
             record(live.device.name, "Presented a different security key than the one you paired (stopped talking to it)")
             report("${live.device.name} presented a different security key than the one you paired. Open it for details.")
-            notify("trust-${snap.deviceId.value}", "${live.device.name} presented a different security key than the one you paired.")
+            notify("trust-${snap.deviceId.value}", "${live.device.name} presented a different security key than the one you paired.", urgent = true)
         } else if (!trust) {
             trustAlerted.remove(snap.deviceId)
         }
