@@ -344,3 +344,11 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | Q1.4 | Type the name of a scene and Enter | The scene runs. Esc closes the bar without doing anything |
 | Q2.1 | Settings → Quiet hours on, set it to include the current time, then switch a Kasa plug off at the wall | No alert appears; the Activity list still shows it went offline |
 | Q2.2 | Set quiet hours to a window that does not include now and repeat | The alert appears |
+
+## Phase 2 — History graphs
+
+| # | Step | Expected |
+|---|---|---|
+| H1.1 | Leave Patchbay open (or watching in the background) for an hour, then open the thermostat | A small graph appears beside the indoor temperature (and humidity) once there are two samples, taken at most every 5 minutes |
+| H1.2 | Restart Patchbay | The graph is still there (it is saved encrypted with the rest of your data) |
+| H1.3 | Open the Bambu printer during a print | Nozzle, bed and chamber show graphs that rise as it heats |

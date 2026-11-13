@@ -93,6 +93,9 @@ public interface LiveHome {
         name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String? = null, offsetMinutes: Int = 0,
     ): PatchbayResult<Unit>
 
+    /** Recent history for the little graphs (a day of temperature, humidity and printer heat). */
+    public val trends: dev.patchbay.core.model.TrendSource
+
     /** The daily window when alerts stay silent, or null for none. */
     public val quietHours: StateFlow<QuietHours?>
     public suspend fun setQuietHours(quiet: QuietHours?)

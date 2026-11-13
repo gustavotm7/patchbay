@@ -40,3 +40,6 @@ internal data class StoredAway(val active: Boolean, val simulate: List<String>)
 
 @Serializable
 internal data class StoredLocation(val lat: Double, val lon: Double)
+
+@Serializable
+internal data class StoredTrend(val d: String, val m: String, val t: List<Long>, val v: List<Double>)

@@ -104,7 +104,7 @@ internal fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = M
             }
         } else {
             PrinterPanel(
-                d.device, snap, dev.patchbay.core.model.TrendSource { _, _ -> null }, roomName = null, modifier = modifier,
+                d.device, snap, live.trends, roomName = null, modifier = modifier,
                 onPrintAction = { send(dev.patchbay.core.model.Command.ControlPrint(it)) },
                 onLight = { send(dev.patchbay.core.model.Command.SetAuxLight("Chamber light", it)) },
             )
@@ -148,7 +148,7 @@ internal fun LiveDetailBody(live: LiveHome, id: DeviceId, modifier: Modifier = M
                 }
             } else {
                 ThermostatPanel(
-                    d.device, snap, dev.patchbay.core.model.TrendSource { _, _ -> null }, roomName = null,
+                    d.device, snap, live.trends, roomName = null,
                     onMode = { send(dev.patchbay.core.model.Command.SetHvacMode(it)) },
                     onSetpoints = SetpointListener { h, k -> send(dev.patchbay.core.model.Command.SetSetpoints(h, k)) },
                 )

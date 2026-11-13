@@ -71,6 +71,9 @@ public class LanHome(
     private val _favourites = MutableStateFlow<Set<DeviceId>>(emptySet())
     private val _notifications = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
     private val lastNotified = ConcurrentHashMap<String, Long>()
+    private val recorder = TrendRecorder()
+    @Volatile private var trendsSavedAt = 0L
+    override val trends: dev.patchbay.core.model.TrendSource = dev.patchbay.core.model.TrendSource { device, metric -> recorder.trend(device, metric, clock()) }
     private val _quiet = MutableStateFlow<QuietHours?>(null)
     override val quietHours: StateFlow<QuietHours?> = _quiet.asStateFlow()
     private val printStartedAt = ConcurrentHashMap<DeviceId, Long>()
@@ -132,6 +135,7 @@ public class LanHome(
         val name = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return
         observers.remove(device)?.cancel()
         try { owners[device]?.unpair(device) } catch (e: Exception) { log?.warn("home", "could not ask a device to forget us: ${e.javaClass.simpleName}") }
+        recorder.forget(device)
         owners.remove(device); pendingPairing.remove(device); lastSummary.remove(device); trustAlerted.remove(device)
         synchronized(this) {
             _devices.update { list -> list.filterNot { it.device.id == device } }
@@ -344,6 +348,9 @@ public class LanHome(
 
     private fun loadLocationAndFavourites() {
         store?.setting("quiet")?.let { _quiet.value = QuietHours.parse(it) }
+        store?.setting("trends")?.let { raw ->
+            try { recorder.import(sceneJson.decodeFromString<List<StoredTrend>>(raw).map { TrendRecorder.Exported(it.d, it.m, it.t, it.v) }) } catch (e: Exception) { /* a damaged history is dropped, never fatal */ }
+        }
         store?.setting("location")?.let { raw ->
             _location.value = try { sceneJson.decodeFromString<StoredLocation>(raw).let { HomeLocation(it.lat, it.lon) } } catch (e: Exception) { null }
         }
@@ -714,6 +721,7 @@ public class LanHome(
                 )
             }
         }
+        if (snap.reachability == dev.patchbay.core.model.Reachability.ONLINE) recordTrends(snap)
         val live = _devices.value.firstOrNull { it.device.id == snap.deviceId } ?: return
         if (trust && trustAlerted.add(snap.deviceId)) {
             record(live.device.name, "Presented a different security key than the one you paired (stopped talking to it)")
@@ -737,6 +745,23 @@ public class LanHome(
         if (now.stage != dev.patchbay.core.model.PrintStage.PRINTING && now.stage != dev.patchbay.core.model.PrintStage.PAUSED && now.stage != dev.patchbay.core.model.PrintStage.PREPARING) printStartedAt.remove(snap.deviceId)
         if (before != null && before.reach != dev.patchbay.core.model.Reachability.OFFLINE && now.reach == dev.patchbay.core.model.Reachability.OFFLINE) {
             notify("offline-${snap.deviceId.value}", "${live.device.name} stopped answering.")
+        }
+    }
+
+    private fun recordTrends(snap: DeviceSnapshot) {
+        val now = clock()
+        val id = snap.deviceId
+        snap.state<dev.patchbay.core.model.CapabilityState.ThermostatState>()?.let { recorder.record(id, dev.patchbay.core.model.Metric.INDOOR_TEMPERATURE, it.current.value, now) }
+        snap.state<dev.patchbay.core.model.CapabilityState.HumidityReading>()?.let { recorder.record(id, dev.patchbay.core.model.Metric.HUMIDITY, it.relative.value, now) }
+        snap.state<dev.patchbay.core.model.CapabilityState.PrinterThermalsState>()?.let { t ->
+            t.nozzles.getOrNull(0)?.let { recorder.record(id, dev.patchbay.core.model.Metric.NOZZLE_1, it.current.value, now) }
+            t.nozzles.getOrNull(1)?.let { recorder.record(id, dev.patchbay.core.model.Metric.NOZZLE_2, it.current.value, now) }
+            recorder.record(id, dev.patchbay.core.model.Metric.BED, t.bed.current.value, now)
+            t.chamber?.let { recorder.record(id, dev.patchbay.core.model.Metric.CHAMBER, it.current.value, now) }
+        }
+        if (now - trendsSavedAt > 10 * 60_000) {
+            trendsSavedAt = now
+            store?.putSetting("trends", sceneJson.encodeToString(recorder.export().map { StoredTrend(it.device, it.metric, it.times, it.values) }))
         }
     }
 
