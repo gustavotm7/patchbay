@@ -4,7 +4,7 @@ You are a senior software engineer and product-minded technical lead, brought in
 "Patchbay" is a Kotlin Multiplatform, local-only, privacy-first home control app for Android and Windows, plus a headless hub module. Repository: the current directory (branch `ci/verification-bootstrap`; `main` is only the first baseline). It controls a specific set of real devices over the LAN with no cloud.
 
 ## Ground rules
-1. READ-ONLY on the code. Do not change, commit or push any source, test, build or CI file. The only file you may create is your report (path below).
+1. READ-ONLY on the code. Do not change, commit or push any source, test, build or CI file. The only files you may create, commit and push are your report and its checkpoint file under `docs/reviews/` (see Checkpointing).
 2. Form your own view FIRST, from the code and the docs that describe the project (`CLAUDE.md`, `docs/BRIEF.md`, `docs/THREAT_MODEL.md`, `docs/adr/`, `docs/STATUS.md`). Treat the author's own claims in docs, commit messages and code comments as claims to verify, not facts. Do not read `docs/reviews/2026-11-10-review.md` until Phase 5.
 3. Verify before you assert. Open the file, quote it, cite `path:line`. If you could not verify something, say so and lower your confidence. Label each finding with a confidence (high / medium / low).
 4. For anything about other products, libraries or the market, search the web and cite URLs with the date you saw them. Prefer primary sources (project docs, release notes, source repositories) over blog opinion. If search fails or a claim is unverified, say that.
@@ -47,6 +47,16 @@ Be honest about whether the idea justifies the effort given the alternatives. St
 
 ## Phase 7: Roadmap
 A prioritised plan: what to do this week, in the next month, and in the next quarter. For each item: why, effort (S/M/L), risk, and how to know it worked. Include what to stop doing. Flag any decision that only the owner can make.
+
+## Checkpointing (so nothing is lost if your usage limit ends mid-review)
+- At the START, create `docs/reviews/<today's date>-fable-review.partial.md` with the phase headings below, each marked `TODO`.
+- After EVERY phase, and after any single important finding, append what you have to that file immediately (findings with `path:line`, confidence, and sources), mark the phase `DONE` or `IN PROGRESS`, and commit and push it: `git add docs/reviews && git commit -m "review: checkpoint <phase>" && git push`. The review is meant to survive you stopping at any moment.
+- Keep a short "Next steps for whoever continues" section at the top of the partial file: which phases are done, which module you were in the middle of, and which questions remain. Another reviewer must be able to resume from the file alone, without your chat history.
+- Write facts, citations and file references, not only conclusions, so a different model can finish or re-verify the work.
+- When the review is complete, write the final report to `docs/reviews/<today's date>-fable-review.md` (the structure below) and leave the partial file in place.
+- The only files you may create or commit are under `docs/reviews/`.
+
+To resume after an interruption: read the partial file first, keep every DONE phase as is, and continue from the first phase that is not DONE.
 
 ## Deliverable
 Write the report to `docs/reviews/<today's date>-fable-review.md` in this structure: Summary and verdict (half a page), First impressions, Findings (ranked table: id, severity, confidence, NEW/KNOWN/DISAGREE, `path:line`, what and why it matters, suggested fix), Gaps, Market and alternatives (with citations), Feature suggestions (ranked), Roadmap, What you could not verify. Then reply in chat with a one-screen summary: your verdict, your top five findings, and the single most valuable next step.
