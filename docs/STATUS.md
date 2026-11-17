@@ -9,7 +9,7 @@ Last updated: 2026-11-17. Work branch: **`ci/verification-bootstrap`** (ahead of
 
 | Area | State | Verified how |
 |---|---|---|
-| CI | **All 7 jobs green:** policy, JVM tests, screenshots, Android APK (R8 + lint + permission allowlist), Windows MSI, SBOM | GitHub Actions on `ci/verification-bootstrap` |
+| CI | **All 6 jobs green:** policy, JVM tests, screenshots (including the UI behaviour tests), Android APK (R8 + lint + permission allowlist), Windows MSI and portable zip, SBOM | GitHub Actions on `ci/verification-bootstrap` |
 | Dependency verification | Strict; covers Android/Compose/AGP 9.4.1 (bootstrapped by CI, reviewed) | Every build |
 | Demo home UI | Floor plan, thermostat, printer, design system, in dark/light/night, phone and desktop | Screenshot renders (`docs/design/screens/`) |
 | **NetGuard** | LAN-only TCP/UDP/multicast; no DNS, no proxies; non-LAN inbound dropped | 18 unit tests (policy + sockets) |
@@ -25,13 +25,13 @@ Last updated: 2026-11-17. Work branch: **`ci/verification-bootstrap`** (ahead of
 | **Bambu H2D** | Pinned MQTT/TLS 8883 + access code; dual-nozzle/bed/chamber temps, job progress, AMS swatches, HMS; pause/resume/stop + chamber lights only | 9 codec tests + 5 contract tests vs a simulated H2D (incl. wrong code, impostor). **Not yet tried on your printer** (HARDWARE_TEST B1.x) |
 | **App lock** | Windows: PIN (PBKDF2 in encrypted DB), locks at start and after unfocus. Android: BiometricPrompt (biometric or device PIN), auto-lock after 1 min in background | AppLock/PinHash tests |
 | **TP-Link Kasa** | Legacy local protocol (TCP/UDP 9999): discover, power on/off, state. KLAP-only firmware isn't found | 10 codec tests (incl. 25 000-input mutation) + 7 contract tests vs a simulated plug. **Not yet tried on your plugs** (HARDWARE_TEST K1.x) |
-| **eufy cameras (RTSP)** | Add by address, RTSP login pairing, Digest/Basic status check, view-only. No in-app video yet | 8 codec tests + RFC 2617 digest vector + 12 contract tests vs a simulated camera. **Not yet tried on your cameras** (HARDWARE_TEST E1.x) |
-| **Camera playback (Android)** | Watch button plays the RTSP stream in the camera panel through Media3, TCP only, over a NetGuard-backed SocketFactory (ADR 0008). Windows: no player yet | 3 `GuardedSocketFactory` tests (public IPs, hostnames, unresolved addresses refused; LAN counted) + 3 stream-lease tests. APK builds in CI, no new permissions. **Not yet tried on a real camera** (E1.7) |
+| **eufy cameras (RTSP)** | Add by address, RTSP login pairing, Digest/Basic status check; video in the app (Android through Media3, Windows through a local ffmpeg: see the two camera rows below) | 8 codec tests + RFC 2617 digest vector + 12 contract tests vs a simulated camera. **Not yet tried on your cameras** (HARDWARE_TEST E1.x) |
+| **Camera playback (Android)** | Watch button plays the RTSP stream in the camera panel through Media3, TCP only, over a NetGuard-backed SocketFactory (ADR 0008). Windows: see "Camera video on Windows" | 3 `GuardedSocketFactory` tests (public IPs, hostnames, unresolved addresses refused; LAN counted) + 3 stream-lease tests. APK builds in CI, no new permissions. **Not yet tried on a real camera** (E1.7) |
 | **Tuya bulbs (Lepro and others)** | Local protocols 3.3, 3.4 and 3.5 (pairing tries each and remembers the one that answers; ADR 0015), add by address, user-supplied local key (never sent anywhere), allowlisted data points: power, brightness, colour temperature, colour. The vacuum's controls are not built | 12 codec tests (independent frame vector, 25 000-input mutation) + 7 3.4/3.5 codec tests against vectors from the tinytuya library, each damaged byte rejected, 25 000-input mutation + 13 contract tests vs a simulated bulb (3.3) + 9 for 3.4 and 3.5 + 6 for the reply habits tinytuya documents (an empty ack before data, "device22" devices read by data point number); tinytuya 3.4 and 3.5 clients pass against our simulators (`docs/protocols/interop.md`). **Not yet tried on your bulbs** (HARDWARE_TEST U1.x) |
 | **Visual redesign (v2)** | Dark-first modern look: rounded cards, pill controls, inverse emphasis, tile home (tap toggles lights and plugs), phone bottom tabs (Devices, Network, Demo), restyled desktop rail, edge-to-edge insets on Android. ADR 0009 | 29 screenshot goldens (light, dark, night; phone and desktop; live tiles) compared in CI; contrast tests on every palette. **Not yet seen on a real phone** |
 | **Settings and navigation** | Desktop sections: Devices, Network, Demo home, Settings. Phone tabs: Devices, Network, Demo, Settings. Settings: appearance (System, Dark, Light, Night, saved), lock now, where data lives (portable or installed), about | Screenshot goldens (32). **Portable Windows zip** keeps data beside the exe |
 | **Rooms and scenes** | Tiles group by room (a room exists while it has devices); a Room picker on each device page; scenes saved from the current state of lights and plugs, run in one tap. Scenes can never hold a TV, printer, camera or lock command | 3 simulator tests incl. restart persistence; goldens. **Not yet tried on your devices** (HARDWARE_TEST S1.x) |
-| **Cast / Google TV** | Cast v2 over pinned TLS 8009; found via the mDNS census; volume, mute, play, pause, stop, current app and now-playing. No casting, no app launching, no Google TV remote keys yet | 8 codec tests (hand-built protobuf vector, 25 000-input mutation) + 9 contract tests vs a simulated Chromecast (pinning, impostor, bad frames, back-off). **Not yet tried on a real device** (HARDWARE_TEST C1.x) |
+| **Cast / Google TV** | Cast v2 over pinned TLS 8009; found via the mDNS census; volume, mute, play, pause, stop, current app and now-playing. No casting and no app launching (the Google TV remote keys are the separate row below) | 8 codec tests (hand-built protobuf vector, 25 000-input mutation) + 9 contract tests vs a simulated Chromecast (pinning, impostor, bad frames, back-off). **Not yet tried on a real device** (HARDWARE_TEST C1.x) |
 | **Attention, removal, activity** | Changed security keys now reach the UI as a loud alert and stop all contact (they were silently shown as "No reply" before). Needs-attention card, Offline notice instead of dead controls, Remove device, All off, Activity history (bounded, encrypted, Copy as CSV) | Simulator tests: impostor key through LanHome, remove and re-pair, restart persistence, CSV escaping. **Not yet tried on your devices** (HARDWARE_TEST N1.x) |
 | **Tray mode and automations** | Windows: keep running in the tray when the window is closed (locks when hidden; menu: Open, All off, Lock now, Quit). Automations run a scene at a time on chosen days while Patchbay is open or in the tray; no catch-up for missed times | Clock-driven simulator tests (exact minute, once only, weekdays, disabled, deleted scene, restart). **Not yet tried on Windows** (HARDWARE_TEST R1.x). Android doesn't run in the background yet |
 | **Adaptive lighting and away mode** | Adaptive: white colour follows a day curve for lights you choose; stops when you change a light, resumes after off and on. Away: all off, optional evening presence imitation (18:00 to 23:00, off at 23:00). Both run only while Patchbay is open or in the tray | Curve tests; clock-driven simulator tests (override, off-and-on, colour mode untouched, imitation schedule). **Not yet tried on real lights** (HARDWARE_TEST D1.x) |
@@ -50,7 +50,7 @@ Last updated: 2026-11-17. Work branch: **`ci/verification-bootstrap`** (ahead of
 | **Self-healing and moved devices** | A device that gets a new IP is re-registered with its pairing intact after one rescan; offline for 90 s triggers a quiet, rate-limited search. Cast and Google TV devices are identified by what they announce, not by IP | `DeviceMovesTest`, `SelfHealTest` |
 | **Encrypted backup** | Settings → Backup: passphrase-encrypted one-line backup of devices, pairings, rooms, scenes, automations, settings (ADR 0013); restore replaces what it covers, after a restart | `BackupTest` (15), `BackupRoundTripTest`; panel verified in CI only |
 | **Device-triggered automations** | Automations → New → When: Device. A light or plug turning on or off, a print finishing or failing, a TV or streamer starting or stopping playback runs a scene. Events come from comparing consecutive reports; the first report after start is never an event; automations never start each other (30-second window); a forgotten device leaves the automation marked and idle (ADR 0014) | `EventDetectorTest` (8), `DeviceWatcherEventsTest` (1; changed-key guard), `DeviceAutomationTest` (3; chain rule mutation-checked), `AutomationsBehaviourTest` (4, green in CI). **Not yet tried on real devices** (HARDWARE_TEST A1.x) |
-| **UI behaviour tests** | 44 headless tests drive the real screens (command bar, tiles, pairing, lock, navigation) | CI; mutation-checked once |
+| **UI behaviour tests** | 48 headless tests drive the real screens (command bar, tiles, pairing, lock, navigation, the automation form) | CI; mutation-checked once |
 | **Start-up fix (2026-11-17)** | Restoring a saved device that needs pairing used to make the app fail while starting (paired devices since the IP-move fix; never-paired ones before that). Fixed and covered | `RestoreAfterRestartTest` |
 
 ## Get the builds
@@ -65,8 +65,9 @@ Then run `docs/HARDWARE_TEST.md`: app lock, Govee, TV, Bambu, Kasa, then ecobee 
 
 ## Waiting on you: Lefant vacuum
 
-ADR 0007 is accepted and the Tuya **bulb** adapter exists (Lepro). The **vacuum** needs its model number and its data-point list (tinytuya wizard)
-before any command is allowed; see `docs/protocols/tuya.md` and `docs/TUYA_KEYS.md`.
+ADR 0007 is accepted and the Tuya **bulb** adapter exists (Lepro). The **vacuum** has a read-only mode that lists every data point it reports (protocols 3.3, 3.4 and 3.5, and the
+"device22" way of being read are handled). Its start/pause/dock commands need its model number and the data-point list from that mode, because a wrong write moves a motor; see
+`docs/protocols/tuya.md` and `docs/TUYA_KEYS.md`.
 
 ## Not built yet (accurate as of 2026-11-17)
 
@@ -74,7 +75,7 @@ before any command is allowed; see `docs/protocols/tuya.md` and `docs/TUYA_KEYS.
 - **`hub/`** is a 12-line stub: no headless daemon yet.
 - **ESPHome** (Noise NNpsk0), the **Lefant vacuum controls** (only a read-only "learn" mode exists, `docs/TUYA_KEYS.md`).
 - **Windows Hello** (the Windows lock is a PIN by decision) and **Jazzer** coverage-guided fuzzing (parsers use seeded mutation tests; both are "possible later" in `CLAUDE.md`).
-- **HomeKit event subscriptions** (the thermostat is polled every 5 s) and **Android start at boot**.
+- **HomeKit event subscriptions** (the thermostat is polled every 5 s), **automation conditions** (only after sunset, only when away) and **Android start at boot**.
 - **A floor-plan editor for live devices** (rooms for live devices exist; the plan is only for the demo home), OUI vendor lookup, an opt-in port probe.
 - **Everything on real hardware.** The first real-device pass has not happened: see `docs/HARDWARE_TEST.md`.
 
@@ -82,7 +83,7 @@ before any command is allowed; see `docs/protocols/tuya.md` and `docs/TUYA_KEYS.
 
 - `docs/ADDING_AN_ADAPTER.md` is the step-by-step path every new system follows.
 - `docs/protocols/eufy.md`:
-  - **eufy cameras:** local via RTSP once you enable it per camera. An RTSP adapter is planned.
+  - **eufy cameras:** local via RTSP once you enable it per camera (the adapter and video playback exist; see `docs/protocols/eufy.md`).
   - **HomeBase P2P:** needs a cloud login, so not in v1.
   - **eufy lock:** cloud-only unless your model has Matter, and **read-only** until an ADR approves
     lock/unlock.
