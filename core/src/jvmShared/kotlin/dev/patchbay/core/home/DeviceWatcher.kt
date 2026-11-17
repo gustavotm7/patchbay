@@ -53,7 +53,7 @@ internal class DeviceWatcher(
         detector.forget(device)
     }
 
-    /** Called after every report from a device, once the home's own list has been updated. [trust] is false when the device presented a different key. */
+    /** Called after every report from a device, once the home's own list has been updated. [trust] is true when the device presented a different key than the one pinned (it is named for the alert, not for safety). */
     fun onSnapshot(snap: DeviceSnapshot, trust: Boolean) {
         if (snap.reachability == Reachability.ONLINE) recordTrends(snap)
         val live = ctx.devices.value.firstOrNull { it.device.id == snap.deviceId } ?: return
@@ -65,7 +65,9 @@ internal class DeviceWatcher(
             trustAlerted.remove(snap.deviceId)
         }
         val s = live.snapshot ?: return
-        for (event in detector.detect(s)) onEvent(snap.deviceId, event)
+        // The detector always sees the report (so its baseline stays current), but a device that presented a different key starts nothing.
+        val events = detector.detect(s)
+        if (!trust) events.forEach { onEvent(snap.deviceId, it) }
         val now = Summary(s.reachability, s.state<CapabilityState.PowerState>()?.on, s.state<CapabilityState.PrintJobState>()?.stage, s.state<CapabilityState.MediaState>()?.status)
         val before = lastSummary.put(snap.deviceId, now)
         if (now.stage == PrintStage.PRINTING && before?.stage != PrintStage.PRINTING) printStartedAt.putIfAbsent(snap.deviceId, ctx.clock())
