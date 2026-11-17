@@ -69,6 +69,7 @@ public class NetworkCensus(
         var hapId: String? = null
         var hapCategory: Int? = null
         var hapUnpaired: Boolean? = null
+        var hapFlags: Int? = null
         val ids = LinkedHashMap<String, String>()
 
         fun add(m: Dns.Message) {
@@ -95,6 +96,7 @@ public class NetworkCensus(
                         hapId = hapId ?: r.entries["id"]?.take(32)
                         hapCategory = hapCategory ?: r.entries["ci"]?.toIntOrNull()
                         hapUnpaired = hapUnpaired ?: r.entries["sf"]?.toIntOrNull()?.let { it and 1 == 1 }
+                        hapFlags = hapFlags ?: r.entries["ff"]?.toIntOrNull()
                     }
                 }
                 is Dns.Record.A, is Dns.Record.Aaaa -> hosts += r.name.removeSuffix(".local")
@@ -107,7 +109,7 @@ public class NetworkCensus(
             server = server ?: r.server
         }
 
-        fun build() = Finding(address, hosts, services, ports, friendly, model, server, hapPort?.let { HapAdvert(it, hapId, hapCategory, hapUnpaired) }, ids)
+        fun build() = Finding(address, hosts, services, ports, friendly, model, server, hapPort?.let { HapAdvert(it, hapId, hapCategory, hapUnpaired, hapFlags) }, ids)
     }
 
     public companion object {

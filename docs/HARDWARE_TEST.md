@@ -360,3 +360,9 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | M1.1 | In the router, give a paired Cast TV, the ecobee and a Kasa plug new IP addresses (or restart the router so leases change), then press Scan | Each comes back as the **same** tile (same name, room and scenes), not as a new device; the Activity list says "Found again at a new address" |
 | M1.2 | Same, for the LG TV and the Bambu printer | Same result, no new pairing needed |
 | M1.3 | Cameras and Tuya devices are added by address: change their address and note what you see | Expected: they stay offline until re-added (known limitation) |
+
+## Phase 2 — ecobee pairing method (E2.1a)
+
+| # | Step | Expected |
+|---|---|---|
+| E2.1a | When you pair the ecobee (E2.2), note whether it takes a while at the "pairing" step | It may take up to ~30 s: the thermostat does heavy maths. If it fails, tell me the exact message: "would not start pairing" means neither pair-setup method was accepted |

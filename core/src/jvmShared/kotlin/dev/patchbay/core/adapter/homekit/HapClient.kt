@@ -11,7 +11,7 @@ import java.util.UUID
 
 /** Anything that goes wrong talking HAP. [kind] tells the caller what to do about it. */
 internal class HapException(val kind: Kind, message: String) : IOException(message) {
-    enum class Kind { IO, PROTOCOL, WRONG_CODE, ALREADY_PAIRED, BUSY, TOO_MANY_TRIES, UNAUTHENTICATED, UNTRUSTED_ACCESSORY, REJECTED }
+    enum class Kind { IO, PROTOCOL, WRONG_CODE, ALREADY_PAIRED, BUSY, TOO_MANY_TRIES, UNAUTHENTICATED, UNTRUSTED_ACCESSORY, REJECTED, METHOD_REJECTED }
 }
 
 /** What a paired accessory lets us do again later: our identity, our long-term key and the accessory's. Secret at rest. */
@@ -123,7 +123,8 @@ internal class HapConnection(private val socket: Socket, private val host: Strin
             if (body.isNotEmpty() || method != "GET") append("Content-Length: ${body.size}\r\n")
             append("\r\n")
         }.toByteArray(Charsets.US_ASCII)
-        output.write(head); if (body.isNotEmpty()) output.write(body); output.flush()
+        // One write for the whole request: over the encrypted session each write becomes its own frames, and some accessories cannot take the head and body apart.
+        output.write(if (body.isEmpty()) head else head + body); output.flush()
         while (true) {
             val r = readResponse() ?: continue // skips unsolicited EVENT/1.0 messages
             return r
@@ -196,6 +197,9 @@ internal class HapConnection(private val socket: Socket, private val host: Strin
         return sb.toString()
     }
 
+    /** Pairing can take an accessory several seconds (a 3072-bit modular exponentiation on a small chip), so it gets a longer read timeout than polling. */
+    fun setReadTimeout(ms: Int) { socket.soTimeout = ms }
+
     internal fun switchToEncrypted(writeKey: ByteArray, readKey: ByteArray) {
         val s = SecureStreams(input, output, writeKey, readKey)
         input = s.input; output = s.output; secure = true
@@ -240,9 +244,36 @@ internal object HapPairing {
         else -> HapException(HapException.Kind.REJECTED, "the accessory refused (error ${code ?: "?"})")
     }
 
+    /** TLV "Method" values for pair-setup: 0 = Pair Setup, 1 = Pair Setup with Auth (the value for accessories with an Apple authentication chip). */
+    const val METHOD_PAIR_SETUP = 0
+    const val METHOD_PAIR_SETUP_WITH_AUTH = 1
+
+    /**
+     * M1 and M2. An accessory that does not accept [method] answers with an error TLV "unknown" or "authentication" (or an HTTP error) before any
+     * secret is exchanged; that is reported as [HapException.Kind.METHOD_REJECTED] so the caller can try the other method. Busy, locked-out
+     * and already-paired answers are not retried.
+     */
+    private fun startSetup(c: HapConnection, method: Int): Map<Int, ByteArray> {
+        val resp = c.request("POST", "/pair-setup", HapConnection.TLV, Tlv8.encode(listOf(Tlv8.STATE to byteArrayOf(1), Tlv8.METHOD to byteArrayOf(method.toByte()))))
+        val m = Tlv8.map(resp.body)
+        if (resp.status != 200 || m == null) throw HapException(HapException.Kind.METHOD_REJECTED, "pair-setup start refused (HTTP ${resp.status})")
+        m[Tlv8.ERROR]?.let {
+            val code = it.firstOrNull()?.toInt()
+            throw if (code == 1 || code == 2) HapException(HapException.Kind.METHOD_REJECTED, "pair-setup start refused (error $code)") else errorFor(code)
+        }
+        if (m[Tlv8.STATE]?.singleOrNull()?.toInt() != 2) throw HapException(HapException.Kind.PROTOCOL, "unexpected pairing state")
+        return m
+    }
+
     /** Pair-setup M1..M6. [setupCode] is "XXX-XX-XXX". Returns the keys to store. */
-    fun setup(c: HapConnection, setupCode: String, srpPrivate: ByteArray = ByteArray(16).also(random::nextBytes), controllerSeed: ByteArray = ByteArray(32).also(random::nextBytes)): HapPairingKeys {
-        val m2 = tlvExchange(c, "/pair-setup", listOf(Tlv8.STATE to byteArrayOf(1), Tlv8.METHOD to byteArrayOf(0)), 2)
+    fun setup(
+        c: HapConnection,
+        setupCode: String,
+        method: Int = METHOD_PAIR_SETUP,
+        srpPrivate: ByteArray = ByteArray(16).also(random::nextBytes),
+        controllerSeed: ByteArray = ByteArray(32).also(random::nextBytes),
+    ): HapPairingKeys {
+        val m2 = startSetup(c, method)
         val salt = m2[Tlv8.SALT]?.takeIf { it.size == 16 } ?: throw HapException(HapException.Kind.PROTOCOL, "bad salt")
         val serverPub = m2[Tlv8.PUBLIC_KEY]?.takeIf { it.size in 1..SrpClient.LEN } ?: throw HapException(HapException.Kind.PROTOCOL, "bad public key")
         val srp = SrpClient(setupCode, salt, serverPub, srpPrivate)

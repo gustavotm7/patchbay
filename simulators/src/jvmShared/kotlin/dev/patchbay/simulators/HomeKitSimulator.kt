@@ -38,6 +38,10 @@ public class HomeKitSimulator(
     port: Int = 0,
     /** Start as the same accessory (same identity key, same paired controllers) at another address: what a DHCP change looks like. */
     cloneOf: HomeKitSimulator? = null,
+    /** Only accept this pair-setup Method (0 plain, 1 with Auth); others get an "unknown" error at M2, like firmware that insists on one. */
+    private val requiredPairMethod: Int? = null,
+    /** Add an extra EncryptedData TLV to M4, as accessories with an authentication chip do for "with Auth". */
+    private val mfiExtraInM4: Boolean = false,
 ) : AutoCloseable {
     init { require(address.startsWith("127.")) { "simulators bind loopback only" } }
 
@@ -56,6 +60,8 @@ public class HomeKitSimulator(
 
     /** Every write the accessory accepted, as "iid=value". */
     public val writes: MutableList<String> = CopyOnWriteArrayList()
+    /** The Method value of every pair-setup M1 received, in order. */
+    public val pairMethodsSeen: MutableList<Int> = CopyOnWriteArrayList()
     @Volatile public var unencryptedAccessoryRequests: Int = 0
     @Volatile public var pairVerifies: Int = 0
 
@@ -188,6 +194,9 @@ public class HomeKitSimulator(
         val m = decodeTlv(body) ?: return Reply("400 Bad Request", "text/plain", ByteArray(0))
         when (m[6]?.firstOrNull()?.toInt()) {
             1 -> {
+                val method = m[0]?.firstOrNull()?.toInt() ?: 0
+                pairMethodsSeen += method
+                if (requiredPairMethod != null && method != requiredPairMethod) return tlvError(2, 1) // this firmware only does the other method
                 if (isPaired) return tlvError(2, 6) // unavailable: already paired
                 if (wrongCodes >= setupCodeAttemptsAllowed) return tlvError(2, 5)
                 val salt = ByteArray(16).also(rnd::nextBytes)
@@ -199,7 +208,8 @@ public class HomeKitSimulator(
                 val a = m[3] ?: return tlvError(4, 1); val proof = m[4] ?: return tlvError(4, 1)
                 if (!srp.checkClient(a, proof)) { wrongCodes++; return tlvError(4, 2) }
                 s.setupKey = srp.sessionKey(a)
-                return tlv(6 to byteArrayOf(4), 4 to srp.serverProof(a, proof))
+                val extra = if (mfiExtraInM4) arrayOf(5 to ByteArray(48) { it.toByte() }) else emptyArray()
+                return tlv(6 to byteArrayOf(4), 4 to srp.serverProof(a, proof), *extra)
             }
             5 -> {
                 val k = s.setupKey ?: return tlvError(6, 1)

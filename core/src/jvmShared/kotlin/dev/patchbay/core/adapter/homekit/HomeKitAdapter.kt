@@ -57,8 +57,11 @@ public class HomeKitAdapter(
 ) : DeviceAdapter {
 
     public data class Config(
-        val connectTimeoutMs: Int = 4_000,
-        val ioTimeoutMs: Int = 6_000,
+        val connectTimeoutMs: Int = 8_000,
+        /** Normal requests; HomeKit controllers commonly allow 30 s, and a busy thermostat can be slow. */
+        val ioTimeoutMs: Int = 15_000,
+        /** Pairing: the accessory does a 3072-bit SRP step that can take several seconds on a small chip. */
+        val pairingTimeoutMs: Int = 30_000,
         val pollIntervalMs: Long = 5_000,
         val maxBackoffMs: Long = 60_000,
     )
@@ -79,6 +82,9 @@ public class HomeKitAdapter(
     private val wakes = ConcurrentHashMap<DeviceId, Channel<Unit>>()
     private val layouts = ConcurrentHashMap<DeviceId, ThermostatLayout>()
     private val trustBroken = ConcurrentHashMap.newKeySet<DeviceId>()
+
+    /** What each thermostat's mDNS announcement said about hardware authentication, so pairing can try the likelier method first. */
+    private val authChip = ConcurrentHashMap<DeviceId, Boolean>()
     private val lastContact = ConcurrentHashMap<DeviceId, Long>()
     private val lastMode = ConcurrentHashMap<DeviceId, HvacMode>()
 
@@ -89,6 +95,7 @@ public class HomeKitAdapter(
             val hap = f.hap ?: continue
             if (hap.category != null && hap.category != CATEGORY_THERMOSTAT) continue // v1 handles thermostats only
             val pairedElsewhere = hap.unpaired == false
+            hap.hasAuthCoprocessor?.let { authChip[DeviceId("homekit-" + keyFor(hap.deviceId, f.address).lowercase())] = it }
             val model = f.model?.take(32)
             emit(
                 DiscoveredDevice(
@@ -154,18 +161,31 @@ public class HomeKitAdapter(
         val code = normaliseCode(raw) ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("The setup code is eight digits, like 123-45-678."))
         val id = deviceId(device)
 
-        val keys = when (val r = connect(addr, port)) {
-            is PatchbayResult.Err -> return r
-            is PatchbayResult.Ok -> r.value.use { conn ->
-                try {
-                    withContext(Dispatchers.IO) { HapPairing.setup(conn, code) }
-                } catch (e: HapException) {
-                    return PatchbayResult.Err(mapPairingError(e))
-                } catch (e: IOException) {
-                    return PatchbayResult.Err(PatchbayError.Unreachable("lost the connection while pairing"))
-                }
+        // Which pair-setup method to start with: accessories with an authentication chip (the ecobee is one) expect "with Auth"; software-only ones the plain
+        // method. If the first is refused before anything secret is exchanged, the other is tried. aiohomekit defaults to "with Auth".
+        val methods = if (authChip[id] == true) listOf(HapPairing.METHOD_PAIR_SETUP_WITH_AUTH, HapPairing.METHOD_PAIR_SETUP)
+        else listOf(HapPairing.METHOD_PAIR_SETUP, HapPairing.METHOD_PAIR_SETUP_WITH_AUTH)
+        var keys: HapPairingKeys? = null
+        var lastRefusal: HapException? = null
+        for (method in methods) {
+            val conn = when (val r = connect(addr, port)) {
+                is PatchbayResult.Err -> return r
+                is PatchbayResult.Ok -> r.value
+            }
+            try {
+                conn.setReadTimeout(config.pairingTimeoutMs)
+                keys = withContext(Dispatchers.IO) { HapPairing.setup(conn, code, method) }
+                break
+            } catch (e: HapException) {
+                if (e.kind != HapException.Kind.METHOD_REJECTED) return PatchbayResult.Err(mapPairingError(e))
+                lastRefusal = e
+            } catch (e: IOException) {
+                return PatchbayResult.Err(PatchbayError.Unreachable("lost the connection while pairing"))
+            } finally {
+                conn.close()
             }
         }
+        if (keys == null) return PatchbayResult.Err(mapPairingError(lastRefusal ?: HapException(HapException.Kind.METHOD_REJECTED, "refused")))
         val storedKeys = keys.withPort(port)
         val fingerprint = MessageDigest.getInstance("SHA-256").digest(keys.accessoryPublicKey).joinToString("") { "%02x".format(it) }
         if (!prompt.confirmFingerprint(name, fingerprint)) {
@@ -201,6 +221,7 @@ public class HomeKitAdapter(
         HapException.Kind.BUSY -> PatchbayError.Timeout("The thermostat is busy. Wait a minute and try again.")
         HapException.Kind.UNTRUSTED_ACCESSORY -> PatchbayError.Unauthorized("The thermostat could not prove it knows the setup code. Nothing was saved.")
         HapException.Kind.IO -> PatchbayError.Unreachable("lost the connection while pairing")
+        HapException.Kind.METHOD_REJECTED -> PatchbayError.Unsupported("The thermostat would not start pairing. Make sure it is showing its HomeKit setup code and is not already paired to another app.")
         else -> PatchbayError.ProtocolViolation("unexpected pairing reply: ${e.message}")
     }
 

@@ -45,4 +45,7 @@ public object ServiceHints {
 }
 
 /** The parts of a HomeKit mDNS announcement we use. Untrusted. [category] is the accessory category ("ci"; 9 = thermostat); [unpaired] is status flag bit 0 ("sf"). */
-public data class HapAdvert(val port: Int, val deviceId: String?, val category: Int?, val unpaired: Boolean?)
+public data class HapAdvert(val port: Int, val deviceId: String?, val category: Int?, val unpaired: Boolean?, val featureFlags: Int? = null) {
+    /** Feature flag bit 0 ("ff"): the accessory has an Apple authentication coprocessor, which decides which pair-setup method to try first. */
+    val hasAuthCoprocessor: Boolean? get() = featureFlags?.let { it and 1 == 1 }
+}

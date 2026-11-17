@@ -38,8 +38,8 @@ class HomeKitContractTest {
     private val thermostat = HomeKitSimulator("127.0.0.60")
     private val other = HomeKitSimulator("127.0.0.61", accessoryId = "DD:EE:FF:44:55:66", port = thermostat.port) // same port, other address
 
-    private fun finding(sim: HomeKitSimulator, unpaired: Boolean? = true) =
-        Finding(sim.address, emptySet(), setOf("_hap._tcp"), setOf(sim.port), "Hallway", "ecobee Premium", null, HapAdvert(sim.port, sim.accessoryId, 9, unpaired))
+    private fun finding(sim: HomeKitSimulator, unpaired: Boolean? = true, ff: Int? = null) =
+        Finding(sim.address, emptySet(), setOf("_hap._tcp"), setOf(sim.port), "Hallway", "ecobee Premium", null, HapAdvert(sim.port, sim.accessoryId, 9, unpaired, ff))
 
     private var findings: List<Finding> = emptyList()
     private val adapter = HomeKitAdapter(
@@ -88,6 +88,7 @@ class HomeKitContractTest {
     fun pairsWithTheSetupCodeAndReadsTheThermostat(): Unit = runBlocking {
         val id = paired()
         assertEquals(1, thermostat.pairedControllers.size)
+        assertTrue(thermostat.pairedControllers.single().let { it == it.uppercase() }) // iOS 16+ unpairs an accessory whose controller id is not an uppercase UUID
         val snap = snapshot(id)
         val t = snap.state<CapabilityState.ThermostatState>()!!
         assertEquals(HvacMode.HEAT, t.mode)
@@ -249,5 +250,55 @@ class HomeKitContractTest {
         assertTrue(adapter.trustChanged(id))
         adapter.unpair(id)
         assertFalse(adapter.trustChanged(id))
+    }
+
+    private suspend fun pairWithFlags(sim: HomeKitSimulator, ff: Int?): PatchbayResult<dev.patchbay.core.adapter.Pairing> {
+        findings = listOf(finding(sim, ff = ff))
+        val d = adapter.discover().toList().single()
+        return adapter.pair(d, Prompt("314-15-926"))
+    }
+
+    @Test
+    fun anAccessoryWithAnAuthChipIsPairedWithTheAuthMethodFirst(): Unit = runBlocking {
+        val sim = HomeKitSimulator("127.0.0.68", requiredPairMethod = 1, mfiExtraInM4 = true)
+        try {
+            assertTrue(pairWithFlags(sim, ff = 1) is PatchbayResult.Ok) // ff bit 0 = authentication coprocessor; the extra EncryptedData in M4 is tolerated
+            assertEquals(listOf(1), sim.pairMethodsSeen)
+        } finally { sim.close() }
+    }
+
+    @Test
+    fun whenTheFirstMethodIsRefusedTheOtherIsTried(): Unit = runBlocking {
+        val needsAuth = HomeKitSimulator("127.0.0.69", requiredPairMethod = 1)
+        val needsPlain = HomeKitSimulator("127.0.0.70", requiredPairMethod = 0)
+        try {
+            assertTrue(pairWithFlags(needsAuth, ff = null) is PatchbayResult.Ok) // unknown flags: plain first, refused at M2, then with Auth
+            assertEquals(listOf(0, 1), needsAuth.pairMethodsSeen)
+            assertTrue(pairWithFlags(needsPlain, ff = 1) is PatchbayResult.Ok) // chip announced but the firmware wants the plain method
+            assertEquals(listOf(1, 0), needsPlain.pairMethodsSeen)
+        } finally { needsAuth.close(); needsPlain.close() }
+    }
+
+    @Test
+    fun anAccessoryThatRefusesBothMethodsGivesAClearMessageAndNothingIsStored(): Unit = runBlocking {
+        val sim = HomeKitSimulator("127.0.0.71", requiredPairMethod = 5)
+        try {
+            val e = pairWithFlags(sim, ff = null).errorOrNull()
+            assertIs<PatchbayError.Unsupported>(e)
+            assertTrue("would not start pairing" in e.message)
+            assertEquals(listOf(0, 1), sim.pairMethodsSeen)
+            assertFalse(sim.isPaired)
+        } finally { sim.close() }
+    }
+
+    @Test
+    fun aWrongCodeIsNotRetriedWithAnotherMethod(): Unit = runBlocking {
+        val sim = HomeKitSimulator("127.0.0.72")
+        try {
+            findings = listOf(finding(sim, ff = null))
+            val d = adapter.discover().toList().single()
+            assertIs<PatchbayError.Unauthorized>(adapter.pair(d, Prompt("314-15-927")).errorOrNull())
+            assertEquals(listOf(0), sim.pairMethodsSeen) // the code was wrong, not the method: one attempt, no second guess at the lockout counter
+        } finally { sim.close() }
     }
 }
