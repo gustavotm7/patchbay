@@ -71,6 +71,11 @@ public class LanHome(
     private val _favourites = MutableStateFlow<Set<DeviceId>>(emptySet())
     private val _notifications = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
     private val lastNotified = ConcurrentHashMap<String, Long>()
+    /** When each device was first seen offline in its current stretch (cleared when it answers again); drives the quiet rescans below. */
+    private val offlineSince = ConcurrentHashMap<DeviceId, Long>()
+    private class HealState { @Volatile var nextAt: Long = 0; @Volatile var backoffMs: Long = HEAL_FIRST_BACKOFF_MS }
+    private val healStates = ConcurrentHashMap<dev.patchbay.core.model.AdapterId, HealState>()
+    private val healLock = kotlinx.coroutines.sync.Mutex()
     private val recorder = TrendRecorder()
     @Volatile private var trendsSavedAt = 0L
     override val trends: dev.patchbay.core.model.TrendSource = dev.patchbay.core.model.TrendSource { device, metric -> recorder.trend(device, metric, clock()) }
@@ -137,6 +142,7 @@ public class LanHome(
         try { owners[device]?.unpair(device) } catch (e: Exception) { log?.warn("home", "could not ask a device to forget us: ${e.javaClass.simpleName}") }
         recorder.forget(device)
         pairings.remove(device)
+        offlineSince.remove(device)
         owners.remove(device); pendingPairing.remove(device); lastSummary.remove(device); trustAlerted.remove(device)
         synchronized(this) {
             _devices.update { list -> list.filterNot { it.device.id == device } }
@@ -568,6 +574,12 @@ public class LanHome(
                 tickAway()
             }
         }
+        scope.launch {
+            while (true) {
+                delay(15_000)
+                try { tickHeal() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { log?.warn("home", "quiet rescan failed: ${e.javaClass.simpleName}") }
+            }
+        }
     }
 
     /** Devices saved by earlier sessions appear immediately and are polled; no scan needed. */
@@ -654,6 +666,32 @@ public class LanHome(
         return provider.streamLease(device).also { if (it is PatchbayResult.Ok) log?.info("home", "stream opened for a camera") }
     }
 
+    /**
+     * Self-healing: a device that has been offline for a while may simply have moved (a new address after a DHCP change or a router reboot), so
+     * look for it again without the user pressing Scan. Only the adapters that have such a device are searched, in the background (the Scan
+     * button and the report are untouched), never while a scan is running, and with a back-off per adapter (2 minutes, doubling to 30) that
+     * resets when one of its devices answers. Adapters that can't discover (cameras and Tuya devices are added by address) are skipped.
+     */
+    public suspend fun tickHeal(nowMillis: Long = clock()) {
+        if (_scan.value == ScanState.SCANNING) return
+        val due = adapters.filter { a ->
+            a.discoverable && _devices.value.any { d -> owners[d.device.id] === a && offlineSince[d.device.id]?.let { nowMillis - it >= HEAL_AFTER_MS } == true }
+        }
+        for (a in due) {
+            val st = healStates.getOrPut(a.id) { HealState() }
+            if (nowMillis < st.nextAt) continue
+            if (!healLock.tryLock()) return
+            try {
+                st.nextAt = nowMillis + st.backoffMs
+                st.backoffMs = (st.backoffMs * 2).coerceAtMost(HEAL_MAX_BACKOFF_MS)
+                log?.info("home", "${a.systemName}: looking again for devices that stopped answering")
+                a.discover().collect { found -> synchronized(this@LanHome) { add(a, found) } }
+            } finally {
+                healLock.unlock()
+            }
+        }
+    }
+
     override suspend fun scan(): PatchbayResult<Int> {
         _scan.value = ScanState.SCANNING
         try {
@@ -673,6 +711,9 @@ public class LanHome(
                     null -> {}
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            _scan.value = ScanState.IDLE
+            throw e
         } catch (e: Exception) {
             // Adapters return errors as values; this only catches programming errors, and reports them.
             _scan.value = ScanState.FAILED
@@ -734,6 +775,11 @@ public class LanHome(
                     device = if (caps != null && caps != it.device.capabilities) it.device.copy(capabilities = caps) else it.device,
                 )
             }
+        }
+        when (snap.reachability) {
+            dev.patchbay.core.model.Reachability.OFFLINE -> offlineSince.putIfAbsent(snap.deviceId, clock())
+            dev.patchbay.core.model.Reachability.ONLINE -> { offlineSince.remove(snap.deviceId); owners[snap.deviceId]?.id?.let { healStates.remove(it) } }
+            else -> {}
         }
         if (snap.reachability == dev.patchbay.core.model.Reachability.ONLINE) recordTrends(snap)
         val live = _devices.value.firstOrNull { it.device.id == snap.deviceId } ?: return
@@ -862,3 +908,8 @@ public class LanHome(
         log?.warn("home", message)
     }
 }
+
+/** How long a device must have been offline before a quiet rescan looks for it, the first pause between rescans per adapter, and the longest. */
+private const val HEAL_AFTER_MS = 90_000L
+private const val HEAL_FIRST_BACKOFF_MS = 120_000L
+private const val HEAL_MAX_BACKOFF_MS = 30 * 60_000L

@@ -366,3 +366,10 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | # | Step | Expected |
 |---|---|---|
 | E2.1a | When you pair the ecobee (E2.2), note whether it takes a while at the "pairing" step | It may take up to ~30 s: the thermostat does heavy maths. If it fails, tell me the exact message: "would not start pairing" means neither pair-setup method was accepted |
+
+## Phase 2 — Self-healing
+
+| # | Step | Expected |
+|---|---|---|
+| M2.1 | With Patchbay open, change a paired TV's or thermostat's address in the router (or restart the router) and do **not** press Scan | Within a few minutes the tile goes offline and then comes back by itself, as the same tile |
+| M2.2 | Switch a device off for 10 minutes, then on again | It comes back within a minute or two of being on; no flood of network scans (the Network screen's counters should not climb quickly) |
