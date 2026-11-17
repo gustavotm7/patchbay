@@ -6,7 +6,8 @@ Patchbay is a local-only home control app (Android + Windows). Nothing in it tal
 2. **What works, honestly:** `docs/STATUS.md`. Every adapter is tested against a simulator I wrote, not against real devices, until you run the checks.
 3. **Why it is built this way:** `CLAUDE.md` (the privacy rules) and `docs/adr/` (one short page per decision, 0001 to 0012).
 4. **If something fails:** `docs/TROUBLESHOOTING.md`, then send me the step number from HARDWARE_TEST and what you saw.
-5. **Continuing in a new session:** `docs/HANDOFF.md`.
+5. **What is being worked on and why:** `docs/PLAN.md`.
+6. **Continuing in a new session:** `docs/HANDOFF.md`.
 
 ## Decisions taken (2026-11-12)
 
