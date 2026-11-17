@@ -1,7 +1,7 @@
 package dev.patchbay.core.media
 
 import dev.patchbay.core.adapter.StreamLease
-import dev.patchbay.core.adapter.StreamProtocol
+import dev.patchbay.core.model.StreamProtocol
 import dev.patchbay.core.net.NetGuard
 import dev.patchbay.core.result.PatchbayResult
 import kotlinx.coroutines.runBlocking
