@@ -88,7 +88,7 @@ public class AndroidTvRemoteAdapter(
             if (f.services.none { it.startsWith("_androidtvremote2._tcp") }) continue
             emit(
                 DiscoveredDevice(
-                    adapter = ID, key = "ip-" + f.address.map { if (it.isLetterOrDigit()) it else '-' }.joinToString(""), address = f.address,
+                    adapter = ID, key = dev.patchbay.core.discovery.DeviceKey.of(f.ids["_androidtvremote2._tcp"], f.address, minLength = 4), address = f.address,
                     port = config.remotePort, kind = DeviceKind.MEDIA_RECEIVER, vendor = "Android TV", model = f.model?.take(32) ?: "Google TV",
                     displayName = ((f.friendlyName?.take(40)?.takeIf { it.isNotBlank() } ?: "TV") + " remote"),
                     controlPath = ControlPath.LOCAL_AFTER_SETUP, seenAt = EpochMillis(clock()),
@@ -106,7 +106,9 @@ public class AndroidTvRemoteAdapter(
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
         }
+        val moved = known[device]?.address?.let { it != a } == true
         known[device] = Known(a, pairing?.pinnedFingerprint, pairing?.secret?.let(ClientIdentity::fromBytes), known[device]?.name ?: "TV")
+        if (moved) sessions.remove(device)?.tls?.close()
         return PatchbayResult.Ok(Unit)
     }
 

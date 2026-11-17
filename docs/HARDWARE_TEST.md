@@ -352,3 +352,11 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | H1.1 | Leave Patchbay open (or watching in the background) for an hour, then open the thermostat | A small graph appears beside the indoor temperature (and humidity) once there are two samples, taken at most every 5 minutes |
 | H1.2 | Restart Patchbay | The graph is still there (it is saved encrypted with the rest of your data) |
 | H1.3 | Open the Bambu printer during a print | Nozzle, bed and chamber show graphs that rise as it heats |
+
+## Phase 2 — A device changes address
+
+| # | Step | Expected |
+|---|---|---|
+| M1.1 | In the router, give a paired Cast TV, the ecobee and a Kasa plug new IP addresses (or restart the router so leases change), then press Scan | Each comes back as the **same** tile (same name, room and scenes), not as a new device; the Activity list says "Found again at a new address" |
+| M1.2 | Same, for the LG TV and the Bambu printer | Same result, no new pairing needed |
+| M1.3 | Cameras and Tuya devices are added by address: change their address and note what you see | Expected: they stay offline until re-added (known limitation) |

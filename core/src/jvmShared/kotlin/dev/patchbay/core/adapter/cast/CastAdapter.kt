@@ -105,7 +105,7 @@ public class CastAdapter(
             val model = f.model?.take(32)
             emit(
                 DiscoveredDevice(
-                    adapter = ID, key = keyFor(f.address), address = f.address, port = config.port,
+                    adapter = ID, key = dev.patchbay.core.discovery.DeviceKey.of(f.ids["_googlecast._tcp"], f.address, minLength = 8), address = f.address, port = config.port,
                     kind = kindFor(model), vendor = "Google Cast", model = model ?: "Cast device",
                     displayName = f.friendlyName?.take(48)?.takeIf { it.isNotBlank() },
                     controlPath = ControlPath.LOCAL_AFTER_SETUP, seenAt = EpochMillis(clock()),
@@ -114,7 +114,6 @@ public class CastAdapter(
         }
     }
 
-    private fun keyFor(address: String): String = "ip-" + address.map { if (it.isLetterOrDigit()) it else '-' }.joinToString("")
 
     /** Audio-only models are speakers; everything else is a media receiver (Chromecast, Google TV, Cast TVs). */
     private fun kindFor(model: String?): DeviceKind {
@@ -131,7 +130,9 @@ public class CastAdapter(
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
         }
+        val moved = known[device]?.address?.let { it != a } == true
         known[device] = Known(a, pairing?.pinnedFingerprint, known[device]?.name ?: "Cast device")
+        if (moved) sessions.remove(device)?.tls?.close() // the old connection points at the old address; the next loop connects to the new one
         return PatchbayResult.Ok(Unit)
     }
 

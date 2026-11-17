@@ -68,7 +68,7 @@ Automation triggers (device events), HomeKit event subscriptions instead of poll
 | Item | Status |
 |---|---|
 | W3.1 Wycheproof | **done 2026-11-17**: all 210 Ed25519 and all 518 X25519 vectors agree, no code change needed |
-| W1.1 IP-change fix | todo |
+| W1.1 IP-change fix | **done 2026-11-17**. Found a second, bigger flaw on the way: Cast and Google TV devices were *identified by their IP address*, so a DHCP change made them a brand-new device with no pairing, room or scenes. They now use the stable id the device announces over mDNS (Cast `id`; the TV's Bluetooth address or instance name), and a rescan that finds a known device at a new address re-registers it with its adapter (pairing and pinned key kept; HomeKit also takes the new port). Tests: `DeviceMovesTest` (Cast, HomeKit) |
 | W1.2 self-healing | todo |
 | W2.1 diagnostics | todo |
 | W3.2 HomeKit desk-check | todo |

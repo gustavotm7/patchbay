@@ -52,6 +52,7 @@ class NetworkCensusTest {
         assertEquals("Living TV", c.friendlyName)
         assertEquals("Chromecast", c.model)
         assertTrue("_googlecast._tcp" in c.services)
+        assertEquals("abc", c.ids["_googlecast._tcp"]) // the identity a Cast adapter keeps across address changes
         assertTrue(8009 in c.ports)
         assertEquals(listOf("Cast: local media control"), c.hints)
         val t = found[1]

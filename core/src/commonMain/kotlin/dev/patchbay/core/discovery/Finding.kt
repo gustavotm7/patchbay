@@ -12,6 +12,11 @@ public data class Finding(
     val server: String?,
     /** What a HomeKit (`_hap._tcp`) announcement said, when there was one. */
     val hap: HapAdvert? = null,
+    /**
+     * Identifiers a device announced for itself, by DNS-SD service type (the Cast device id, a Google TV's Bluetooth address or instance name).
+     * They stay the same when the device's IP address changes, so adapters use them as the device's identity instead of the address.
+     */
+    val ids: Map<String, String> = emptyMap(),
 ) {
     /** What the advertised services say about local control (for the Exposure Map). */
     val hints: List<String> get() = services.mapNotNull { ServiceHints.SERVICE_HINTS[it] ?: ServiceHints.SERVICE_HINTS.entries.firstOrNull { (k, _) -> it.startsWith(k) }?.value }.distinct()

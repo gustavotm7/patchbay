@@ -118,9 +118,19 @@ public class HomeKitAdapter(
         }
         val keys = pairing?.secret?.let { HapPairingKeys.decode(it) }
         val prev = known[device]
-        if (prev != null && prev.address != a) drop(device) // the thermostat moved (new DHCP lease): reconnect there
+        if (prev != null && prev.address != a) { drop(device); lastPortRefresh.remove(device) } // the thermostat moved (new DHCP lease): reconnect there
         known[device] = Known(a, prev?.port ?: keys?.port?.takeIf { it > 0 } ?: DEFAULT_PORT, keys ?: prev?.keys, prev?.name ?: "thermostat")
         return PatchbayResult.Ok(Unit)
+    }
+
+    /** HomeKit accessories often pick a new port along with a new address, and the scan that found the new address knows it. */
+    override fun relocate(device: DeviceId, found: DiscoveredDevice, pairing: Pairing?): PatchbayResult<Unit> {
+        val r = restore(device, found.address, pairing)
+        if (r is PatchbayResult.Ok) {
+            found.port?.takeIf { it in 1..65_535 }?.let { p -> known[device]?.port = p }
+            wakes[device]?.trySend(Unit) // reconnect now instead of at the end of the back-off
+        }
+        return r
     }
 
     /** The setup code is typed with or without dashes; HAP wants "XXX-XX-XXX". Null when it isn't eight digits. */

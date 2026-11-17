@@ -78,6 +78,13 @@ public interface DeviceAdapter {
      */
     public fun restore(device: DeviceId, address: String, pairing: Pairing?): PatchbayResult<Unit>
 
+    /**
+     * A scan found an already-known device at [found].address, which differs from the address it had (a DHCP change, a router reboot).
+     * Re-register it there, keeping its pairing and pinned key; [pairing] is what [pair] returned earlier, or null for adapters that don't pair.
+     * The default is [restore] at the new address; adapters whose devices also change port override it.
+     */
+    public fun relocate(device: DeviceId, found: DiscoveredDevice, pairing: Pairing?): PatchbayResult<Unit> = restore(device, found.address, pairing)
+
     /** Hot flow of state for a paired device. Reconnects with back-off; never hammers. */
     public fun observe(device: DeviceId): Flow<DeviceSnapshot>
 

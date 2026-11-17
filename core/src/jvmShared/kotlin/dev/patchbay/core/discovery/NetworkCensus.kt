@@ -69,6 +69,7 @@ public class NetworkCensus(
         var hapId: String? = null
         var hapCategory: Int? = null
         var hapUnpaired: Boolean? = null
+        val ids = LinkedHashMap<String, String>()
 
         fun add(m: Dns.Message) {
             seen = true
@@ -84,6 +85,12 @@ public class NetworkCensus(
                 is Dns.Record.Txt -> {
                     friendly = friendly ?: r.entries["fn"]?.takeIf { it.isNotBlank() }
                     model = model ?: (r.entries["md"] ?: r.entries["model"])?.takeIf { it.isNotBlank() }
+                    if ("._googlecast._tcp" in r.name) r.entries["id"]?.takeIf { it.isNotBlank() }?.let { ids.putIfAbsent("_googlecast._tcp", it.take(48)) }
+                    if ("._androidtvremote2._tcp" in r.name) {
+                        // The TV's Bluetooth address when it announces one; otherwise the instance name (stable until the TV is renamed).
+                        val stable = r.entries["bt"]?.takeIf { it.isNotBlank() } ?: r.name.substringBefore("._androidtvremote2").takeIf { it.isNotBlank() }
+                        stable?.let { ids.putIfAbsent("_androidtvremote2._tcp", it.take(48)) }
+                    }
                     if ("._hap._tcp" in r.name) {
                         hapId = hapId ?: r.entries["id"]?.take(32)
                         hapCategory = hapCategory ?: r.entries["ci"]?.toIntOrNull()
@@ -100,7 +107,7 @@ public class NetworkCensus(
             server = server ?: r.server
         }
 
-        fun build() = Finding(address, hosts, services, ports, friendly, model, server, hapPort?.let { HapAdvert(it, hapId, hapCategory, hapUnpaired) })
+        fun build() = Finding(address, hosts, services, ports, friendly, model, server, hapPort?.let { HapAdvert(it, hapId, hapCategory, hapUnpaired) }, ids)
     }
 
     public companion object {

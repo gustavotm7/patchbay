@@ -36,6 +36,8 @@ public class HomeKitSimulator(
     public val setupCode: String = "314-15-926",
     public val accessoryId: String = "AA:BB:CC:11:22:33",
     port: Int = 0,
+    /** Start as the same accessory (same identity key, same paired controllers) at another address: what a DHCP change looks like. */
+    cloneOf: HomeKitSimulator? = null,
 ) : AutoCloseable {
     init { require(address.startsWith("127.")) { "simulators bind loopback only" } }
 
@@ -61,9 +63,9 @@ public class HomeKitSimulator(
     public val port: Int get() = server.localPort
 
     private val rnd = SecureRandom()
-    private val ltKeys: KeyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+    private val ltKeys: KeyPair = cloneOf?.ltKeys ?: KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
     public val publicKey: ByteArray = ltKeys.public.encoded.takeLast(32).toByteArray()
-    private val paired = ConcurrentHashMap<String, ByteArray>() // controller id -> LTPK
+    private val paired: ConcurrentHashMap<String, ByteArray> = cloneOf?.paired ?: ConcurrentHashMap() // controller id -> LTPK
     private var wrongCodes = 0
     private val sockets = CopyOnWriteArrayList<Socket>()
 

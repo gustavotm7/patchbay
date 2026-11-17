@@ -136,6 +136,7 @@ public class LanHome(
         observers.remove(device)?.cancel()
         try { owners[device]?.unpair(device) } catch (e: Exception) { log?.warn("home", "could not ask a device to forget us: ${e.javaClass.simpleName}") }
         recorder.forget(device)
+        pairings.remove(device)
         owners.remove(device); pendingPairing.remove(device); lastSummary.remove(device); trustAlerted.remove(device)
         synchronized(this) {
             _devices.update { list -> list.filterNot { it.device.id == device } }
@@ -575,6 +576,7 @@ public class LanHome(
         for (sd in saved) {
             val adapter = adapters.firstOrNull { it.id.value == sd.adapter } ?: continue
             val pairing = store.pairing(sd.id)?.let { Pairing(it.deviceId, it.secret, it.pinnedSha256) }
+            if (pairing != null) pairings[sd.id] = pairing
             if (adapter.restore(sd.id, sd.address, pairing) is PatchbayResult.Err) continue
             val device = Device(
                 id = sd.id, name = sd.name, kind = sd.kind, vendor = sd.vendor, model = sd.model, roomId = sd.roomId,
@@ -592,6 +594,9 @@ public class LanHome(
     }
 
     private val pendingPairing = ConcurrentHashMap<DeviceId, DiscoveredDevice>()
+
+    /** What each paired device's adapter was last given, kept so a device that moves can be re-registered at its new address without losing its secret or pinned key. */
+    private val pairings = ConcurrentHashMap<DeviceId, Pairing>()
 
     private fun track(adapter: DeviceAdapter, device: Device, address: String?, observe: Boolean = true) {
         owners[device.id] = adapter
@@ -617,6 +622,7 @@ public class LanHome(
         }
         store?.savePairing(StoredPairing(device, pairing.secret, pairing.pinnedFingerprint, clock()))
         adapter.restore(device, found.address, pairing)
+        pairings[device] = pairing
         pendingPairing.remove(device)
         _devices.update { list -> list.map { if (it.device.id == device) it.copy(needsPairing = false) else it } }
         log?.info("home", "paired ${found.displayName ?: found.model ?: "device"} (key pinned)")
@@ -697,6 +703,14 @@ public class LanHome(
             log?.info("home", "found ${device.name} at ${found.address}" + if (unpaired) " (needs pairing)" else "")
         } else if (existing.address != found.address) {
             _devices.update { list -> list.map { if (it.device.id == id) it.copy(address = found.address) else it } }
+            // The device moved (a DHCP change, a router reboot): tell its adapter, or it keeps knocking on the old address. The pairing
+            // and pinned key travel with it; an unpaired device that needs pairing has nothing to re-register yet.
+            val kept = pairings[id]
+            if (!adapter.requiresPairing || kept != null) {
+                adapter.relocate(id, found, kept)
+                record(existing.device.name, "Found again at a new address")
+                log?.info("home", "${existing.device.name} moved to ${found.address}")
+            }
         }
         val d = (existing?.device ?: _devices.value.first { it.device.id == id }.device)
         store?.saveDevice(
