@@ -4,6 +4,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +117,7 @@ fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier, live: dev.patc
                 PButton("Open demo home", onOpenDemo)
             }
         }
+        if (live != null) DiagnosticsPanel(s, live)
         VSpace(Space.m)
         Panel(Modifier.fillMaxWidth()) {
             Legend("Your data")
@@ -133,6 +142,41 @@ fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier, live: dev.patc
                 "Local only: no account, no analytics, no updater, and no connection to anything outside your home network. Devices are reached directly on your Wi-Fi.",
                 Patchbay.type.caption, c.textSecondary,
             )
+        }
+    }
+}
+
+/**
+ * One button for the first pass on real devices: copies a report of what each system and device has been doing (settings, counters, the last
+ * problems). It has no names, passwords, codes or readings, and it is only copied when asked; you can read it first.
+ */
+@Composable
+private fun DiagnosticsPanel(s: AppSettings, live: dev.patchbay.core.home.LiveHome) {
+    val c = Patchbay.colors
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    var copied by remember { mutableStateOf(false) }
+    var shown by remember { mutableStateOf<String?>(null) }
+    val header = listOf("Patchbay ${s.version}", "Key protection: ${s.keyProtection}", "Portable build: ${s.portable}")
+    fun build(then: (String) -> Unit) { scope.launch { then(withContext(Dispatchers.Default) { live.diagnosticsReport(header) }) } }
+    VSpace(Space.m)
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Diagnostics")
+        VSpace(Space.xs)
+        PText(
+            "If a device doesn't work, copy this and send it with what you did. It holds settings, counters and the last problems: no names, passwords, codes or readings. Nothing is sent anywhere.",
+            Patchbay.type.caption, c.textSecondary,
+        )
+        VSpace(Space.s)
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            PButton(if (copied) "Copied" else "Copy diagnostics", { build { clipboard.setText(AnnotatedString(it)); copied = true } })
+            PButton(if (shown == null) "Read it first" else "Hide", { if (shown == null) build { shown = it } else shown = null })
+        }
+        shown?.let { text ->
+            VSpace(Space.s)
+            Column(Modifier.fillMaxWidth().heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
+                PText(text, Patchbay.type.mono, c.textSecondary)
+            }
         }
     }
 }
