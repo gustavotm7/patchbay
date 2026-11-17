@@ -81,6 +81,7 @@ public class LanHome(
     /** What each paired device's adapter was last given, kept so a device that moves can be re-registered at its new address without losing its secret or pinned key. */
     private val pairings = ConcurrentHashMap<DeviceId, Pairing>()
 
+    private val extraSources = java.util.concurrent.CopyOnWriteArrayList<Pair<String, () -> List<String>>>()
     private val ctx = HomeContext(scope, clock, zone, random, store, log, devices)
     private val activityLog = ActivityLog(ctx)
     private val notifier = Notifier(ctx)
@@ -93,7 +94,7 @@ public class LanHome(
     private val healer = SelfHeal(ctx, adapters, { owners[it] }, { _scan.value == ScanState.SCANNING }) { adapter, found -> synchronized(this) { add(adapter, found) } }
     private val diagnostics = DiagnosticsCollector(
         ctx, adapters, { owners[it] }, healer, { netGuard.stats.value }, { _report.value }, { _census.value }, activityLog,
-        sceneBook.scenes, schedule.automations, _rooms, { maxLines -> recentLog(maxLines) },
+        sceneBook.scenes, schedule.automations, _rooms, { maxLines -> recentLog(maxLines) }, { extraSources.toList() },
     )
 
     // What the parts publish, as the interface asks for it.
@@ -122,6 +123,7 @@ public class LanHome(
     override val away: StateFlow<AwayState> = awayMode.away
     override suspend fun setAway(active: Boolean, simulate: Set<DeviceId>): Unit = awayMode.set(active, simulate)
     override fun diagnosticsReport(header: List<String>): String = diagnostics.report(header)
+    override fun addDiagnosticsSource(name: String, lines: () -> List<String>) { extraSources += name to lines }
 
     override suspend fun createBackup(passphrase: String): PatchbayResult<String> {
         val s = store ?: return PatchbayResult.Err(PatchbayError.Unsupported("Nothing is saved on this device, so there is nothing to back up"))

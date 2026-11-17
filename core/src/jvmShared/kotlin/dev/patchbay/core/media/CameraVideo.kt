@@ -1,5 +1,6 @@
 package dev.patchbay.core.media
 
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.adapter.StreamLease
 import dev.patchbay.core.adapter.rtsp.MjpegSplitter
 import dev.patchbay.core.adapter.rtsp.RtspStreamClient
@@ -82,24 +83,37 @@ public class CameraVideo(private val netGuard: NetGuard, private val ffmpeg: Fil
 
     public val available: Boolean get() = ffmpeg != null
 
+    private val problems = RecentProblems()
+    private val started = java.util.concurrent.atomic.AtomicInteger()
+    private val framesShown = java.util.concurrent.atomic.AtomicLong()
+
+    /** Facts for the diagnostics report: whether a decoder was found, how many streams were tried, how many pictures arrived, and why the last ones stopped. Never an address or a login. */
+    public fun diagnostics(): List<String> =
+        listOf("ffmpeg found: ${ffmpeg != null}; streams started: ${started.get()}; pictures decoded: ${framesShown.get()}") + problems.list().map { "problem: $it" }
+
     /** Runs until cancelled or the stream ends. [onFrame] gets JPEG bytes at the decoder's frame rate. */
     public suspend fun play(lease: StreamLease, onFrame: (ByteArray) -> Unit): PatchbayResult<Unit> {
-        val exe = ffmpeg ?: return PatchbayResult.Err(PatchbayError.Unsupported("Video needs ffmpeg. Put ffmpeg.exe in the Patchbay folder (see the camera help)."))
+        val exe = ffmpeg ?: return PatchbayResult.Err(PatchbayError.Unsupported("Video needs ffmpeg. Put ffmpeg.exe in the Patchbay folder (see the camera help).")).also { problems.add("no ffmpeg found") }
         return play(lease, VideoDecoder(exe), onFrame)
     }
 
     public suspend fun play(lease: StreamLease, decoder: VideoDecoder, onFrame: (ByteArray) -> Unit): PatchbayResult<Unit> {
+        started.incrementAndGet()
         try {
-            decoder.start(onFrame)
+            decoder.start { jpeg -> framesShown.incrementAndGet(); onFrame(jpeg) }
         } catch (e: IOException) {
+            problems.add("could not start ffmpeg: ${e.javaClass.simpleName}")
             return PatchbayResult.Err(PatchbayError.Unsupported("Couldn't start ffmpeg: ${e.javaClass.simpleName}"))
         }
-        return try {
+        val result = try {
             RtspStreamClient(netGuard, config).stream(lease) { nal -> try { decoder.write(nal) } catch (e: IOException) { throw DecoderGone() } }
         } catch (e: DecoderGone) {
             PatchbayResult.Err(PatchbayError.Unsupported("ffmpeg stopped. Check that this is a working ffmpeg build."))
         } finally {
             decoder.close()
         }
+        // Fixed-shape reasons only ("the camera offers no H.264 video...", "the camera stopped sending"); stopping on purpose is not a problem.
+        if (result is PatchbayResult.Err && result.error !is PatchbayError.Cancelled) problems.add(result.error.message.filter { it.code in 32..126 }.take(120))
+        return result
     }
 }

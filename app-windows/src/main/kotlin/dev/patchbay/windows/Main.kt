@@ -54,7 +54,9 @@ fun main() {
     val services = DesktopBootstrap.start("windows", root)
     Runtime.getRuntime().addShutdownHook(Thread { services.close() })
     val ffmpeg = dev.patchbay.core.media.FfmpegLocator.find(listOfNotNull(exeDir, root))
-    app(services.home, DesktopLock(services.store), services.store, services.keyKind, root, portable, dev.patchbay.core.media.CameraVideo(services.netGuard, ffmpeg))
+    val video = dev.patchbay.core.media.CameraVideo(services.netGuard, ffmpeg)
+    services.home.addDiagnosticsSource("Camera video") { video.diagnostics() }
+    app(services.home, DesktopLock(services.store), services.store, services.keyKind, root, portable, video)
 }
 
 /** The tray icon: a teal disc with a dark centre, drawn in code so there is no image file to ship. */

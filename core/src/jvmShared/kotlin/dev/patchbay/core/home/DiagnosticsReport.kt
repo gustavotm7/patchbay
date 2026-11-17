@@ -43,6 +43,8 @@ public data class DiagnosticsInput(
      * (the log, the activity list, what adapters say), because the log and the ledger are written for the owner and mention them.
      */
     val personalNames: List<String> = emptyList(),
+    /** Blocks from parts of the app that are not adapters (name, lines). */
+    val extras: List<Pair<String, List<String>>> = emptyList(),
 )
 
 /**
@@ -128,6 +130,11 @@ public object DiagnosticsReport {
             d.lines.forEach { line("  ${personal(it)}") }
         }
         if (i.devices.size > MAX_DEVICES) line("(${i.devices.size - MAX_DEVICES} more devices not listed)")
+
+        if (i.extras.isNotEmpty()) {
+            section("Other")
+            for ((name, lines) in i.extras) { line(name); lines.forEach { line("  ${personal(it)}") } }
+        }
 
         section("Network")
         val n = i.netStats

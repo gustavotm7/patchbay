@@ -21,6 +21,7 @@ internal class DiagnosticsCollector(
     private val automations: StateFlow<List<Automation>>,
     private val rooms: StateFlow<List<String>>,
     private val recentLog: (Int) -> String,
+    private val extras: () -> List<Pair<String, () -> List<String>>>,
 ) {
     fun report(header: List<String>): String {
         val now = ctx.clock()
@@ -71,6 +72,7 @@ internal class DiagnosticsCollector(
                     it.copy(deviceName = labels[it.deviceName] ?: "(a device or scene)", event = if (it.event.startsWith("Renamed")) "Renamed" else it.event)
                 },
                 logTail = recentLog(120).lines(),
+                extras = extras().map { (name, lines) -> name to safeLines(lines) },
                 personalNames = buildList {
                     for (l in live) {
                         val plain = listOfNotNull(l.device.vendor, l.device.model).joinToString(" ")

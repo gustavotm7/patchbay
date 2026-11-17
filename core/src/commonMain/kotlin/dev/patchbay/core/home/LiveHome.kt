@@ -72,6 +72,9 @@ public interface LiveHome {
      */
     public fun diagnosticsReport(header: List<String> = emptyList()): String
 
+    /** Lets the app shell add a block to the diagnostics report for something the home does not own (camera video on Windows). [lines] must hold only shapes and counters. */
+    public fun addDiagnosticsSource(name: String, lines: () -> List<String>) {}
+
     /** Systems that can be added by typing an address when discovery doesn't find them. */
     public val manualAdd: List<ManualAdd>
 

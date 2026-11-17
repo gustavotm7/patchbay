@@ -125,6 +125,12 @@ class DiagnosticsReportTest {
     }
 
     @Test
+    fun otherPartsOfTheAppCanAddABlock() {
+        val text = DiagnosticsReport.build(input().copy(extras = listOf("Camera video" to listOf("ffmpeg found: true; streams started: 2", "problem: the camera offers no H.264 video Patchbay can play"))))
+        assertTrue("== Other ==" in text && "Camera video" in text && "  problem: the camera offers no H.264 video Patchbay can play" in text, text)
+    }
+
+    @Test
     fun theWholeReportIsBounded() {
         val noisy = (1..70).map { device(it, List(60) { n -> "line $n " + "y".repeat(250) }) }
         val text = DiagnosticsReport.build(input(devices = noisy))
