@@ -1,7 +1,7 @@
 package dev.patchbay.core.home
 
 /**
- * Run a [Scene] at a time of day on chosen days. [days] are ISO weekdays (1 = Monday ... 7 = Sunday). Runs only while Patchbay is
+ * Run a [Scene] at a time of day on chosen days, or when a device does something ([trigger]; the time fields are then 0 and [days] is every day). [days] are ISO weekdays (1 = Monday ... 7 = Sunday). Runs only while Patchbay is
  * open or running in the tray: nothing is scheduled with the operating system, and a time that passes while it isn't running
  * is not caught up later. [sceneName] is null when the scene was deleted (the automation then does nothing).
  */
@@ -17,4 +17,5 @@ public data class Automation(
     /** "sunrise" or "sunset" instead of a clock time ([hour] and [minute] are then 0), shifted by [offsetMinutes]. Needs a home location. */
     val sun: String? = null,
     val offsetMinutes: Int = 0,
+    val trigger: DeviceTrigger? = null,
 )

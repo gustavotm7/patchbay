@@ -90,7 +90,7 @@ public class LanHome(
     private val schedule = Automations(ctx, sceneBook, activityLog, prefs.location) { id -> runScene(id) }
     private val adaptiveLights = AdaptiveLighting(ctx, activityLog) { id, command -> send(id, command) }
     private val awayMode = AwayMode(ctx, activityLog, { id, command -> send(id, command) }) { allOff() }
-    private val watcher = DeviceWatcher(ctx, activityLog, notifier) { message -> report(message) }
+    private val watcher = DeviceWatcher(ctx, activityLog, notifier, { message -> report(message) }) { id, event -> schedule.onDeviceEvent(id, event) }
     private val healer = SelfHeal(ctx, adapters, { owners[it] }, { _scan.value == ScanState.SCANNING }) { adapter, found -> synchronized(this) { add(adapter, found) } }
     private val diagnostics = DiagnosticsCollector(
         ctx, adapters, { owners[it] }, healer, { netGuard.stats.value }, { _report.value }, { _census.value }, activityLog,
@@ -116,6 +116,8 @@ public class LanHome(
     override val automations: StateFlow<List<Automation>> = schedule.automations
     override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> =
         schedule.save(name, sceneId, hour, minute, days, sun, offsetMinutes)
+    override suspend fun saveDeviceAutomation(name: String, sceneId: String, device: DeviceId, event: DeviceEvent): PatchbayResult<Unit> =
+        schedule.saveDeviceAutomation(name, sceneId, device, event)
     override suspend fun setAutomationEnabled(id: String, enabled: Boolean): Unit = schedule.setEnabled(id, enabled)
     override suspend fun deleteAutomation(id: String): Unit = schedule.delete(id)
     override val adaptive: StateFlow<Set<DeviceId>> = adaptiveLights.adaptive
@@ -173,6 +175,7 @@ public class LanHome(
         prefs.load()
         watcher.loadTrends()
         restoreSaved()
+        schedule.publish() // device names for triggers, now that the saved devices are back
         refreshRooms()
         scope.launch {
             while (true) {
@@ -299,6 +302,7 @@ public class LanHome(
             _devices.update { list -> list.filterNot { it.device.id == device } }
             refreshRooms()
         }
+        schedule.publish()
         store?.forget(device)
         activityLog.record(name, "Removed from Patchbay")
         log?.info("home", "removed a device and its saved pairing")
@@ -347,6 +351,7 @@ public class LanHome(
         }
         store?.devices()?.firstOrNull { it.id == device }?.let { store.saveDevice(it.copy(name = clean), clock()) }
         if (old != clean) activityLog.record(clean, "Renamed (was $old)")
+        schedule.publish()
         return PatchbayResult.Ok(Unit)
     }
 

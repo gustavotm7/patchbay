@@ -33,7 +33,12 @@ internal data class StoredAutomation(
     val enabled: Boolean = true,
     val sun: String? = null,
     val offset: Int = 0,
+    val trigger: StoredTrigger? = null,
 )
+
+/** "When [device] does [event]" (a [DeviceEvent] name). */
+@Serializable
+internal data class StoredTrigger(val device: String, val event: String)
 
 @Serializable
 internal data class StoredAway(val active: Boolean, val simulate: List<String>)

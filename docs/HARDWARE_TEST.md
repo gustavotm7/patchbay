@@ -399,3 +399,19 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | B1.4 | Same with the right passphrase | "Restored N devices and M pairings. Close Patchbay and open it again". After restarting, devices, rooms, scenes and automations are back, and paired devices do not ask for their code |
 | B1.5 | Restore on another computer or phone (a fresh install) | Same result; devices show offline for a minute at most, then come back as the app finds them at their new addresses |
 
+## Phase 2 — Device-triggered automations (A1.x)
+
+Needs a Windows or Android build that has Automations → New → When: **Device**, one scene, and a light or plug you can switch by hand (its own app or button, not Patchbay).
+
+| # | Step | Expected |
+|---|---|---|
+| A1.1 | Make a scene that switches a second light off. Automations → New → When: Device → pick the first light → "Turns on" → pick the scene → Save | The row reads "When <light> turns on · <scene>" |
+| A1.2 | Start with the first light already on. Close and reopen Patchbay | Nothing runs when Patchbay starts (an already-on light is a baseline, not an event) |
+| A1.3 | Switch the first light off, then on, with its own app or button | A few seconds after "on" the scene runs. Activity shows "Automation: …  Running scene … because <light> turns on". Switching it off did nothing |
+| A1.4 | Switch the first light off and on again within 30 seconds of A1.3 | Nothing runs. Activity says "Not run: … right after an automation ran, and automations don't start each other" |
+| A1.5 | Wait a minute, switch it off and on again | The scene runs again |
+| A1.6 | Printer (Bambu): make a scene that turns a light on. Automation "print finishes" → that scene. Run a short print | When it finishes the light comes on once, not when Patchbay starts with a finished print showing |
+| A1.7 | TV or Google TV: "starts playing" → a scene. Start a video, pause it, resume it | It runs on the first start; a stalled or buffering video does not run it again |
+| A1.8 | Forget the first light (open it → Forget), then look at Automations | The row says "a removed device" in the attention colour and never runs |
+| A1.9 | Turn the automation's switch off and repeat A1.3 | Nothing runs |
+

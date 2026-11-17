@@ -20,7 +20,11 @@ internal class DeviceWatcher(
     private val notifier: Notifier,
     /** Puts a problem on the banner and in the log. */
     private val report: (String) -> Unit,
+    /** Something a device did that an automation may be waiting for. */
+    private val onEvent: (DeviceId, DeviceEvent) -> Unit = { _, _ -> },
 ) {
+    private val detector = EventDetector()
+
     private data class Summary(val reach: Reachability, val power: Boolean?, val stage: PrintStage?, val media: PlaybackStatus?)
 
     private val lastSummary = ConcurrentHashMap<DeviceId, Summary>()
@@ -46,6 +50,7 @@ internal class DeviceWatcher(
     fun forget(device: DeviceId) {
         recorder.forget(device)
         lastSummary.remove(device); trustAlerted.remove(device)
+        detector.forget(device)
     }
 
     /** Called after every report from a device, once the home's own list has been updated. [trust] is false when the device presented a different key. */
@@ -60,6 +65,7 @@ internal class DeviceWatcher(
             trustAlerted.remove(snap.deviceId)
         }
         val s = live.snapshot ?: return
+        for (event in detector.detect(s)) onEvent(snap.deviceId, event)
         val now = Summary(s.reachability, s.state<CapabilityState.PowerState>()?.on, s.state<CapabilityState.PrintJobState>()?.stage, s.state<CapabilityState.MediaState>()?.status)
         val before = lastSummary.put(snap.deviceId, now)
         if (now.stage == PrintStage.PRINTING && before?.stage != PrintStage.PRINTING) printStartedAt.putIfAbsent(snap.deviceId, ctx.clock())

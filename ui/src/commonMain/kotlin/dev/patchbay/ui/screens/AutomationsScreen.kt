@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import dev.patchbay.core.home.DeviceEvent
 import dev.patchbay.core.home.ExposureReport
 import dev.patchbay.core.home.LiveDevice
 import dev.patchbay.core.home.LiveHome
@@ -199,7 +200,15 @@ internal fun daysText(days: Set<Int>): String = when {
     else -> days.sorted().joinToString(" ") { listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[it - 1] }
 }
 
-/** Run a scene at a time on chosen days. Only while Patchbay is open or in the tray; the panel says so. */
+/** The "when" of an automation in words, for its row. */
+internal fun whenText(a: dev.patchbay.core.home.Automation): String {
+    val t = a.trigger
+    if (t != null) return "When ${t.deviceName ?: "a removed device"} ${t.event.label}"
+    return (a.sun?.let { sunName -> sunName.replaceFirstChar { ch -> ch.uppercase() } + if (a.offsetMinutes != 0) " %+d min".format(a.offsetMinutes) else "" }
+        ?: "%02d:%02d".format(a.hour, a.minute)) + " · ${daysText(a.days)}"
+}
+
+/** Run a scene at a time on chosen days, or when a device does something. Only while Patchbay is open or in the tray; the panel says so. */
 @Composable
 internal fun AutomationsPanel(live: LiveHome) {
     val c = Patchbay.colors
@@ -213,6 +222,10 @@ internal fun AutomationsPanel(live: LiveHome) {
     var sceneId by remember { mutableStateOf<String?>(null) }
     var whenKind by remember { mutableStateOf("time") }
     var offset by remember { mutableStateOf("0") }
+    val devices by live.devices.collectAsState()
+    val watchable = devices.filter { DeviceEvent.availableFor(it.device.capabilities).isNotEmpty() }
+    var pickedDevice by remember { mutableStateOf<DeviceId?>(null) }
+    var pickedEvent by remember { mutableStateOf<DeviceEvent?>(null) }
     val location by live.location.collectAsState()
     var days by remember { mutableStateOf(setOf(1, 2, 3, 4, 5, 6, 7)) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -220,7 +233,7 @@ internal fun AutomationsPanel(live: LiveHome) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Legend("Automations")
-                PText("Run a scene at a set time or at sunrise or sunset. Runs while Patchbay is open, in the tray, or watching in the background (Settings).", Patchbay.type.caption, c.textSecondary)
+                PText("Run a scene at a set time, at sunrise or sunset, or when a device does something. Runs while Patchbay is open, in the tray, or watching in the background (Settings).", Patchbay.type.caption, c.textSecondary)
             }
             if (!creating && scenes.isNotEmpty()) PButton("New", { creating = true; error = null; sceneId = scenes.first().id })
         }
@@ -229,9 +242,8 @@ internal fun AutomationsPanel(live: LiveHome) {
             PToggle(a.name, a.enabled, { on -> scope.launch { live.setAutomationEnabled(a.id, on) } })
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PText(
-                    (a.sun?.let { sunName -> sunName.replaceFirstChar { ch -> ch.uppercase() } + if (a.offsetMinutes != 0) " %+d min".format(a.offsetMinutes) else "" } ?: "%02d:%02d".format(a.hour, a.minute)) +
-                        " · ${daysText(a.days)} · ${a.sceneName ?: "scene deleted"}",
-                    Patchbay.type.caption, if (a.sceneName == null) c.attention else c.textSecondary, Modifier.weight(1f),
+                    whenText(a) + " · ${a.sceneName ?: "scene deleted"}",
+                    Patchbay.type.caption, if (a.sceneName == null || (a.trigger != null && a.trigger?.deviceName == null)) c.attention else c.textSecondary, Modifier.weight(1f),
                 )
                 ConfirmingDelete(a.name) { scope.launch { live.deleteAutomation(a.id) } }
             }
@@ -258,9 +270,42 @@ internal fun AutomationsPanel(live: LiveHome) {
             VSpace(Space.xs)
             PText("When", Patchbay.type.bodyStrong)
             VSpace(Space.xs)
-            Segmented(listOf("time", "sunrise", "sunset"), whenKind, { it.replaceFirstChar { ch -> ch.uppercase() } }, { whenKind = it }, Modifier.fillMaxWidth())
+            Segmented(listOf("time", "sunrise", "sunset", "device"), whenKind, { it.replaceFirstChar { ch -> ch.uppercase() } }, { whenKind = it }, Modifier.fillMaxWidth())
             VSpace(Space.s)
-            if (whenKind == "time") {
+            if (whenKind == "device") {
+                if (watchable.isEmpty()) {
+                    PText("No device Patchbay can watch yet. Lights, plugs, TVs and printers can.", Patchbay.type.caption, c.attention)
+                } else {
+                    PText("Device", Patchbay.type.bodyStrong)
+                    VSpace(Space.xs)
+                    watchable.chunked(2).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                            row.forEach { d ->
+                                PButton(
+                                    d.device.name,
+                                    { pickedDevice = d.device.id; pickedEvent = DeviceEvent.availableFor(d.device.capabilities).first() },
+                                    Modifier.weight(1f), if (d.device.id == pickedDevice) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
+                                )
+                            }
+                            if (row.size == 1) Box(Modifier.weight(1f))
+                        }
+                        VSpace(Space.xs)
+                    }
+                    watchable.firstOrNull { it.device.id == pickedDevice }?.let { picked ->
+                        VSpace(Space.xs)
+                        PText("When it", Patchbay.type.bodyStrong)
+                        VSpace(Space.xs)
+                        DeviceEvent.availableFor(picked.device.capabilities).chunked(2).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                                row.forEach { ev -> PButton(ev.label.replaceFirstChar { ch -> ch.uppercase() }, { pickedEvent = ev }, Modifier.weight(1f), if (ev == pickedEvent) ButtonKind.PRIMARY else ButtonKind.SECONDARY) }
+                                if (row.size == 1) Box(Modifier.weight(1f))
+                            }
+                            VSpace(Space.xs)
+                        }
+                    }
+                    PText("Nothing starts within 30 seconds of another automation, so automations can't set each other off.", Patchbay.type.caption, c.textTertiary)
+                }
+            } else if (whenKind == "time") {
                 PText("Time (24 hour, HH:MM)", Patchbay.type.bodyStrong)
                 VSpace(Space.xs)
                 BasicTextField(
@@ -279,13 +324,15 @@ internal fun AutomationsPanel(live: LiveHome) {
                     modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
                 )
             }
-            VSpace(Space.s)
-            PText("Days", Patchbay.type.bodyStrong)
-            VSpace(Space.xs)
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                DAY_LETTERS.forEachIndexed { i, letter ->
-                    val d = i + 1
-                    PButton(letter, { days = if (d in days) days - d else days + d }, Modifier.weight(1f), if (d in days) ButtonKind.PRIMARY else ButtonKind.SECONDARY)
+            if (whenKind != "device") {
+                VSpace(Space.s)
+                PText("Days", Patchbay.type.bodyStrong)
+                VSpace(Space.xs)
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    DAY_LETTERS.forEachIndexed { i, letter ->
+                        val d = i + 1
+                        PButton(letter, { days = if (d in days) days - d else days + d }, Modifier.weight(1f), if (d in days) ButtonKind.PRIMARY else ButtonKind.SECONDARY)
+                    }
                 }
             }
             error?.let {
@@ -301,7 +348,19 @@ internal fun AutomationsPanel(live: LiveHome) {
                         val m = parts.getOrNull(1)?.toIntOrNull()
                         val off = offset.toIntOrNull()
                         val sid = sceneId
-                        if (whenKind == "time" && (h == null || m == null || parts.size != 2)) error = "Enter the time as HH:MM, for example 07:30"
+                        val target = pickedDevice
+                        val what = pickedEvent
+                        if (whenKind == "device") {
+                            if (sid == null) error = "Pick a scene"
+                            else if (target == null || what == null) error = "Pick a device and what it does"
+                            else scope.launch {
+                                when (val r = live.saveDeviceAutomation(name, sid, target, what)) {
+                                    is dev.patchbay.core.result.PatchbayResult.Ok -> { creating = false; name = ""; error = null }
+                                    is dev.patchbay.core.result.PatchbayResult.Err -> error = r.error.message
+                                }
+                            }
+                        }
+                        else if (whenKind == "time" && (h == null || m == null || parts.size != 2)) error = "Enter the time as HH:MM, for example 07:30"
                         else if (whenKind != "time" && off == null) error = "Enter the offset in minutes, for example 30 or -15"
                         else if (sid == null) error = "Pick a scene"
                         else scope.launch {

@@ -114,6 +114,12 @@ public interface LiveHome {
         name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String? = null, offsetMinutes: Int = 0,
     ): PatchbayResult<Unit>
 
+    /**
+     * Runs a scene whenever [device] does [event] (see [DeviceEvent.availableFor]). Runs while Patchbay is open, in the tray or watching in the
+     * background. Nothing starts within 30 seconds of another automation running, so automations can't start each other.
+     */
+    public suspend fun saveDeviceAutomation(name: String, sceneId: String, device: DeviceId, event: DeviceEvent): PatchbayResult<Unit>
+
     /** Recent history for the little graphs (a day of temperature, humidity and printer heat). */
     public val trends: dev.patchbay.core.model.TrendSource
 
