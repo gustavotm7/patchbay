@@ -21,6 +21,10 @@ and the app supports API 31+. ChaCha20-Poly1305, SHA-512 and HMAC are available 
 - Polling (every 5 s) over one verified, encrypted connection. HAP event subscriptions are not used yet.
 - Only accessory category 9 (thermostat) is offered. Other HomeKit devices are ignored.
 
+## Independent check (added 2026-11-17)
+
+`Curve25519WycheproofTest` runs Project Wycheproof's published vectors (Google / C2SP; 210 Ed25519 verification cases including malleable, truncated, non-canonical and small-order inputs, and 518 X25519 cases including low-order and non-canonical public keys). Every case agrees with the expected result. This covers the curves; SRP-6a and the HAP message flow remain checked only against simulators and the reference code that was read when they were written.
+
 ## Alternatives considered
 
 - BouncyCastle: well-reviewed, but a ~4 MB dependency with its own verification and R8 work, for four primitives.

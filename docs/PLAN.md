@@ -67,7 +67,7 @@ Automation triggers (device events), HomeKit event subscriptions instead of poll
 ## Status
 | Item | Status |
 |---|---|
-| W3.1 Wycheproof | todo |
+| W3.1 Wycheproof | **done 2026-11-17**: all 210 Ed25519 and all 518 X25519 vectors agree, no code change needed |
 | W1.1 IP-change fix | todo |
 | W1.2 self-healing | todo |
 | W2.1 diagnostics | todo |
