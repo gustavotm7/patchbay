@@ -72,15 +72,17 @@ public class CastSimulator(
                 val body = ByteArray(len).also { inp.readFully(it) }
                 val m = decode(body) ?: continue
                 received += Triple(m.ns, m.dest, m.payload)
+                // A real device answers with the request's own id (pychromecast waits for it); status it pushes by itself uses 0.
+                val id = Regex(""""requestId"\s*:\s*(\d+)""").find(m.payload)?.groupValues?.get(1)?.toIntOrNull() ?: 1
                 when {
-                    m.ns.endsWith("heartbeat") && "PING" in m.payload -> reply(out, "receiver-0", m.ns, """{"type":"PONG"}""")
-                    m.ns.endsWith("receiver") && "GET_STATUS" in m.payload -> reply(out, "receiver-0", m.ns, receiverStatus())
+                    m.ns.endsWith("heartbeat") && "PING" in m.payload -> reply(out, "receiver-0", m.ns, """{"type":"PONG"}""", m.src)
+                    m.ns.endsWith("receiver") && "GET_STATUS" in m.payload -> reply(out, "receiver-0", m.ns, receiverStatus(id), m.src)
                     m.ns.endsWith("receiver") && "SET_VOLUME" in m.payload -> {
-                        Regex(""""level":([0-9.]+)""").find(m.payload)?.let { volume = it.groupValues[1].toDouble() }
-                        Regex(""""muted":(true|false)""").find(m.payload)?.let { muted = it.groupValues[1].toBoolean() }
-                        broadcast("receiver-0", m.ns, receiverStatus())
+                        Regex(""""level"\s*:\s*([0-9.]+)""").find(m.payload)?.let { volume = it.groupValues[1].toDouble() }
+                        Regex(""""muted"\s*:\s*(true|false)""").find(m.payload)?.let { muted = it.groupValues[1].toBoolean() }
+                        broadcast("receiver-0", m.ns, receiverStatus(id), m.src)
                     }
-                    m.ns.endsWith("media") && "GET_STATUS" in m.payload -> reply(out, "web-5", m.ns, mediaStatus())
+                    m.ns.endsWith("media") && "GET_STATUS" in m.payload -> reply(out, "web-5", m.ns, mediaStatus(id), m.src)
                     m.ns.endsWith("media") && ("\"PLAY\"" in m.payload || "\"PAUSE\"" in m.payload || "\"STOP\"" in m.payload) -> {
                         playerState = when {
                             "\"PLAY\"" in m.payload -> "PLAYING"
@@ -88,7 +90,7 @@ public class CastSimulator(
                             else -> "IDLE"
                         }
                         if (playerState == "IDLE") appRunning = false
-                        broadcast("web-5", m.ns, mediaStatus())
+                        broadcast("web-5", m.ns, mediaStatus(id), m.src)
                         if (!appRunning) broadcast("receiver-0", "urn:x-cast:com.google.cast.receiver", receiverStatus())
                     }
                 }
@@ -103,19 +105,19 @@ public class CastSimulator(
         broadcast("receiver-0", "urn:x-cast:com.google.cast.receiver", receiverStatus())
     }
 
-    private fun receiverStatus(): String {
+    private fun receiverStatus(requestId: Int = 0): String {
         val apps = if (appRunning) ""","applications":[{"displayName":"YouTube","appId":"233637DE","transportId":"web-5","sessionId":"s1"}]""" else ""
-        return """{"type":"RECEIVER_STATUS","requestId":1,"status":{"volume":{"level":$volume,"muted":$muted}$apps}}"""
+        return """{"type":"RECEIVER_STATUS","requestId":$requestId,"status":{"volume":{"level":$volume,"muted":$muted}$apps}}"""
     }
 
-    private fun mediaStatus(): String =
-        if (!appRunning || playerState == "IDLE") """{"type":"MEDIA_STATUS","requestId":1,"status":[]}"""
-        else """{"type":"MEDIA_STATUS","requestId":1,"status":[{"mediaSessionId":3,"playerState":"$playerState","currentTime":12.5,"media":{"duration":240.0,"metadata":{"title":"Song","artist":"Band"}}}]}"""
+    private fun mediaStatus(requestId: Int = 0): String =
+        if (!appRunning || playerState == "IDLE") """{"type":"MEDIA_STATUS","requestId":$requestId,"status":[]}"""
+        else """{"type":"MEDIA_STATUS","requestId":$requestId,"status":[{"mediaSessionId":3,"playerState":"$playerState","currentTime":12.5,"media":{"duration":240.0,"metadata":{"title":"Song","artist":"Band"}}}]}"""
 
-    private fun reply(out: OutputStream, src: String, ns: String, payload: String) = send(out, encode(src, "sender-patchbay", ns, payload))
+    private fun reply(out: OutputStream, src: String, ns: String, payload: String, to: String = "sender-patchbay") = send(out, encode(src, to, ns, payload))
 
-    private fun broadcast(src: String, ns: String, payload: String) {
-        val bytes = encode(src, "sender-patchbay", ns, payload)
+    private fun broadcast(src: String, ns: String, payload: String, to: String = "sender-patchbay") {
+        val bytes = encode(src, to, ns, payload)
         for (o in clients) runCatching { send(o, bytes) }
     }
 
@@ -126,7 +128,7 @@ public class CastSimulator(
 
     // ---- independent protobuf (varint + length-delimited only) ----
 
-    private class Msg(val dest: String, val ns: String, val payload: String)
+    private class Msg(val src: String, val dest: String, val ns: String, val payload: String)
 
     private fun encode(src: String, dest: String, ns: String, payload: String): ByteArray {
         val o = java.io.ByteArrayOutputStream()
@@ -139,15 +141,15 @@ public class CastSimulator(
     private fun decode(b: ByteArray): Msg? {
         var i = 0
         fun v(): Int { var r = 0; var sh = 0; while (true) { val x = b[i++].toInt() and 0xff; r = r or ((x and 0x7f) shl sh); if (x < 0x80) return r; sh += 7 } }
-        var dest = ""; var ns = ""; var payload = ""
+        var src = ""; var dest = ""; var ns = ""; var payload = ""
         return try {
             while (i < b.size) {
                 val tag = v()
                 if (tag and 7 == 0) { v(); continue }
                 val len = v(); val t = String(b, i, len); i += len
-                when (tag ushr 3) { 3 -> dest = t; 4 -> ns = t; 6 -> payload = t }
+                when (tag ushr 3) { 2 -> src = t; 3 -> dest = t; 4 -> ns = t; 6 -> payload = t }
             }
-            Msg(dest, ns, payload)
+            Msg(src, dest, ns, payload)
         } catch (e: Exception) { null }
     }
 

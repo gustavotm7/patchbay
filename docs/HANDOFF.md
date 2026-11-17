@@ -24,7 +24,7 @@ and whether the eufy stream is H.264 (H.265 is refused). Not built: ESPHome, the
 The pre-hardware plan in `docs/PLAN.md` was executed: Wycheproof vectors for the hand-written curves, device-moves and self-healing, HomeKit desk-check, the diagnostics report,
 LanHome split into parts, encrypted backup (ADR 0013), and 44 headless UI behaviour tests. A new restore test found a real start-up crash (a saved device that needs pairing); fixed.
 **First hardware pass:** run `docs/HARDWARE_TEST.md` and after each device press Settings → Diagnostics → Copy diagnostics and send it with the failing step.
-Still open: W3.3 (interop against HAP-python, tinytuya, python-kasa, pychromecast, androidtvremote2 on loopback needs the owner to allow installing those PyPI packages into a throwaway venv; the sandbox refused), and the owner decisions in PLAN W5 (Home Assistant or continue; keep hand-written crypto or adopt a library).
+W3.3 interop is done (`docs/protocols/interop.md`, `tools/interop/`). Still open: the owner decisions in PLAN W5 (Home Assistant or continue; keep hand-written crypto or adopt a library).
 Known gaps: camera video failures are only shown on screen (not in the diagnostics report); each scan runs several separate mDNS censuses (harmless, wasteful).
 
 ## Paste this to start a new session
