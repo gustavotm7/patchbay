@@ -27,6 +27,11 @@ LanHome split into parts, encrypted backup (ADR 0013), and 44 headless UI behavi
 W3.3 interop is done (`docs/protocols/interop.md`, `tools/interop/`). Still open: the owner decisions in PLAN W5 (Home Assistant or continue; keep hand-written crypto or adopt a library).
 Known gaps: each scan runs several separate mDNS censuses (harmless, wasteful).
 
+**Later the same day, from the backlog:** device-triggered automations (ADR 0014). Automations → New → When: Device runs a scene when a light or plug turns on or off, a print finishes or fails,
+or a TV or streamer starts or stops playing. Events come from comparing consecutive reports (`EventDetector`); the first report after start is never an event; automations never start each other
+(30-second window); reports from a device with a changed key start nothing. Hardware checks are `docs/HARDWARE_TEST.md` A1.x. Not built from the backlog: automation conditions (only after
+sunset, only when away), HomeKit event subscriptions, Android widgets and tiles.
+
 ## Paste this to start a new session
 
 > Continue the Patchbay project in https://github.com/gustavotm7/patchbay. Work on the branch
