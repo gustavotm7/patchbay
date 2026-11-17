@@ -6,7 +6,7 @@ Our simulators and our adapters were written from the same reading of each proto
 Set up once, in a throwaway virtualenv outside the repository:
 
     python3 -m venv /tmp/pbvenv
-    /tmp/pbvenv/bin/pip install HAP-python tinytuya python-kasa pychromecast androidtvremote2
+    /tmp/pbvenv/bin/pip install HAP-python tinytuya python-kasa pychromecast androidtvremote2 paho-mqtt govee-local-api bscpylgtv
 
 **1. Our HomeKit client against HAP-python (a real accessory).**
 
@@ -14,12 +14,12 @@ Set up once, in a throwaway virtualenv outside the repository:
     PATCHBAY_HAP_PYTHON_PORT=51826 PATCHBAY_HAP_PYTHON_ID=<mac from the state file> \
       ./gradlew -Ppatchbay.jvmOnly=true :simulators:jvmTest --tests '*HapPythonInteropTest' -i
 
-**2. Reference clients against our simulators** (Tuya, Kasa, Cast, Google TV remote).
+**2. Reference clients against our simulators** (Tuya 3.3 to 3.5, Kasa, Cast, Google TV remote, Bambu MQTT, Govee, webOS).
 
     mkdir /tmp/pbhost && PATCHBAY_SIM_HOST_DIR=/tmp/pbhost ./gradlew -Ppatchbay.jvmOnly=true :simulators:jvmTest --tests '*SimulatorHostForInterop' &
     # wait for /tmp/pbhost/ports, then:
     /tmp/pbvenv/bin/python tools/interop/run_clients.py /tmp/pbhost
-    touch /tmp/pbhost/stop
+    touch /tmp/pbhost/stop      # then /tmp/pbhost/final shows the simulators' state (webos.volume=23 webos.muted=true webos.input=HDMI_3 webos.on=false, govee.brightness=40, ...)
 
 `tools/interop/tuya_vectors.py` prints the known-answer vectors (3.4 and 3.5 frames, session keys, HMACs) from tinytuya's own codec; they are pinned in `TuyaSecureFramesTest`.
 

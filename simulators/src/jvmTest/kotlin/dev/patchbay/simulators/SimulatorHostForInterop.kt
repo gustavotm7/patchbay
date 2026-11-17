@@ -5,7 +5,7 @@ import java.security.KeyStore
 import kotlin.test.Test
 
 /**
- * Not a test: when PATCHBAY_SIM_HOST_DIR is set, it starts simulated Tuya bulbs (protocols 3.3, 3.4 and 3.5), a Kasa plug and others on loopback, writes their ports to
+ * Not a test: when PATCHBAY_SIM_HOST_DIR is set, it starts simulated Tuya bulbs (protocols 3.3, 3.4 and 3.5), a Kasa plug, a Govee lamp, an LG TV and others on loopback, writes their ports to
  * <dir>/ports, and keeps them up until <dir>/stop exists (at most 10 minutes). It lets independent client libraries (tinytuya,
  * python-kasa) talk to our simulators by hand. Does nothing in a normal run.
  */
@@ -21,15 +21,18 @@ class SimulatorHostForInterop {
         val cast = CastSimulator("127.0.0.173", ks("device-a.p12"), "testpass".toCharArray())
         val tv = AndroidTvSimulator("127.0.0.174", ks("tv-a.p12"), "testpass".toCharArray())
         val printer = BambuSimulator("127.0.0.175", "0948AD4A0B00001", "12345678", ks("device-a.p12"), "testpass".toCharArray())
+        // The Govee library replies are read on a fixed port, so the lamp is told where to send them (loopback only).
+        val govee = GoveeSimulator("127.0.0.178", "1F:80:C5:32:32:36:72:4E", "H6076", replyPort = 14002)
+        val webos = WebOsSimulator("127.0.0.179", ks("device-a.p12"), "testpass".toCharArray())
         try {
-            File(dir, "ports").writeText("tuya=${tuya.port}\ntuya34=${tuya34.port}\ntuya35=${tuya35.port}\nkasa=${kasa.port}\ncast=${cast.port}\natvpair=${tv.pairingPort}\natvremote=${tv.remotePort}\nbambu=${printer.mqttPort}\n")
+            File(dir, "ports").writeText("tuya=${tuya.port}\ntuya34=${tuya34.port}\ntuya35=${tuya35.port}\nkasa=${kasa.port}\ncast=${cast.port}\natvpair=${tv.pairingPort}\natvremote=${tv.remotePort}\nbambu=${printer.mqttPort}\ngovee_scan=${govee.scanPort}\ngovee_cmd=${govee.commandPort}\nwebos=${webos.wssPort}\n")
             var lastCode: String? = null
             val end = System.nanoTime() + 600_000_000_000L
             while (!File(dir, "stop").exists() && System.nanoTime() < end) {
                 tv.displayedCode?.let { if (it != lastCode) { lastCode = it; File(dir, "atv.code").writeText(it) } }
                 Thread.sleep(200)
             }
-            File(dir, "final").writeText("tuya.dps=${tuya.dps}\ntuya34.dps=${tuya34.dps}\ntuya35.dps=${tuya35.dps}\ntuya34.sessions=${tuya34.sessionsNegotiated}\ntuya35.sessions=${tuya35.sessionsNegotiated}\nkasa.on=${kasa.on}\ncast.volume=${cast.volume}\natv.code=${tv.displayedCode}\n")
-        } finally { tuya.close(); tuya34.close(); tuya35.close(); kasa.close(); cast.close(); tv.close(); printer.close() }
+            File(dir, "final").writeText("tuya.dps=${tuya.dps}\ntuya34.dps=${tuya34.dps}\ntuya35.dps=${tuya35.dps}\ntuya34.sessions=${tuya34.sessionsNegotiated}\ntuya35.sessions=${tuya35.sessionsNegotiated}\nkasa.on=${kasa.on}\ncast.volume=${cast.volume}\natv.code=${tv.displayedCode}\ngovee.on=${govee.on} govee.brightness=${govee.brightness} govee.rgb=${govee.rgb} govee.kelvin=${govee.kelvin}\nwebos.volume=${webos.volume} webos.muted=${webos.muted} webos.on=${webos.on} webos.input=${webos.input} webos.keys=${webos.issuedKeys.size}\n")
+        } finally { tuya.close(); tuya34.close(); tuya35.close(); kasa.close(); cast.close(); tv.close(); printer.close(); govee.close(); webos.close() }
     }
 }

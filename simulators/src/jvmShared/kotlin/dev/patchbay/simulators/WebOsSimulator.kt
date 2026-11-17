@@ -107,25 +107,26 @@ public class WebOsSimulator(
             val text = readClientText(inp) ?: return
             val msg = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
             val type = (msg["type"] as? JsonPrimitive)?.content
-            val id = (msg["id"] as? JsonPrimitive)?.content ?: ""
+            // A real TV echoes the id exactly as the client sent it (some libraries send numbers, some strings), so keep its JSON text.
+            val id = msg["id"]?.toString() ?: "\"\""
             val payload = msg["payload"] as? JsonObject ?: JsonObject(emptyMap())
             when (type) {
-                "hello" -> send(out, """{"type":"hello","id":"$id","payload":{"protocolVersion":1,"deviceType":"tv","deviceOS":"webOS"}}""")
+                "hello" -> send(out, """{"type":"hello","id":$id,"payload":{"protocolVersion":1,"deviceType":"tv","deviceOS":"webOS"}}""")
                 "register" -> {
                     val presented = (payload["client-key"] as? JsonPrimitive)?.content
                     if (presented != null && presented in issuedKeys) {
                         registered = true
-                        send(out, """{"type":"registered","id":"$id","payload":{"client-key":"$presented"}}""")
+                        send(out, """{"type":"registered","id":$id,"payload":{"client-key":"$presented"}}""")
                     } else {
-                        send(out, """{"type":"response","id":"$id","payload":{"pairingType":"PROMPT","returnValue":true}}""")
+                        send(out, """{"type":"response","id":$id,"payload":{"pairingType":"PROMPT","returnValue":true}}""")
                         Thread.sleep(50) // the user picks up the remote
                         if (userAccepts) {
                             val newKey = (1..32).map { "0123456789abcdef"[(Math.random() * 16).toInt()] }.joinToString("")
                             issuedKeys += newKey
                             registered = true
-                            send(out, """{"type":"registered","id":"$id","payload":{"client-key":"$newKey"}}""")
+                            send(out, """{"type":"registered","id":$id,"payload":{"client-key":"$newKey"}}""")
                         } else {
-                            send(out, """{"type":"error","id":"$id","error":"403 User denied access","payload":{}}""")
+                            send(out, """{"type":"error","id":$id,"error":"403 User denied access","payload":{}}""")
                         }
                     }
                 }
@@ -133,7 +134,7 @@ public class WebOsSimulator(
                     val uri = (msg["uri"] as? JsonPrimitive)?.content?.removePrefix("ssap://") ?: ""
                     requests += uri
                     if (!registered && uri != "system/getSystemInfo") {
-                        send(out, """{"type":"error","id":"$id","error":"401 insufficient permissions","payload":{}}""")
+                        send(out, """{"type":"error","id":$id,"error":"401 insufficient permissions","payload":{}}""")
                         continue
                     }
                     val body = when (uri) {
@@ -149,8 +150,8 @@ public class WebOsSimulator(
                         "media.controls/play", "media.controls/pause", "media.controls/stop" -> """{"returnValue":true}"""
                         else -> null
                     }
-                    if (body == null) send(out, """{"type":"error","id":"$id","error":"404 no such service or method","payload":{}}""")
-                    else send(out, """{"type":"response","id":"$id","payload":$body}""")
+                    if (body == null) send(out, """{"type":"error","id":$id,"error":"404 no such service or method","payload":{}}""")
+                    else send(out, """{"type":"response","id":$id,"payload":$body}""")
                 }
             }
         }
