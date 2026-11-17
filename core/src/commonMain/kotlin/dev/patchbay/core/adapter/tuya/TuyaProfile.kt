@@ -18,6 +18,12 @@ public interface TuyaProfile {
     /** True when a first reading looks like this device type (used to catch a wrong choice at pairing). */
     public fun recognises(dps: Map<String, JsonPrimitive>): Boolean
 
+    /**
+     * The data point numbers this device type uses, or null when they are not known in advance. Devices that must be asked for data points by number ("device22")
+     * are asked for these; for null, a set of ranges is tried once and the numbers that answered are remembered.
+     */
+    public val requestDps: List<String>? get() = null
+
     public fun toDps(command: Command): PatchbayResult<Map<String, JsonPrimitive>>
     public fun states(dps: Map<String, JsonPrimitive>): List<CapabilityState>
 }

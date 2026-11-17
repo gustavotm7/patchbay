@@ -72,7 +72,13 @@ public class TuyaLocalAdapter(
         ID, "Tuya bulb (Lepro and others)", "Device ID (20–24 letters and numbers)", TuyaProfiles.ALL.map { it.label },
     )
 
-    private class Known(val address: LanAddress, val profile: TuyaProfile, val localKey: ByteArray?, val version: TuyaVersion = TuyaVersion.V33)
+    private class Known(val address: LanAddress, val profile: TuyaProfile, val localKey: ByteArray?, val version: TuyaVersion = TuyaVersion.V33) {
+        /** Set once a protocol 3.3 device has answered the normal query with "data unvalid": it is then asked for its data points by number. */
+        @Volatile var device22: Boolean = false
+
+        /** The data point numbers that answered when they were looked for by number, so later readings ask for just those. */
+        @Volatile var knownDps: List<String>? = null
+    }
 
     private val known = ConcurrentHashMap<DeviceId, Known>()
     private val locks = ConcurrentHashMap<LanAddress, Mutex>()
@@ -107,7 +113,10 @@ public class TuyaLocalAdapter(
 
     override fun diagnostics(device: DeviceId): List<String> = buildList {
         val k = known[device]
-        add("device type: ${k?.profile?.id ?: "unknown"}; local key stored: ${k?.localKey != null}; protocol spoken: ${k?.version?.label ?: "unknown"}")
+        add(
+            "device type: ${k?.profile?.id ?: "unknown"}; local key stored: ${k?.localKey != null}; protocol spoken: ${k?.version?.label ?: "unknown"}; " +
+                "query style: ${if (k?.device22 == true) "by data point number (a \"device22\" device)" else "normal"}",
+        )
         dpShapes[device]?.let { add("data points in the last reading (type only): $it") }
     }
 
@@ -148,7 +157,12 @@ public class TuyaLocalAdapter(
         val key = parts?.getOrNull(1)?.takeIf { it.length == 16 }?.toByteArray(Charsets.UTF_8)
         // Secrets saved before 3.4 and 3.5 were supported have no third line: they are 3.3.
         val version = TuyaVersion.byLabel(parts?.getOrNull(2)) ?: known[device]?.version ?: TuyaVersion.V33
-        known[device] = Known(a, profile, key, version)
+        val previous = known[device]
+        known[device] = Known(a, profile, key, version).also {
+            // A fourth line says the device had to be asked for its data points by number; what a moved device had already found out is kept.
+            it.device22 = parts?.getOrNull(3) == "device22" || previous?.device22 == true
+            it.knownDps = previous?.knownDps
+        }
         return PatchbayResult.Ok(Unit)
     }
 
@@ -176,7 +190,8 @@ public class TuyaLocalAdapter(
                         return PatchbayResult.Err(PatchbayError.Unsupported("The device didn't report a power switch where this device type expects it; try the other type"))
                     }
                     known[id] = k
-                    return PatchbayResult.Ok(Pairing(id, "${profile.id}\n$keyText\n${version.label}".toByteArray(Charsets.UTF_8), pinnedFingerprint = null))
+                    val secret = "${profile.id}\n$keyText\n${version.label}" + if (k.device22) "\ndevice22" else ""
+                    return PatchbayResult.Ok(Pairing(id, secret.toByteArray(Charsets.UTF_8), pinnedFingerprint = null))
                 }
             }
         }
@@ -238,18 +253,56 @@ public class TuyaLocalAdapter(
 
     private suspend fun query(device: DeviceId, k: Known, tuyaId: String): PatchbayResult<Map<String, JsonPrimitive>> {
         val key = k.localKey ?: return PatchbayResult.Err(PatchbayError.Unauthorized("enter the device's local key first"))
+        if (k.version == TuyaVersion.V33 && k.device22) return queryByNumber(device, k, tuyaId, key)
         val json = if (k.version == TuyaVersion.V33) TuyaProtocol.dpQueryJson(tuyaId, clock() / 1000) else TuyaProtocol.dpQueryJsonNew()
         val reply = when (val r = withLink(k, key) { it.query(json) }) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
         }
+        // Some protocol 3.3 devices (often with 22-character ids) answer the normal query with "data unvalid" and want their data points asked for by number.
+        if (k.version == TuyaVersion.V33 && reply.plain.decodeToString().contains("data unvalid", ignoreCase = true)) {
+            k.device22 = true
+            problems.add("the device answered \"data unvalid\" to the normal query; asking for its data points by number instead")
+            return queryByNumber(device, k, tuyaId, key)
+        }
         (checkReturn(reply) as? PatchbayResult.Err)?.let { return it }
-        return TuyaProtocol.parseDps(reply.plain).also {
-            when (it) {
-                is PatchbayResult.Err -> rejected(it.error.message)
-                is PatchbayResult.Ok -> { lastContact[device] = clock(); dpShapes[device] = shapeOf(it.value) }
+        return noteReading(device, TuyaProtocol.parseDps(reply.plain))
+    }
+
+    private fun noteReading(device: DeviceId, r: PatchbayResult<Map<String, JsonPrimitive>>): PatchbayResult<Map<String, JsonPrimitive>> = r.also {
+        when (it) {
+            is PatchbayResult.Err -> rejected(it.error.message)
+            is PatchbayResult.Ok -> { lastContact[device] = clock(); dpShapes[device] = shapeOf(it.value) }
+        }
+    }
+
+    /**
+     * The "device22" way of reading: the control-style command with the data point numbers wanted. The profile's own numbers are asked for in one request; a profile
+     * that does not know its numbers (the read-only one) tries the ranges devices use, once, and remembers which numbers answered.
+     */
+    private suspend fun queryByNumber(device: DeviceId, k: Known, tuyaId: String, key: ByteArray): PatchbayResult<Map<String, JsonPrimitive>> {
+        suspend fun ask(ids: List<String>): PatchbayResult<Map<String, JsonPrimitive>> {
+            val reply = when (val r = withLink(k, key) { it.queryDps(TuyaProtocol.dpQueryByNumberJson(tuyaId, ids, clock() / 1000)) }) {
+                is PatchbayResult.Ok -> r.value
+                is PatchbayResult.Err -> return r
+            }
+            (checkReturn(reply) as? PatchbayResult.Err)?.let { return it }
+            return TuyaProtocol.parseDps(reply.plain)
+        }
+        val wanted = k.knownDps ?: k.profile.requestDps
+        if (wanted != null) return noteReading(device, ask(wanted))
+        // Unknown numbers: look through the usual ranges (a request can only carry so many), always including 1.
+        val found = LinkedHashMap<String, JsonPrimitive>()
+        var lastError: PatchbayResult.Err? = null
+        for (range in DISCOVERY_RANGES) {
+            when (val r = ask(listOf("1") + range.map { it.toString() })) {
+                is PatchbayResult.Ok -> found.putAll(r.value)
+                is PatchbayResult.Err -> lastError = r
             }
         }
+        if (found.isEmpty()) return noteReading(device, lastError ?: PatchbayResult.Err(PatchbayError.ProtocolViolation("tuya: the device reported no data points")))
+        k.knownDps = found.keys.toList()
+        return noteReading(device, PatchbayResult.Ok(found))
     }
 
     private fun checkReturn(r: TuyaReply): PatchbayResult<Unit> =
@@ -304,5 +357,8 @@ public class TuyaLocalAdapter(
         public fun deviceIdFor(key: String): DeviceId = DeviceId("tuya-$key")
         private const val MAX_DPS_IN_REPORT = 30
         private const val CLOSED = "the device closed the connection"
+
+        /** Where data point numbers are found in practice; asked for in these groups because a request has a small size limit. */
+        private val DISCOVERY_RANGES: List<IntRange> = listOf(2..10, 11..20, 21..30, 50..60, 61..70, 100..110, 111..120, 121..130, 131..140)
     }
 }

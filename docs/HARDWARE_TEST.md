@@ -143,6 +143,7 @@ Prerequisite: the bulb's device ID, local key and IP (the protocol version, 3.3,
 | U1.1 | Network screen → **Add by address** → "Tuya bulb" → **Bulb (standard)** → IP + device ID → Add | A "Tuya bulb-v2" entry with a Pair button |
 | U1.2 | Open it → **Pair** → paste the local key | Pairing completes; within about 6 s the bulb shows its on/off state |
 | U1.2a | Settings → Diagnostics → Read it first, find the bulb's block | A line "protocol spoken: 3.3", "3.4" or "3.5". Tell me which (and, if you know it, what `tinytuya scan` says) |
+| U1.2b | (Only if the diagnostics line in U1.2a says "query style: by data point number") | That means the device answered "data unvalid" to the normal query and Patchbay switched to asking for data points by number; it should still show its state. Tell me anyway |
 | U1.3 | Wrong key (one character off) | Within about 10 seconds: "the device didn't accept the local key", or (newer devices that simply hang up) "answered the connection but not with the protocol and local key you gave" |
 | U1.4 | Toggle power, drag brightness | The bulb follows within about 1 s |
 | U1.5 | Colour temperature pad: warmest and coolest ends | The bulb goes from warm to cool white. Tell me the real range if it looks different from 2700 to 6500 K |
@@ -339,6 +340,7 @@ This is the first real-camera test of the RTSP video code (H.264 and H.265): tel
 |---|---|---|
 | V1.1 | Get the vacuum's local key (`docs/TUYA_KEYS.md`); Network → Add by address → Tuya → "Robot vacuum or other (read-only…)" → its IP and device ID | A tile appears, "Tap to pair" |
 | V1.2 | Pair with the local key | The page lists "DP 1 = …" style rows. Pairing may take a few seconds longer than for other devices (it tries each protocol version). If it says "answered the connection but not with the protocol and local key", re-fetch the local key; if that does not help, tell me and copy diagnostics (the Tuya block lists the problems seen per version) |
+| V1.2a | Read the diagnostics block for the vacuum | "protocol spoken: 3.x" and "query style: normal" or "by data point number". If it is by number, the first reading takes a few seconds (it looks through the usual data point ranges once) |
 | V1.3 | Copy data points while it is docked, again while it cleans, again while paused | Send me the three lists. Nothing is ever sent to the vacuum |
 
 ## Phase 2 — Command bar and quiet hours

@@ -53,6 +53,20 @@ public class TuyaSimulator(
     @Volatile public var garbage: Boolean = false
     @Volatile public var versionHeaderInQuery: Boolean = false
 
+    /** How many empty acknowledgement frames come before the data in answer to a query, as some real devices send (all protocol versions). */
+    @Volatile public var emptyAcksBeforeData: Int = 0
+
+    /**
+     * Protocol 3.3 only: answers the normal query with "data unvalid" (and [device22Retcode]) and only answers a query that names its data points by number with the
+     * control-style command, as "device22" devices do.
+     */
+    @Volatile public var device22: Boolean = false
+    @Volatile public var device22Retcode: Int = 0
+
+    /** How many normal queries and how many by-number queries the device has received. */
+    public val normalQueries: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger()
+    public val numberQueries: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger()
+
     /** The data-point maps received in control frames, in order. */
     public val writes: MutableList<Map<String, JsonPrimitive>> = CopyOnWriteArrayList()
 
@@ -84,8 +98,11 @@ public class TuyaSimulator(
             if (garbage) { out.write(ByteArray(40) { i -> (i * 7).toByte() }); return@use }
             val reply: ByteArray = when (cmd) {
                 0x0A -> {
+                    normalQueries.incrementAndGet()
+                    repeat(emptyAcksBeforeData) { out.write(frame(seq, cmd, 0, ByteArray(0))) }
                     val ok = decrypt(payload)?.let { p -> Json.parseToJsonElement(p.decodeToString()).jsonObject["devId"]?.let { d -> (d as JsonPrimitive).content == deviceId } } == true
                     if (!ok) frame(seq, cmd, 1, "data format error".toByteArray())
+                    else if (device22) frame(seq, cmd, device22Retcode, encrypt("""{"errorCode":"json obj data unvalid"}""".toByteArray()))
                     else {
                         val json = JsonObject(dps.toMap()).let { d -> """{"devId":"$deviceId","dps":$d}""" }
                         val enc = encrypt(json.toByteArray())
@@ -102,6 +119,18 @@ public class TuyaSimulator(
                         writes += w
                         dps.putAll(w)
                         frame(seq, cmd, 0, ByteArray(0))
+                    }
+                }
+                0x0D -> {
+                    // A "device22" device's way of being read: the data points wanted, by number, in a control-style message.
+                    numberQueries.incrementAndGet()
+                    val body = if (payload.size > 15 && payload.copyOf(3).contentEquals("3.3".toByteArray())) payload.copyOfRange(15, payload.size) else null
+                    val obj = body?.let { b -> decrypt(b) }?.let { p -> Json.parseToJsonElement(p.decodeToString()).jsonObject }
+                    val wanted = (obj?.get("dps") as? JsonObject)?.keys
+                    if (!device22 || obj == null || (obj["devId"] as? JsonPrimitive)?.content != deviceId || wanted == null) frame(seq, cmd, 1, "data format error".toByteArray())
+                    else {
+                        val answer = JsonObject(dps.toMap().filterKeys { it in wanted }).let { d -> """{"devId":"$deviceId","dps":$d}""" }
+                        frame(seq, cmd, 0, encrypt(answer.toByteArray()))
                     }
                 }
                 else -> frame(seq, cmd, 1, ByteArray(0))
@@ -200,6 +229,8 @@ public class TuyaSimulator(
                         sessionsNegotiated++
                     }
                     0x10 -> {
+                        normalQueries.incrementAndGet()
+                        repeat(emptyAcksBeforeData) { out.write(replySecure(m.seq, 0x10, 0, ByteArray(0), key)) }
                         val json = """{"data":{"dps":${JsonObject(dps.toMap())}},"protocol":4,"t":1700000000}""".toByteArray()
                         out.write(replySecure(m.seq, 0x10, 0, if (versionHeaderInQuery) header + json else json, key)); out.flush()
                     }

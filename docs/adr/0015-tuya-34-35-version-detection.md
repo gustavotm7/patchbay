@@ -31,6 +31,14 @@ rejected, and tinytuya as a client completes the handshake, reads and writes aga
 - A firmware update that changes the version makes a paired device stop answering; forgetting and adding it again detects the new version. Re-detecting automatically after repeated failures is a possible later addition.
 - 3.4 uses AES-ECB inside an HMAC: the protocol's design, accepted because this only runs on the LAN behind `NetGuard`. 3.5 is the better scheme of the two.
 
+## Addendum, same day: two reply habits
+
+Reading tinytuya's source for the real-device behaviour it works around turned up two that the first version of this adapter could not handle, both plausible on the owner's devices: an
+empty acknowledgement frame before a query's data (the adapter read one frame and called it the answer, so such a device would have looked permanently unreadable), and "device22"
+devices that answer the normal query with "data unvalid" and must be asked for data points by number (the vacuum's id has 22 characters). The adapter now skips up to three empty
+acknowledgements on a query, and falls back to the by-number query (3.3 only) when it sees "data unvalid", remembering that in the pairing. Details in `docs/protocols/tuya.md`. Both are
+checked against the simulator only: tinytuya documents them but there is no independent device to test against.
+
 ## Alternatives considered
 
 - Asking the owner for the version: most owners would not know it.

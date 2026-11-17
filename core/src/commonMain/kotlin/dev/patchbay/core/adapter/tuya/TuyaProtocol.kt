@@ -91,6 +91,12 @@ public object TuyaProtocol {
         put("dps", JsonObject(dps))
     }.toString().encodeToByteArray()
 
+    /** The query a "device22" device wants: the data points listed by number, each with a null value. */
+    public fun dpQueryByNumberJson(deviceId: String, dpIds: List<String>, nowSeconds: Long): ByteArray = buildJsonObject {
+        put("devId", deviceId); put("uid", deviceId); put("t", nowSeconds.toString())
+        put("dps", JsonObject(dpIds.associateWith { kotlinx.serialization.json.JsonNull }))
+    }.toString().encodeToByteArray()
+
     /** Protocol 3.4 and 3.5 ask for the data points with an empty JSON object. */
     public fun dpQueryJsonNew(): ByteArray = "{}".encodeToByteArray()
 

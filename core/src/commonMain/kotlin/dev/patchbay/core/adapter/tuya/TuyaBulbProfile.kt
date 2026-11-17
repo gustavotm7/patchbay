@@ -39,6 +39,7 @@ public class TuyaBulbProfile private constructor(
     public val coolest: Int = 6_500,
 ) : TuyaProfile {
     public val powerDp: String get() = power
+    override val requestDps: List<String> get() = listOf(power, mode, bright, temp, colour)
     override val kind: DeviceKind = DeviceKind.LIGHT
     override fun recognises(dps: Map<String, JsonPrimitive>): Boolean = power in dps
 
