@@ -56,6 +56,44 @@ class RtspStreamTest {
     }
 
     @Test
+    fun playsH265AndSaysWhichCodecBeforeTheFirstNal(): Unit = runBlocking {
+        val sim = RtspSimulator("127.0.0.84", "cam", "secret", port = 0)
+        sim.sdp = "v=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H265/90000\r\n" +
+            "a=fmtp:96 sprop-vps=QAEMAf//AWAAAAMAkAAAAwAAAwBalZgJ; sprop-sps=QgEBAWAAAAMAkAAAAwAAAwBaoAUCAeFllZpJMrwFoCAAAAMAIAAAAwHh; sprop-pps=RAHBcrRiQA==\r\na=control:track1\r\n"
+        sim.rtpPackets = listOf(
+            rtp(1, byteArrayOf(0x02, 0x01, 9, 9)),                                            // a small NAL (type 1)
+            rtp(2, byteArrayOf(0x62, 0x01, (0x80 or 19).toByte(), 1, 2)),                     // FU start (type 19)
+            rtp(3, byteArrayOf(0x62, 0x01, (0x40 or 19).toByte(), 3)),                        // FU end
+        )
+        try {
+            val events = CopyOnWriteArrayList<String>()
+            val nals = CopyOnWriteArrayList<ByteArray>()
+            val job = async(Dispatchers.Default) {
+                client().stream(lease(sim), onCodec = { events += "codec ${it.label}" }) { events += "nal"; nals += it }
+            }
+            withTimeout(8_000) { while (nals.size < 3) delay(20) }
+            assertEquals("codec H.265", events.first()) // before any NAL unit
+            // VPS, SPS and PPS from the SDP arrive together first, as three NAL units with start codes.
+            val sets = nals[0]
+            assertContentEquals(byteArrayOf(0, 0, 0, 1, 0x40, 0x01), sets.copyOf(6))
+            assertContentEquals(byteArrayOf(0, 0, 0, 1, 0x02, 0x01, 9, 9), nals[1])
+            assertContentEquals(byteArrayOf(0, 0, 0, 1, 0x26, 0x01, 1, 2, 3), nals[2])
+            job.cancel()
+        } finally { sim.close() }
+    }
+
+    @Test
+    fun aCameraWithNoPlayableVideoSaysSo(): Unit = runBlocking {
+        val sim = RtspSimulator("127.0.0.85", "cam", "secret", mode = RtspSimulator.Mode.NONE)
+        sim.sdp = "v=0\r\nm=video 0 RTP/AVP 26\r\na=rtpmap:26 JPEG/90000\r\n"
+        try {
+            val e = client().stream(StreamLease("rtsp://${sim.address}:${sim.port}/${sim.path}", StreamProtocol.RTSP)) { }.errorOrNull()
+            assertIs<PatchbayError.Unsupported>(e)
+            assertTrue("H.264 or H.265" in e.message)
+        } finally { sim.close() }
+    }
+
+    @Test
     fun aWrongPasswordIsRefusedAfterOneChallenge(): Unit = runBlocking {
         val sim = RtspSimulator("127.0.0.71", "cam", "secret")
         try {

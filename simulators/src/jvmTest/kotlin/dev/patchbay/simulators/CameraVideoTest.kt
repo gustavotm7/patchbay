@@ -48,6 +48,39 @@ class CameraVideoTest {
         assertTrue("ffmpeg" in e.message)
     }
 
+    /**
+     * A stand-in "ffmpeg" that records the arguments it was started with and then copies standard input to standard output. The real decoder is only started once
+     * the camera has said which codec it sends, and H.265 needs `-f hevc` where H.264 needs `-f h264`.
+     */
+    @Test
+    fun theDecoderIsStartedForTheCodecTheCameraSends(): Unit = runBlocking {
+        if (!File("/bin/sh").exists()) return@runBlocking
+        val dir = Files.createTempDirectory("pbfake").toFile()
+        val args = File(dir, "args.txt")
+        val fake = File(dir, "ffmpeg").apply { writeText("#!/bin/sh\necho \"\$@\" > '${args.path}'\nexec /bin/cat\n"); setExecutable(true) }
+        for ((codec, sdp, packets, format) in listOf(
+            Case("H.265", "v=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H265/90000\r\n", listOf(rtp(1, byteArrayOf(0x02, 0x01, 9))), "-f hevc"),
+            Case("H.264", "v=0\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n", listOf(rtp(1, byteArrayOf(0x41, 9))), "-f h264"),
+        )) {
+            args.delete()
+            val sim = RtspSimulator("127.0.0.86", "cam", "secret", mode = RtspSimulator.Mode.NONE)
+            sim.sdp = sdp; sim.rtpPackets = packets
+            try {
+                val video = CameraVideo(NetGuard(), fake, dev.patchbay.core.adapter.rtsp.RtspStreamClient.Config(connectTimeoutMs = 2_000, readTimeoutMs = 100, stallMs = 5_000))
+                val job = async(Dispatchers.Default) { video.play(StreamLease("rtsp://${sim.address}:${sim.port}/${sim.path}", StreamProtocol.RTSP)) { } }
+                withTimeout(8_000) { while (!args.exists() || args.length() == 0L) delay(20) }
+                val text = args.readText()
+                assertTrue(format in text, "$codec should start ffmpeg with $format: $text")
+                assertTrue("-protocol_whitelist pipe" in text && "-i pipe:0" in text, text) // it reads only standard input
+                assertTrue("rtsp" !in text && "127.0.0" !in text, "the decoder must never be given the camera's address: $text")
+                assertTrue(codec in video.diagnostics().first(), video.diagnostics().first())
+                job.cancel()
+            } finally { sim.close() }
+        }
+    }
+
+    private data class Case(val codec: String, val sdp: String, val packets: List<ByteArray>, val format: String)
+
     /** `cat` stands in for ffmpeg: whatever is written to it comes back, so JPEG-marked bytes in the "video" come out as frames. */
     @Test
     fun streamsThroughADecoderProcessAndSplitsFrames(): Unit = runBlocking {

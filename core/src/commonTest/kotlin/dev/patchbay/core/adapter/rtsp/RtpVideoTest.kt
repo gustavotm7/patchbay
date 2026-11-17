@@ -129,7 +129,8 @@ class RtpVideoTest {
     fun sdpRefusesForeignControlUrlsAndNonH264() {
         assertNull(SdpVideo.parse(sdp.replace("track1", "rtsp://203.0.113.9/steal")))
         assertNull(SdpVideo.parse(sdp.replace("track1", "/abs")))
-        assertNull(SdpVideo.parse(sdp.replace("H264/90000", "H265/90000")))
+        assertNull(SdpVideo.parse(sdp.replace("H264/90000", "JPEG/90000"))) // a video codec we cannot play
+        assertNull(SdpVideo.parse(sdp.replace("H264/90000", "MP4V-ES/90000")))
         assertNull(SdpVideo.parse("v=0\r\nm=audio 0 RTP/AVP 8\r\n"))
         assertNull(SdpVideo.parse("x".repeat(20_000)))
         assertEquals(0, SdpVideo.parse(sdp.replace("Z2QAKKw=,aO48gA==", "!!!notbase64,"))!!.parameterSets.size)

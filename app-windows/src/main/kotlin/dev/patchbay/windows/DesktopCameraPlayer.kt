@@ -28,7 +28,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image as SkiaImage
 
 /**
- * Camera video on Windows (ADR 0012): Patchbay's own guarded RTSP client feeds H.264 to a local ffmpeg, which hands back JPEG pictures.
+ * Camera video on Windows (ADR 0012): Patchbay's own guarded RTSP client feeds H.264 or H.265 to a local ffmpeg, which hands back JPEG pictures.
  * ffmpeg is not shipped; without it the panel says where to put it.
  */
 class DesktopCameraPlayer(private val video: CameraVideo) : CameraPlayer {

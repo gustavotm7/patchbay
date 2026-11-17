@@ -45,6 +45,10 @@ A door lock is a physical-security device. Like the printer's heater and motion 
 
 ## Video (2026-11-08)
 
-`RtspStreamClient` plays H.264 over RTSP with RTP on the same TCP connection (ADR 0012). The SDP must offer an H.264 video track (`a=rtpmap:<pt> H264/90000`);
-H.265-only streams are refused with a clear message. The SDP's `sprop-parameter-sets` are sent to the decoder first. Absolute `a=control` URLs from the camera are never followed.
-Tested against the simulator only until HARDWARE_TEST C2.x.
+`RtspStreamClient` plays H.264 or H.265 over RTSP with RTP on the same TCP connection (ADR 0012, ADR 0016). The SDP must offer a video track whose `a=rtpmap` is `H264/90000` or
+`H265/90000` (`HEVC` is accepted too); the first playable video section is used and anything else (MJPEG, MPEG-4) is refused with a clear message. The SDP's parameter sets
+(`sprop-parameter-sets`; `sprop-vps`, `sprop-sps` and `sprop-pps`) are sent to the decoder first; cameras that leave them out send them in-band with each keyframe, which works too.
+Absolute `a=control` URLs from the camera are never followed. The decoder is started once the camera has said which codec it sends (`-f h264` or `-f hevc`).
+
+Checked against an independent packetizer, not only the simulator: ffmpeg's own RTP muxer (single NAL units, STAP-A/AP aggregates and FU-A/FU fragments) served through
+`tools/interop/rtsp_ffmpeg_server.py`; see `docs/protocols/interop.md`. Not yet tried on a real camera (HARDWARE_TEST C2.x).

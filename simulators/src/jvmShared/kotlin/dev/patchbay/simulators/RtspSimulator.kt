@@ -33,6 +33,9 @@ public class RtspSimulator(
     @Volatile public var garbage: Boolean = false
     @Volatile public var hugeHeaders: Boolean = false
 
+    /** The SDP DESCRIBE returns; null for the default H.264 one. */
+    @Volatile public var sdp: String? = null
+
     /** RTP packets sent (interleaved on channel 0) right after PLAY. */
     @Volatile public var rtpPackets: List<ByteArray> = emptyList()
 
@@ -92,9 +95,9 @@ public class RtspSimulator(
                     out.write(reply(404, cseq))
                 } else when (method) {
                     "DESCRIBE" -> {
-                        val sdp = "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=sim\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n" +
-                            "a=fmtp:96 packetization-mode=1;sprop-parameter-sets=Z2QAKKw=,aO48gA==\r\na=control:track1\r\n"
-                        out.write(reply(200, cseq, "Content-Type: application/sdp", "Content-Length: ${sdp.length}") + sdp.toByteArray())
+                        val text = sdp ?: ("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=sim\r\nm=video 0 RTP/AVP 96\r\na=rtpmap:96 H264/90000\r\n" +
+                            "a=fmtp:96 packetization-mode=1;sprop-parameter-sets=Z2QAKKw=,aO48gA==\r\na=control:track1\r\n")
+                        out.write(reply(200, cseq, "Content-Type: application/sdp", "Content-Length: ${text.length}") + text.toByteArray())
                     }
                     "SETUP" -> out.write(reply(200, cseq, "Session: 12345678;timeout=60", "Transport: RTP/AVP/TCP;unicast;interleaved=0-1"))
                     "PLAY" -> {

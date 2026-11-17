@@ -16,8 +16,8 @@ import java.net.URLDecoder
 import kotlin.random.Random
 
 /**
- * Plays a camera's H.264 video over RTSP with RTP interleaved on the one TCP connection (RFC 2326 §10.12), through [NetGuard].
- * It delivers Annex-B NAL units to [stream]'s callback; decoding them is somebody else's job (ADR 0012). Credentials come from the
+ * Plays a camera's H.264 or H.265 video over RTSP with RTP interleaved on the one TCP connection (RFC 2326 §10.12), through [NetGuard].
+ * It delivers Annex-B NAL units to [stream]'s callback, after telling it which codec they are; decoding them is somebody else's job (ADR 0012). Credentials come from the
  * short-lived [StreamLease], are sent only after the camera's own 401 challenge (and remembered for later requests on the same
  * connection), and never logged. Everything the camera sends is size-bounded and strictly parsed.
  */
@@ -63,10 +63,10 @@ public class RtspStreamClient(
     private fun bad(why: String) = PatchbayResult.Err(PatchbayError.InvalidArgument("stream: $why"))
 
     /**
-     * Runs until the coroutine is cancelled (returns [PatchbayResult.Ok]) or the stream fails. [onNal] is called on an IO thread
-     * with each Annex-B NAL unit (SPS/PPS from the SDP first); it must not block for long.
+     * Runs until the coroutine is cancelled (returns [PatchbayResult.Ok]) or the stream fails. [onCodec] is called once, on an IO thread, when the camera has agreed
+     * to play (before the first NAL unit); then [onNal] is called with each Annex-B NAL unit (the parameter sets from the SDP first). Neither may block for long.
      */
-    public suspend fun stream(lease: StreamLease, onNal: (ByteArray) -> Unit): PatchbayResult<Unit> {
+    public suspend fun stream(lease: StreamLease, onCodec: (VideoCodec) -> Unit = {}, onNal: (ByteArray) -> Unit): PatchbayResult<Unit> {
         val t = when (val r = parse(lease)) { is PatchbayResult.Ok -> r.value; is PatchbayResult.Err -> return r }
         val addr = when (val r = netGuard.address(t.host)) { is PatchbayResult.Ok -> r.value; is PatchbayResult.Err -> return r }
         val socket = when (val r = netGuard.connectTcp(addr, t.port, config.connectTimeoutMs)) { is PatchbayResult.Ok -> r.value; is PatchbayResult.Err -> return r }
@@ -79,16 +79,17 @@ public class RtspStreamClient(
                 socket.use { s ->
                     val conn = Conn(s.getInputStream().buffered(), s.getOutputStream(), t) { job?.isActive != false }
                     val describe = conn.exchange("DESCRIBE", base, listOf("Accept: application/sdp")).okOr { return@use it }
-                    val sdp = SdpVideo.parse(describe.body.decodeToString()) ?: return@use PatchbayResult.Err(PatchbayError.Unsupported("the camera offers no H.264 video Patchbay can play"))
+                    val sdp = SdpVideo.parse(describe.body.decodeToString()) ?: return@use PatchbayResult.Err(PatchbayError.Unsupported("the camera offers no H.264 or H.265 video Patchbay can play"))
                     val track = if (sdp.control == "*") base else "$base/${sdp.control}"
                     val setup = conn.exchange("SETUP", track, listOf("Transport: RTP/AVP/TCP;unicast;interleaved=0-1")).okOr { return@use it }
                     val session = setup.response.header("session").firstOrNull()?.substringBefore(';')?.trim()?.takeIf { it.length in 1..64 && it.none { c -> c.isISOControl() || c == ' ' } }
                     val sessionHeader = session?.let { "Session: $it" }
                     val channel = Regex("interleaved=(\\d+)-(\\d+)").find(setup.response.header("transport").firstOrNull().orEmpty())?.groupValues?.get(1)?.toIntOrNull() ?: 0
                     conn.exchange("PLAY", base, listOfNotNull(sessionHeader, "Range: npt=0.000-")).okOr { return@use it }
+                    onCodec(sdp.codec)
                     val ps = sdp.parameterSetsAnnexB()
                     if (ps.isNotEmpty()) onNal(ps)
-                    val depack = H264Depacketizer()
+                    val depack: VideoDepacketizer = if (sdp.codec == VideoCodec.H265) H265Depacketizer() else H264Depacketizer()
                     val result = conn.readMedia(channel, depack, onNal, sessionHeader, base)
                     droppedPackets = depack.dropped
                     result
@@ -177,7 +178,7 @@ public class RtspStreamClient(
             }
         }
 
-        fun readMedia(channel: Int, depack: H264Depacketizer, onNal: (ByteArray) -> Unit, session: String?, base: String): PatchbayResult<Unit> {
+        fun readMedia(channel: Int, depack: VideoDepacketizer, onNal: (ByteArray) -> Unit, session: String?, base: String): PatchbayResult<Unit> {
             var lastKeepAlive = clock()
             val packet = ByteArray(65_535)
             while (true) {
