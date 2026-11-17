@@ -207,7 +207,7 @@ private fun BackupPanel(live: dev.patchbay.core.home.LiveHome) {
         Legend("Backup")
         VSpace(Space.xs)
         PText(
-            "An encrypted copy of your devices, pairings, scenes and automations, so a new phone or laptop does not mean pairing everything again. Only the passphrase opens it: if you forget it, the backup cannot be read. Nothing is sent anywhere.",
+            "An encrypted copy of your devices, pairings, scenes and automations, so a new phone or laptop does not mean pairing everything again. Only the passphrase opens it: if you forget it, the backup cannot be read. Copy puts it on the clipboard; Restore reads it from there. Nothing is sent anywhere.",
             Patchbay.type.caption, c.textSecondary,
         )
         VSpace(Space.s)
@@ -228,7 +228,7 @@ private fun BackupPanel(live: dev.patchbay.core.home.LiveHome) {
                 }
             }, enabled = passphrase.length >= 8)
             if (!confirmingRestore) {
-                PButton("Restore from clipboard", { confirmingRestore = true; message = null }, enabled = passphrase.isNotEmpty())
+                PButton("Restore", { confirmingRestore = true; message = null }, enabled = passphrase.isNotEmpty())
             }
         }
         if (confirmingRestore) {
