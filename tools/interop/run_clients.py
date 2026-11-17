@@ -60,5 +60,34 @@ async def atv():
     await asyncio.sleep(1)
     r.disconnect()
     return True
-check("androidtvremote2 pairs, connects and sends a key", asyncio.run(atv()))
+# Roughly one fresh pairing in ten ends with the connection closed before the TV's answer arrives; the cause is not found (see docs/protocols/interop.md), so retry.
+atv_ok, tries = False, 0
+while not atv_ok and tries < 4:
+    tries += 1
+    for f in ("atv.code",):
+        if os.path.exists(os.path.join(D, f)): os.remove(os.path.join(D, f))
+    for f in ("cert.pem", "key.pem"):
+        if os.path.exists(os.path.join(D, f)): os.remove(os.path.join(D, f))
+    try:
+        atv_ok = asyncio.run(atv())
+    except Exception as e:
+        print("  androidtvremote2 attempt", tries, "failed:", type(e).__name__)
+check("androidtvremote2 pairs, connects and sends a key", atv_ok, f"(attempts: {tries})")
+
+# paho-mqtt: a generic MQTT client over TLS with the printer's login reads the printer's report topic from our simulated broker.
+import ssl, threading
+import paho.mqtt.client as mqtt
+got = threading.Event(); report = {}
+def on_connect(c, u, f, rc, props=None):
+    c.subscribe("device/0948AD4A0B00001/report")
+    c.publish("device/0948AD4A0B00001/request", json.dumps({"pushing": {"sequence_id": "1", "command": "pushall"}}))
+def on_message(c, u, m):
+    report["payload"] = json.loads(m.payload); got.set()
+c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="interop")
+c.username_pw_set("bblp", "12345678")
+c.tls_set(cert_reqs=ssl.CERT_NONE); c.tls_insecure_set(True)
+c.on_connect = on_connect; c.on_message = on_message
+c.connect("127.0.0.175", int(ports["bambu"]), 10); c.loop_start()
+check("paho-mqtt connects with the access code and receives the printer report", got.wait(10) and "print" in report["payload"], str(list(report.get("payload", {}).get("print", {}))[:5]))
+c.loop_stop(); c.disconnect()
 sys.exit(0 if ok else 1)

@@ -18,14 +18,16 @@ class SimulatorHostForInterop {
         fun ks(n: String) = KeyStore.getInstance("PKCS12").apply { File("src/jvmTest/resources/tls/$n").inputStream().use { load(it, "testpass".toCharArray()) } }
         val cast = CastSimulator("127.0.0.173", ks("device-a.p12"), "testpass".toCharArray())
         val tv = AndroidTvSimulator("127.0.0.174", ks("tv-a.p12"), "testpass".toCharArray())
+        val printer = BambuSimulator("127.0.0.175", "0948AD4A0B00001", "12345678", ks("device-a.p12"), "testpass".toCharArray())
         try {
-            File(dir, "ports").writeText("tuya=${tuya.port}\nkasa=${kasa.port}\ncast=${cast.port}\natvpair=${tv.pairingPort}\natvremote=${tv.remotePort}\n")
+            File(dir, "ports").writeText("tuya=${tuya.port}\nkasa=${kasa.port}\ncast=${cast.port}\natvpair=${tv.pairingPort}\natvremote=${tv.remotePort}\nbambu=${printer.mqttPort}\n")
+            var lastCode: String? = null
             val end = System.nanoTime() + 600_000_000_000L
             while (!File(dir, "stop").exists() && System.nanoTime() < end) {
-                tv.displayedCode?.let { File(dir, "atv.code").writeText(it) }
+                tv.displayedCode?.let { if (it != lastCode) { lastCode = it; File(dir, "atv.code").writeText(it) } }
                 Thread.sleep(200)
             }
             File(dir, "final").writeText("tuya.dps=${tuya.dps}\nkasa.on=${kasa.on}\ncast.volume=${cast.volume}\natv.code=${tv.displayedCode}\n")
-        } finally { tuya.close(); kasa.close(); cast.close(); tv.close() }
+        } finally { tuya.close(); kasa.close(); cast.close(); tv.close(); printer.close() }
     }
 }
