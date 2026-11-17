@@ -2,10 +2,16 @@
 
 package dev.patchbay.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import dev.patchbay.core.home.Automation
@@ -25,18 +31,23 @@ import kotlin.test.assertTrue
 class AutomationsBehaviourTest {
     private val home = DemoHome.home()
 
+    // The form is taller than the test window, so it sits in a scroll container and every tap scrolls to its target first (a click outside the window goes nowhere).
+    private fun ComposeUiTest.showPanel(fake: FakeLiveHome) = show { Column(Modifier.verticalScroll(rememberScrollState())) { AutomationsPanel(fake) } }
+    private fun ComposeUiTest.tap(text: String) { onNodeWithText(text).performScrollTo().performClick() }
+    private fun ComposeUiTest.typeName(name: String) { onNode(hasSetTextAction()).performScrollTo().performTextInput(name) }
+
     @Test
     fun aDeviceAutomationIsSavedWithTheDeviceAndEventThatWerePicked(): Unit = runComposeUiTest {
         val fake = FakeLiveHome(home)
-        show { AutomationsPanel(fake) }
+        showPanel(fake)
 
-        onNodeWithText("New").performClick()
-        onNodeWithText("Device").performClick() // the time box goes away, leaving the name as the one text field
-        onNode(hasSetTextAction()).performTextInput("Lamp off")
-        onNodeWithText("Good night").performClick()
-        onNodeWithText("Floor lamp").performClick()
-        onNodeWithText("Turns off").performClick()
-        onNodeWithText("Save").performClick()
+        tap("New")
+        tap("Device") // the time box goes away, leaving the name as the one text field
+        typeName("Lamp off")
+        tap("Good night")
+        tap("Floor lamp")
+        tap("Turns off")
+        tap("Save")
 
         waitUntil(timeoutMillis = 5_000L) { fake.deviceAutomationRequests.isNotEmpty() }
         assertEquals(
@@ -48,12 +59,12 @@ class AutomationsBehaviourTest {
     @Test
     fun savingWithoutPickingADeviceAsksForOneAndSavesNothing(): Unit = runComposeUiTest {
         val fake = FakeLiveHome(home)
-        show { AutomationsPanel(fake) }
+        showPanel(fake)
 
-        onNodeWithText("New").performClick()
-        onNodeWithText("Device").performClick()
-        onNode(hasSetTextAction()).performTextInput("Nothing")
-        onNodeWithText("Save").performClick()
+        tap("New")
+        tap("Device")
+        typeName("Nothing")
+        tap("Save")
 
         onNodeWithText("Pick a device and what it does").assertExists()
         assertTrue(fake.deviceAutomationRequests.isEmpty())
@@ -62,13 +73,13 @@ class AutomationsBehaviourTest {
     @Test
     fun aRefusalFromTheHomeIsShownAndTheFormStaysOpen(): Unit = runComposeUiTest {
         val fake = FakeLiveHome(home).also { it.deviceAutomationResult = PatchbayResult.Err(PatchbayError.InvalidArgument("Floor lamp can't tell Patchbay when it turns off")) }
-        show { AutomationsPanel(fake) }
+        showPanel(fake)
 
-        onNodeWithText("New").performClick()
-        onNodeWithText("Device").performClick()
-        onNode(hasSetTextAction()).performTextInput("Refused")
-        onNodeWithText("Floor lamp").performClick()
-        onNodeWithText("Save").performClick()
+        tap("New")
+        tap("Device")
+        typeName("Refused")
+        tap("Floor lamp")
+        tap("Save")
 
         waitUntil(timeoutMillis = 5_000L) { fake.deviceAutomationRequests.isNotEmpty() }
         onNodeWithText("Floor lamp can't tell Patchbay when it turns off").assertExists()
@@ -78,7 +89,7 @@ class AutomationsBehaviourTest {
     @Test
     fun aDeviceAutomationRowSaysWhenItRunsAndAForgottenDeviceIsNamedAsRemoved(): Unit = runComposeUiTest {
         val fake = FakeLiveHome(home)
-        show { AutomationsPanel(fake) }
+        showPanel(fake)
         onNodeWithText("When Floor lamp turns on · Good night").assertExists()
 
         val orphan = Automation("x", "Orphan", "1", "Movie night", 0, 0, (1..7).toSet(), true, trigger = DeviceTrigger(DeviceId("gone"), null, DeviceEvent.PRINT_FINISHED))
