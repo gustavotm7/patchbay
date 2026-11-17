@@ -186,7 +186,8 @@ class HomeKitContractTest {
         val id = paired()
         snapshot(id)
         thermostat.close()
-        val gone = withTimeout(15_000) { adapter.observe(id).first { it.reachability == Reachability.OFFLINE } }
+        // Takes about half a second here (three failed polls with a short back-off); a loaded CI runner once stalled it past 15 s, so the bound is generous.
+        val gone = withTimeout(45_000) { adapter.observe(id).first { it.reachability == Reachability.OFFLINE } }
         assertTrue(gone.states.isEmpty())
     }
 
