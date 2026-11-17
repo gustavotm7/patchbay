@@ -47,7 +47,7 @@ Two clients (an Android phone and a Windows laptop) and, from Phase 3, an option
 
 | Threat | Mitigation | Brief | Status |
 |---|---|---|---|
-| A1 parser exploits | Strict, bounded parsers; size caps on every frame; Jazzer fuzzing for every parser in CI; no reflection-based deserialisation of device data | §3 Untrusted input | Phase 1 |
+| A1 parser exploits | Strict, bounded parsers; size caps on every frame; every parser is mutation-tested with random and damaged inputs (tens of thousands each; Jazzer is a possible later addition); no reflection-based deserialisation of device data | §3 Untrusted input | Phase 1 |
 | A1 device impersonation | TOFU SPKI pinning; loud `TrustChanged` alarm, never silent re-pin (ADR 0005). HAP/ESPHome authenticate cryptographically | §2.5 | Phase 1–2 |
 | A1 credential phishing (fake device asks for a code) | Credentials are bound to a device identity at pairing and only sent over the pinned channel | §2.5 | Phase 1 |
 | A1 discovery spoofing to redirect us to the internet | `NetGuard` checks the **resolved** address after DNS/mDNS, before connect. IPv4-mapped IPv6, NAT64 and 6to4 are refused; tested (`AddressPolicyTest`) | §2.1 | **Policy done (Phase 0)**, sockets Phase 1 |
@@ -56,9 +56,10 @@ Two clients (an Android phone and a Windows laptop) and, from Phase 3, an option
 | A2 tampered artifacts | Gradle dependency verification (sha256), wrapper checksum pinned and validated in CI, content-filtered repositories, CI actions pinned by SHA, WiX checksum pinned | §2.9 | **Done (Phase 0)**; Android/Compose metadata bootstrapped on first CI run |
 | A2 banned SDKs | `check-policy.sh` SDK001/SDK002 | §2.2 | **Done (Phase 0)** |
 | A3 offline disk access | Encrypted DB with a Keystore-/DPAPI-wrapped DEK (ADR 0003); `setUnlockedDeviceRequired`; no backups (`allowBackup=false`, data-extraction rules exclude everything) | §2.4, §2.8 | Manifest done; storage Phase 1 |
-| A3 brief unlocked access | App lock (BiometricPrompt with DEVICE_CREDENTIAL; Windows Hello/PIN) with configurable auto-lock; re-auth before showing secrets or pairing | §2.6 | Phase 1 |
+| A3 brief unlocked access | App lock (BiometricPrompt with DEVICE_CREDENTIAL on Android; a PIN on Windows, Windows Hello possible later) with configurable auto-lock; re-auth before showing secrets or pairing | §2.6 | Phase 1 |
 | A4 vendor clouds | No cloud adapters in v1; Exposure Map shows cloud-only devices "untouched"; suggested firewall rules (text only, never applied) | §2.3 | Data model done; UI Phase 1 |
 | A5 other apps | Only the launcher activity is exported; no content providers; app-private storage; Windows: per-user install, data under `%LOCALAPPDATA%` with user-only ACLs | §2.8 | Manifest done |
+| Diagnostics export | "Copy diagnostics" builds its text on demand and puts it on the clipboard only when the owner presses it (or lets them read it first). It holds shapes, counters and the last few problems, masked ids and addresses, owner-chosen names replaced, and the redacted log tail; it passes through the log redactor and is size-capped. Tests pair every adapter with a known secret and prove no spelling of it appears, and that the redactor would change nothing in an adapter's own lines | §2.7 | **Done** |
 | A6 shoulder surfing | `FLAG_SECURE` (whole app in Phase 0); codes masked by default with press-to-reveal | §2.6 | Partly done |
 | A7 sniffing | Every protocol with credentials uses TLS/Noise/HAP encryption. **Exception:** the legacy webOS `ws://3000` is never used for the client key. Govee LAN is cleartext UDP with no credentials (documented exposure: anyone on the LAN can control Govee lights) | §4 | Phase 1 |
 | Life safety | The Kidde alarm is never integrated or controlled. `CommandValidator` refuses any command to `lifeSafety` devices. The UI never presents Patchbay as an alarm path | §4, §9 | **Done (model)** |

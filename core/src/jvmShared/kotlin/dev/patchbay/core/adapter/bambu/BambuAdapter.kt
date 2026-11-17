@@ -6,6 +6,7 @@ import dev.patchbay.core.adapter.DiscoveredDevice
 import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.discovery.Ssdp
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
@@ -81,6 +82,31 @@ public class BambuAdapter(
     private val latest = ConcurrentHashMap<DeviceId, JsonObject>()
     private val lastContact = ConcurrentHashMap<DeviceId, Long>()
     private val trustBroken = ConcurrentHashMap.newKeySet<DeviceId>()
+
+    private val problems = RecentProblems()
+    private val reportsParsed = java.util.concurrent.atomic.AtomicLong()
+    private val reportsRejected = java.util.concurrent.atomic.AtomicLong()
+    private val sessionsOpened = java.util.concurrent.atomic.AtomicInteger()
+
+    /** Field names only (plain characters, bounded): the shape of a report, never a value. */
+    private fun keysOf(o: JsonObject): String = o.keys.map { k -> k.filter { it.isLetterOrDigit() || it == '_' }.take(24) }.filter { it.isNotEmpty() }.sorted().take(MAX_KEYS_IN_REPORT).joinToString(",")
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        val k = known[device]
+        add("access code stored: ${k?.accessCode != null}; pinned key present: ${k?.pin != null}; connected now: ${sessions.containsKey(device)}; sessions opened by this adapter: ${sessionsOpened.get()}")
+        latest[device]?.let { st ->
+            add("fields in the printer's report (names only): ${keysOf(st)}")
+            val stage = (st["gcode_state"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content?.filter { it.isLetter() }?.take(12)
+            if (stage != null) add("state reported: $stage")
+            (st["device"] as? JsonObject)?.let { add("fields under device (names only): ${keysOf(it)}") }
+            val caps = capabilities(device)
+            caps.filterIsInstance<Capability.PrinterThermals>().firstOrNull()?.let { add("nozzles: ${it.nozzles}") }
+            caps.filterIsInstance<Capability.FilamentSlots>().firstOrNull()?.let { add("AMS units: ${it.units}") }
+        }
+    }
+
+    override fun adapterDiagnostics(): List<String> =
+        listOf("reports parsed: ${reportsParsed.get()}, reports rejected: ${reportsRejected.get()}") + problems.list().map { "problem: $it" }
 
     override fun discover(): Flow<DiscoveredDevice> = channelFlow {
         val seen = java.util.Collections.synchronizedSet(HashSet<String>())
@@ -206,6 +232,7 @@ public class BambuAdapter(
             val m = connect(device)
             if (m is PatchbayResult.Err) {
                 failures++
+                problems.add("connect: ${m.error.message}")
                 emit(DeviceSnapshot(device, if (failures >= 3) Reachability.OFFLINE else Reachability.DEGRADED, emptyList(), EpochMillis(clock())))
                 backoff = min(backoff * 2, config.maxBackoffMs)
                 delay(backoff)
@@ -213,6 +240,7 @@ public class BambuAdapter(
             }
             val client = (m as PatchbayResult.Ok).value
             failures = 0; backoff = 2_000L
+            sessionsOpened.incrementAndGet()
             val k = known[device]!!
             var lastEmit = 0L
             var idleStrikes = 0
@@ -222,7 +250,10 @@ public class BambuAdapter(
                         val pkt = r.value ?: break // closed
                         idleStrikes = 0
                         if (pkt is MqttClient.Packet.Publish && pkt.topic == BambuReport.reportTopic(k.serial)) {
-                            val upd = (BambuReport.parse(pkt.payload) as? PatchbayResult.Ok)?.value ?: continue
+                            val parsed = BambuReport.parse(pkt.payload)
+                            if (parsed is PatchbayResult.Err) { reportsRejected.incrementAndGet(); problems.add(parsed.error.message); continue }
+                            reportsParsed.incrementAndGet()
+                            val upd = (parsed as PatchbayResult.Ok).value ?: continue
                             val state = BambuReport.merge(latest[device] ?: JsonObject(emptyMap()), upd)
                             latest[device] = state
                             lastContact[device] = clock()
@@ -303,5 +334,6 @@ public class BambuAdapter(
 
     public companion object {
         public val ID: AdapterId = AdapterId("bambu-lan")
+        private const val MAX_KEYS_IN_REPORT = 60
     }
 }

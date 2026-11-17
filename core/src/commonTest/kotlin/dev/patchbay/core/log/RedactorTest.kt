@@ -33,6 +33,19 @@ class RedactorTest {
     }
 
     @Test
+    fun masksTuyaDeviceIdsKeepingTheTail() {
+        assertEquals("tuya …fasi online", r("tuya ebf5889331f7b82250fasi online"))
+        assertFalse("bf1234567890abcdef12" in r("device bf1234567890abcdef12 answered"))
+        assertEquals("device …a9z1", r("device AbCdEfGh1234567890a9z1"))
+    }
+
+    @Test
+    fun leavesLongWordsAndClassNamesAlone() {
+        val s = "ColourTemperatureState and kotlinx.coroutines.DispatchedTask at 2026-11-17T20:41:03.123+01:00 in Dispatchers.IO"
+        assertEquals(s, r(s))
+    }
+
+    @Test
     fun leavesOrdinaryTextAlone() {
         val s = "Govee H6076 at 192.168.1.23 brightness 40 % colour 2700 K, layer 112/240"
         assertEquals(s, r(s))

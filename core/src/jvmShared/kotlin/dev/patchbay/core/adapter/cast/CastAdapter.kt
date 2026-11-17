@@ -6,6 +6,7 @@ import dev.patchbay.core.adapter.DiscoveredDevice
 import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.discovery.Finding
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
@@ -99,6 +100,30 @@ public class CastAdapter(
     @Volatile public var rejectedMessages: Long = 0
         private set
 
+    private val problems = RecentProblems()
+    private val namespacesSeen = ConcurrentHashMap<DeviceId, MutableSet<String>>()
+    private val sessionsOpened = AtomicInteger()
+
+    private fun rejected(why: String) {
+        rejectedMessages++
+        problems.add(why)
+    }
+
+    /** Which message namespaces a device uses is protocol shape, not content: kept (bounded, plain characters only) for the diagnostics report. */
+    private fun noteNamespace(device: DeviceId, namespace: String) {
+        val set = namespacesSeen.getOrPut(device) { ConcurrentHashMap.newKeySet() }
+        if (set.size < MAX_NAMESPACES) set += namespace.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it in "._:-" }.take(64)
+    }
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        val k = known[device]
+        add("pinned key present: ${k?.pin != null}; connected now: ${sessions.containsKey(device)}; sessions opened by this adapter: ${sessionsOpened.get()}")
+        namespacesSeen[device]?.sorted()?.let { add("message namespaces seen: ${it.joinToString(", ").ifEmpty { "none" }}") }
+        sessions[device]?.let { add("volume reported: ${it.volume != null}; a media app is running: ${it.transportId != null}; media status reported: ${it.media != null}") }
+    }
+
+    override fun adapterDiagnostics(): List<String> = listOf("messages rejected as out of spec: $rejectedMessages") + problems.list().map { "problem: $it" }
+
     override fun discover(): Flow<DiscoveredDevice> = flow {
         for (f in finder.find()) {
             if (f.services.none { it.startsWith("_googlecast._tcp") }) continue
@@ -163,6 +188,7 @@ public class CastAdapter(
                 is PatchbayResult.Ok -> r.value
                 is PatchbayResult.Err -> {
                     failures++
+                    problems.add("connect: ${r.error.message}")
                     emit(DeviceSnapshot(device, if (failures >= 3) Reachability.OFFLINE else Reachability.DEGRADED, emptyList(), EpochMillis(clock())))
                     backoff = min(backoff * 2, config.maxBackoffMs)
                     delay(backoff)
@@ -170,6 +196,7 @@ public class CastAdapter(
                 }
             }
             failures = 0; backoff = 2_000L
+            sessionsOpened.incrementAndGet()
             val input = DataInputStream(session.tls.socket.getInputStream())
             var silent = 0
             var lastEmit = 0L
@@ -186,6 +213,7 @@ public class CastAdapter(
                     silent = 0
                     val m = message ?: continue
                     lastContact[device] = clock()
+                    noteNamespace(device, m.namespace)
                     val changed = handle(session, m)
                     if (changed && (!gotStatus || clock() - lastEmit >= config.minEmitGapMs)) {
                         gotStatus = true
@@ -208,12 +236,12 @@ public class CastAdapter(
         val header = ByteArray(4).also { input.readFully(it) }
         val n = when (val r = CastProtocol.frameLength(header)) {
             is PatchbayResult.Ok -> r.value
-            is PatchbayResult.Err -> { rejectedMessages++; throw IOException("bad frame length") }
+            is PatchbayResult.Err -> { rejected("frame length outside the allowed range"); throw IOException("bad frame length") }
         }
         val body = ByteArray(n).also { input.readFully(it) }
         return when (val r = CastProtocol.decode(body)) {
             is PatchbayResult.Ok -> r.value
-            is PatchbayResult.Err -> { if (r.error !is PatchbayError.Unsupported) rejectedMessages++; null }
+            is PatchbayResult.Err -> { if (r.error !is PatchbayError.Unsupported) rejected(r.error.message); null }
         }
     }
 
@@ -226,7 +254,7 @@ public class CastAdapter(
             }
             CastProtocol.NS_RECEIVER -> {
                 val st = (CastProtocol.parseReceiverStatus(m.payload) as? PatchbayResult.Ok)?.value ?: run {
-                    if (CastProtocol.messageType(m.payload) == "RECEIVER_STATUS") rejectedMessages++
+                    if (CastProtocol.messageType(m.payload) == "RECEIVER_STATUS") rejected("RECEIVER_STATUS did not have the expected shape")
                     return false
                 }
                 st.volume?.let { s.volume = it }
@@ -247,7 +275,7 @@ public class CastAdapter(
                 if (m.source != s.transportId) return false // only the app we connected to
                 return when (val r = CastProtocol.parseMediaStatus(m.payload)) {
                     is PatchbayResult.Ok -> { s.media = r.value; s.mediaSessionId = r.value?.mediaSessionId; true }
-                    is PatchbayResult.Err -> { if (CastProtocol.messageType(m.payload) == "MEDIA_STATUS") rejectedMessages++; false }
+                    is PatchbayResult.Err -> { if (CastProtocol.messageType(m.payload) == "MEDIA_STATUS") rejected("MEDIA_STATUS did not have the expected shape"); false }
                 }
             }
         }
@@ -337,6 +365,7 @@ public class CastAdapter(
     }
 
     public companion object {
+        private const val MAX_NAMESPACES = 12
         public val ID: AdapterId = AdapterId("cast-v2")
 
         public val CAPABILITIES: List<Capability> = listOf(

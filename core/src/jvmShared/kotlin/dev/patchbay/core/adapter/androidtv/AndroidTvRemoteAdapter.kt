@@ -6,6 +6,7 @@ import dev.patchbay.core.adapter.DiscoveredDevice
 import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.adapter.cast.CastAdapter
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
@@ -83,6 +84,27 @@ public class AndroidTvRemoteAdapter(
     @Volatile public var rejectedMessages: Long = 0
         private set
 
+    private val problems = RecentProblems()
+    private val kindsSeen = ConcurrentHashMap<DeviceId, MutableSet<String>>()
+    private val sessionsOpened = java.util.concurrent.atomic.AtomicInteger()
+
+    private fun rejected(why: String) {
+        rejectedMessages++
+        problems.add(why)
+    }
+
+    private fun noteKind(device: DeviceId, kind: String) {
+        kindsSeen.getOrPut(device) { ConcurrentHashMap.newKeySet() } += kind
+    }
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        val k = known[device]
+        add("pinned key present: ${k?.pin != null}; client identity present: ${k?.identity != null}; connected now: ${sessions.containsKey(device)}; sessions opened by this adapter: ${sessionsOpened.get()}")
+        kindsSeen[device]?.sorted()?.let { add("remote message kinds seen: ${it.joinToString(", ").ifEmpty { "none" }}") }
+    }
+
+    override fun adapterDiagnostics(): List<String> = listOf("messages rejected as out of spec: $rejectedMessages") + problems.list().map { "problem: $it" }
+
     override fun discover(): Flow<DiscoveredDevice> = flow {
         for (f in finder.find()) {
             if (f.services.none { it.startsWith("_androidtvremote2._tcp") }) continue
@@ -143,11 +165,11 @@ public class AndroidTvRemoteAdapter(
                 }
             }
             withContext(Dispatchers.IO) { send(AndroidTvProtocol.pairingRequest("Patchbay")) }
-            expect(AndroidTvProtocol.PairingStep.REQUEST_ACK)?.let { return PatchbayResult.Err(it) }
+            expect(AndroidTvProtocol.PairingStep.REQUEST_ACK)?.let { problems.add("pairing, waiting for the request ack: ${it.message}"); return PatchbayResult.Err(it) }
             withContext(Dispatchers.IO) { send(AndroidTvProtocol.pairingOptions()) }
-            expect(AndroidTvProtocol.PairingStep.OPTIONS)?.let { return PatchbayResult.Err(it) }
+            expect(AndroidTvProtocol.PairingStep.OPTIONS)?.let { problems.add("pairing, waiting for the options: ${it.message}"); return PatchbayResult.Err(it) }
             withContext(Dispatchers.IO) { send(AndroidTvProtocol.pairingConfiguration()) }
-            expect(AndroidTvProtocol.PairingStep.CONFIGURATION_ACK)?.let { return PatchbayResult.Err(it) }
+            expect(AndroidTvProtocol.PairingStep.CONFIGURATION_ACK)?.let { problems.add("pairing, waiting for the configuration ack: ${it.message}"); return PatchbayResult.Err(it) }
 
             val code = prompt.askForCode("Code shown on the TV (6 letters and numbers)", 6..6)
                 ?: return PatchbayResult.Err(PatchbayError.Cancelled("pairing cancelled"))
@@ -159,7 +181,7 @@ public class AndroidTvRemoteAdapter(
                 code, { MessageDigest.getInstance("SHA-256").digest(it) },
             ) ?: return PatchbayResult.Err(PatchbayError.Unauthorized("That code isn't right. Check the code on the TV and try again."))
             withContext(Dispatchers.IO) { send(AndroidTvProtocol.pairingSecretMessage(secret)) }
-            expect(AndroidTvProtocol.PairingStep.SECRET_ACK)?.let { return PatchbayResult.Err(it) }
+            expect(AndroidTvProtocol.PairingStep.SECRET_ACK)?.let { problems.add("pairing, waiting for the secret ack: ${it.message}"); return PatchbayResult.Err(it) }
             val id = deviceId(device)
             known[id] = Known(addr, tls.spkiSha256, identity, name)
             return PatchbayResult.Ok(Pairing(id, identity.toBytes(), tls.spkiSha256))
@@ -176,6 +198,7 @@ public class AndroidTvRemoteAdapter(
                 is PatchbayResult.Ok -> r.value
                 is PatchbayResult.Err -> {
                     failures++
+                    problems.add("connect: ${r.error.message}")
                     emit(DeviceSnapshot(device, if (failures >= 3) Reachability.OFFLINE else Reachability.DEGRADED, emptyList(), EpochMillis(clock())))
                     backoff = min(backoff * 2, config.maxBackoffMs)
                     delay(backoff)
@@ -183,6 +206,7 @@ public class AndroidTvRemoteAdapter(
                 }
             }
             failures = 0; backoff = 2_000L
+            sessionsOpened.incrementAndGet()
             val input = session.tls.socket.getInputStream()
             var silent = 0
             var announced = false
@@ -197,17 +221,20 @@ public class AndroidTvRemoteAdapter(
                     silent = 0
                     lastContact[device] = clock()
                     when (val r = AndroidTvProtocol.parseRemote(body)) {
-                        is PatchbayResult.Err -> rejectedMessages++
+                        is PatchbayResult.Err -> rejected(r.error.message)
                         is PatchbayResult.Ok -> when (val m = r.value) {
-                            is AndroidTvProtocol.Incoming.Configure -> session.send(AndroidTvProtocol.remoteConfigure(m.features))
-                            is AndroidTvProtocol.Incoming.SetActive -> session.send(AndroidTvProtocol.remoteSetActive(AndroidTvProtocol.FEATURES and m.active))
-                            is AndroidTvProtocol.Incoming.Ping -> session.send(AndroidTvProtocol.remotePingResponse(m.val1))
-                            is AndroidTvProtocol.Incoming.Started -> if (!announced) {
-                                announced = true
-                                emit(DeviceSnapshot(device, Reachability.ONLINE, emptyList(), EpochMillis(clock())))
+                            is AndroidTvProtocol.Incoming.Configure -> { noteKind(device, "configure"); session.send(AndroidTvProtocol.remoteConfigure(m.features)) }
+                            is AndroidTvProtocol.Incoming.SetActive -> { noteKind(device, "set-active"); session.send(AndroidTvProtocol.remoteSetActive(AndroidTvProtocol.FEATURES and m.active)) }
+                            is AndroidTvProtocol.Incoming.Ping -> { noteKind(device, "ping"); session.send(AndroidTvProtocol.remotePingResponse(m.val1)) }
+                            is AndroidTvProtocol.Incoming.Started -> {
+                                noteKind(device, "started")
+                                if (!announced) {
+                                    announced = true
+                                    emit(DeviceSnapshot(device, Reachability.ONLINE, emptyList(), EpochMillis(clock())))
+                                }
                             }
-                            is AndroidTvProtocol.Incoming.Error -> break@loop
-                            is AndroidTvProtocol.Incoming.Other -> {}
+                            is AndroidTvProtocol.Incoming.Error -> { noteKind(device, "error"); problems.add("the TV sent an error message and ended the session"); break@loop }
+                            is AndroidTvProtocol.Incoming.Other -> noteKind(device, "other")
                         }
                     }
                 }
@@ -268,9 +295,9 @@ public class AndroidTvRemoteAdapter(
             len = len or ((b and 0x7F) shl shift)
             if (b and 0x80 == 0) break
             shift += 7
-            if (shift > 21) { rejectedMessages++; throw IOException("bad length") }
+            if (shift > 21) { rejected("message length prefix too long"); throw IOException("bad length") }
         }
-        if (len !in 1..AndroidTvProtocol.MAX_MESSAGE_BYTES) { rejectedMessages++; throw IOException("bad length") }
+        if (len !in 1..AndroidTvProtocol.MAX_MESSAGE_BYTES) { rejected("message length outside the allowed range"); throw IOException("bad length") }
         val out = ByteArray(len)
         var off = 0
         while (off < len) {

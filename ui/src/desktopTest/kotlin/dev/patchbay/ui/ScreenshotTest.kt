@@ -161,6 +161,7 @@ class ScreenshotTest {
         override suspend fun runScene(id: String): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
         override suspend fun deleteScene(id: String) {}
         override fun recentLog(maxLines: Int): String = "log"
+        override fun diagnosticsReport(header: List<String>): String = "diagnostics"
         override val manualAdd: List<ManualAdd> = listOf(ManualAdd(AdapterId("rtsp"), "RTSP camera", "Name"))
         override suspend fun addManually(adapter: AdapterId, address: String, key: String, choice: String?): PatchbayResult<DeviceId> =
             PatchbayResult.Err(PatchbayError.Unsupported("screenshot fake"))

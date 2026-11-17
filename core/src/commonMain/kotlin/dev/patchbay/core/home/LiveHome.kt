@@ -54,6 +54,12 @@ public interface LiveHome {
     /** The tail of this session's log (already redacted), for the explicit "Copy log" action. */
     public fun recentLog(maxLines: Int = 300): String
 
+    /**
+     * The text behind "Copy diagnostics": what this run knows about each system and device (shapes, counters, masked identifiers, the last few
+     * problems), redacted by construction and bounded. [header] is what the app shell knows (version, platform). Builds on this device only.
+     */
+    public fun diagnosticsReport(header: List<String> = emptyList()): String
+
     /** Systems that can be added by typing an address when discovery doesn't find them. */
     public val manualAdd: List<ManualAdd>
 

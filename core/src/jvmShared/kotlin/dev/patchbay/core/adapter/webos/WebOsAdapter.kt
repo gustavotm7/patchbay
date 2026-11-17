@@ -6,6 +6,7 @@ import dev.patchbay.core.adapter.DiscoveredDevice
 import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.discovery.Ssdp
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
@@ -79,7 +80,7 @@ public class WebOsAdapter(
 
     private class Known(val address: LanAddress, val clientKey: String?, val pin: String?, val name: String)
 
-    private class Session(val ws: WebSocketClient) {
+    private class Session(val ws: WebSocketClient, val device: DeviceId) {
         var nextId = 1
         val lock = Mutex()
         var inputs: List<Pair<String, String>> = emptyList()
@@ -90,6 +91,34 @@ public class WebOsAdapter(
     private val lastContact = ConcurrentHashMap<DeviceId, Long>()
     private val trustBroken = ConcurrentHashMap.newKeySet<DeviceId>()
     private val macs = ConcurrentHashMap<DeviceId, ByteArray>()
+
+    private val problems = RecentProblems()
+    private val uriOutcomes = ConcurrentHashMap<DeviceId, ConcurrentHashMap<String, String>>()
+    private val sessionsOpened = java.util.concurrent.atomic.AtomicInteger()
+
+    /** Which of our own request addresses the TV answered and which it refused: this differs between webOS versions, so it is what a report needs. */
+    private fun note(device: DeviceId, uri: String, r: PatchbayResult<JsonObject>) {
+        val map = uriOutcomes.getOrPut(device) { ConcurrentHashMap() }
+        if (map.size >= MAX_URIS && !map.containsKey(uri)) return
+        val outcome = when (r) {
+            is PatchbayResult.Ok -> "ok"
+            is PatchbayResult.Err -> "failed: " + r.error.message.filter { it.code in 32..126 }.take(60)
+        }
+        map[uri] = outcome
+        if (r is PatchbayResult.Err) problems.add("${spoken(uri)} $outcome")
+    }
+
+    /** Slashes become spaces so a long request address is not mistaken for a token by the redactor. */
+    private fun spoken(uri: String): String = uri.replace('/', ' ')
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        val k = known[device]
+        add("client key stored: ${k?.clientKey != null}; pinned key present: ${k?.pin != null}; connected now: ${sessions.containsKey(device)}; sessions opened by this adapter: ${sessionsOpened.get()}")
+        add("Wake-on-LAN address learned: ${macs.containsKey(device)}; inputs listed by the TV: ${sessions[device]?.inputs?.size ?: "unknown"}")
+        uriOutcomes[device]?.entries?.sortedBy { it.key }?.forEach { (uri, outcome) -> add("request ${spoken(uri)}: $outcome") }
+    }
+
+    override fun adapterDiagnostics(): List<String> = problems.list().map { "problem: $it" }
 
     override fun discover(): Flow<DiscoveredDevice> = channelFlow {
         val sock = (netGuard.openUdp(0, config.bindLoopbackOnly) as? PatchbayResult.Ok)?.value ?: return@channelFlow
@@ -287,7 +316,8 @@ public class WebOsAdapter(
                 ws.close()
                 return@withContext PatchbayResult.Err(PatchbayError.Unauthorized("the TV no longer accepts this pairing; pair again"))
             }
-            val s = Session(ws)
+            val s = Session(ws, device)
+            sessionsOpened.incrementAndGet()
             sessions[device] = s
             // Learn the MAC for Wake-on-LAN while we're authenticated.
             (request(s, "com.webos.service.connectionmanager/getinfo") as? PatchbayResult.Ok)?.value
@@ -297,6 +327,9 @@ public class WebOsAdapter(
     }
 
     private suspend fun request(s: Session, uri: String, payload: JsonObject = JsonObject(emptyMap())): PatchbayResult<JsonObject> =
+        requestOnce(s, uri, payload).also { note(s.device, uri, it) }
+
+    private suspend fun requestOnce(s: Session, uri: String, payload: JsonObject): PatchbayResult<JsonObject> =
         s.lock.withLock {
             withContext(Dispatchers.IO) {
                 val id = "pb_${s.nextId++}"
@@ -358,5 +391,6 @@ public class WebOsAdapter(
 
     public companion object {
         public val ID: AdapterId = AdapterId("lg-webos")
+        private const val MAX_URIS = 24
     }
 }

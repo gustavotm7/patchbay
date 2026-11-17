@@ -10,6 +10,7 @@ package dev.patchbay.core.log
  * - long hex/base64 runs (keys, fingerprints, tokens) → first 4 chars + `…`
  * - MAC addresses and Govee-style 8-byte device IDs → last 2 bytes kept
  * - Bambu-style serials (15 alphanumerics with digits) → last 4 kept
+ * - Tuya-style device IDs (20 to 23 letters and digits, mixed) → last 4 kept
  */
 public object Redactor {
 
@@ -27,6 +28,8 @@ public object Redactor {
     private val mac = Regex("\\b([0-9A-Fa-f]{2}[:-]){5,7}([0-9A-Fa-f]{2})\\b")
     private val longToken = Regex("\\b[0-9A-Za-z+/_-]{24,}={0,2}")
     private val hexRun = Regex("\\b[0-9a-fA-F]{16,}\\b")
+    // 20 to 23 letters and digits with at least one of each: a Tuya device ID. (24 and longer are caught by longToken; words have no digits.)
+    private val idToken = Regex("\\b(?=[0-9A-Za-z]*[0-9])(?=[0-9A-Za-z]*[A-Za-z])[0-9A-Za-z]{20,23}\\b")
     private val serial = Regex("\\b(?=[0-9A-Z]*[0-9])(?=[0-9A-Z]*[A-Z])[0-9A-Z]{11}([0-9A-Z]{4})\\b")
 
     public fun redact(text: String): String {
@@ -40,6 +43,7 @@ public object Redactor {
         s = serial.replace(s) { m -> "…" + m.groupValues[1] }
         s = longToken.replace(s) { m -> m.value.take(4) + "…" }
         s = hexRun.replace(s) { m -> m.value.take(4) + "…" }
+        s = idToken.replace(s) { m -> "…" + m.value.takeLast(4) }
         return s
     }
 }

@@ -7,6 +7,7 @@ import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.ManualAdd
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
 import dev.patchbay.core.model.Command
@@ -31,6 +32,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.longOrNull
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentHashMap
@@ -78,6 +82,35 @@ public class TuyaLocalAdapter(
     /** Frames rejected as out of spec (diagnostics only). */
     @Volatile public var rejectedMessages: Long = 0
         private set
+
+    private val problems = RecentProblems()
+    private val dpShapes = ConcurrentHashMap<DeviceId, String>()
+
+    private fun rejected(why: String) {
+        rejectedMessages++
+        problems.add(why)
+    }
+
+    /** Data point numbers with the *type* of each value (and a string's length), never the values: a vacuum's map or a bulb's scene is not for a report. */
+    private fun shapeOf(dps: Map<String, JsonPrimitive>): String =
+        dps.entries.sortedBy { it.key.toIntOrNull() ?: Int.MAX_VALUE }.take(MAX_DPS_IN_REPORT).joinToString(" ") { (k, v) ->
+            val type = when {
+                v.isString -> "string(${v.content.length})"
+                v.booleanOrNull != null -> "bool"
+                v.longOrNull != null -> "int"
+                v.doubleOrNull != null -> "float"
+                else -> "other"
+            }
+            "${k.filter { it.isLetterOrDigit() }.take(6)}=$type"
+        }
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        val k = known[device]
+        add("device type: ${k?.profile?.id ?: "unknown"}; local key stored: ${k?.localKey != null}; protocol spoken: 3.3 only")
+        dpShapes[device]?.let { add("data points in the last reading (type only): $it") }
+    }
+
+    override fun adapterDiagnostics(): List<String> = listOf("frames rejected as out of spec: $rejectedMessages") + problems.list().map { "problem: $it" }
 
     override fun discover(): Flow<DiscoveredDevice> = emptyFlow() // by address only (Tuya's UDP announcements are not used)
 
@@ -195,16 +228,25 @@ public class TuyaLocalAdapter(
         val plain = try {
             TuyaCipher.decrypt(key, TuyaProtocol.stripVersionHeader(frame.payload))
         } catch (e: BadPaddingException) {
+            problems.add("reply could not be decrypted with the stored local key")
             return PatchbayResult.Err(PatchbayError.Unauthorized("the device didn't accept the local key"))
         } catch (e: IllegalBlockSizeException) {
-            rejectedMessages++
+            rejected("reply wasn't a protocol 3.3 message")
             return PatchbayResult.Err(PatchbayError.ProtocolViolation("tuya: reply wasn't a protocol 3.3 message"))
         }
-        return TuyaProtocol.parseDps(plain).also { if (it is PatchbayResult.Err) rejectedMessages++ else lastContact[device] = clock() }
+        return TuyaProtocol.parseDps(plain).also {
+            when (it) {
+                is PatchbayResult.Err -> rejected(it.error.message)
+                is PatchbayResult.Ok -> { lastContact[device] = clock(); dpShapes[device] = shapeOf(it.value) }
+            }
+        }
     }
 
     private fun checkReturn(f: TuyaProtocol.Frame): PatchbayResult<Unit> =
-        if (f.retcode == 0) PatchbayResult.Ok(Unit) else PatchbayResult.Err(PatchbayError.Unauthorized("the device refused the request; check the device ID and local key"))
+        if (f.retcode == 0) PatchbayResult.Ok(Unit) else {
+            problems.add("the device answered with return code ${f.retcode} (wrong device ID or local key?)")
+            PatchbayResult.Err(PatchbayError.Unauthorized("the device refused the request; check the device ID and local key"))
+        }
 
     /** One request and one reply on a fresh connection (Tuya bulbs accept very few at once), serialised per device. */
     private suspend fun exchange(addr: LanAddress, cmd: Int, payload: ByteArray): PatchbayResult<TuyaProtocol.Frame> =
@@ -221,14 +263,16 @@ public class TuyaLocalAdapter(
                         val header = input.readExactly(TuyaProtocol.HEADER_BYTES)
                         val remaining = when (val n = TuyaProtocol.remainingAfterHeader(header)) {
                             is PatchbayResult.Ok -> n.value
-                            is PatchbayResult.Err -> { rejectedMessages++; return@use n }
+                            is PatchbayResult.Err -> { rejected(n.error.message); return@use n }
                         }
                         TuyaProtocol.decode(header + input.readExactly(remaining), fromDevice = true)
-                            .also { r -> if (r is PatchbayResult.Err) rejectedMessages++ }
+                            .also { r -> if (r is PatchbayResult.Err) rejected(r.error.message) }
                     }
                 } catch (e: SocketTimeoutException) {
+                    problems.add("no answer within ${config.ioTimeoutMs} ms")
                     PatchbayResult.Err(PatchbayError.Timeout("the device didn't answer"))
                 } catch (e: IOException) {
+                    problems.add("connection failed: ${e.javaClass.simpleName}")
                     PatchbayResult.Err(PatchbayError.Unreachable("connection failed: ${e.javaClass.simpleName}"))
                 }
             }
@@ -250,5 +294,6 @@ public class TuyaLocalAdapter(
     public companion object {
         public val ID: AdapterId = AdapterId("tuya-local")
         public fun deviceIdFor(key: String): DeviceId = DeviceId("tuya-$key")
+        private const val MAX_DPS_IN_REPORT = 30
     }
 }

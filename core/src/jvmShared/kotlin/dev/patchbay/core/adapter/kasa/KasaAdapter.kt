@@ -7,6 +7,7 @@ import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.ManualAdd
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
 import dev.patchbay.core.model.CapabilityState
@@ -79,6 +80,21 @@ public class KasaAdapter(
     @Volatile public var rejectedMessages: Long = 0
         private set
 
+    private val problems = RecentProblems()
+    private val lastInfo = ConcurrentHashMap<DeviceId, KasaProtocol.Sysinfo>()
+
+    private fun rejected(why: String) {
+        rejectedMessages++
+        problems.add(why)
+    }
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        lastInfo[device]?.let { add("model ${it.model.take(24)}; firmware ${it.firmware?.take(40) ?: "not reported"}") }
+        add("address known: ${known.containsKey(device)}")
+    }
+
+    override fun adapterDiagnostics(): List<String> = listOf("messages rejected as out of spec: $rejectedMessages") + problems.list().map { "problem: $it" }
+
     override fun discover(): Flow<DiscoveredDevice> = channelFlow {
         val udp = (netGuard.openUdp(0) as? PatchbayResult.Ok)?.value ?: return@channelFlow
         try {
@@ -93,9 +109,10 @@ public class KasaAdapter(
                 while (clock() < sliceEnd && currentCoroutineContext().isActive) {
                     val d = (udp.receive(KasaProtocol.MAX_MESSAGE_BYTES, 100) as? PatchbayResult.Ok)?.value ?: continue
                     when (val r = KasaProtocol.parseSysinfo(KasaProtocol.unscramble(d.payload))) {
-                        is PatchbayResult.Err -> if (r.error !is PatchbayError.Unsupported) rejectedMessages++
+                        is PatchbayResult.Err -> if (r.error !is PatchbayError.Unsupported) rejected(r.error.message)
                         is PatchbayResult.Ok -> if (seen.add(r.value.deviceKey)) {
                             known[deviceIdFor(r.value.deviceKey)] = d.from
+                            lastInfo[deviceIdFor(r.value.deviceKey)] = r.value
                             send(discovered(r.value, d.from))
                         }
                     }
@@ -142,9 +159,10 @@ public class KasaAdapter(
         }
         val info = when (val r = KasaProtocol.parseSysinfo(reply)) {
             is PatchbayResult.Ok -> r.value
-            is PatchbayResult.Err -> { rejectedMessages++; return r }
+            is PatchbayResult.Err -> { rejected(r.error.message); return r }
         }
         known[deviceIdFor(info.deviceKey)] = addr
+        lastInfo[deviceIdFor(info.deviceKey)] = info
         return PatchbayResult.Ok(discovered(info, addr))
     }
 
@@ -203,8 +221,8 @@ public class KasaAdapter(
         if (command !is Command.SetPower) return PatchbayResult.Err(PatchbayError.Unsupported("Kasa plugs don't support ${command::class.simpleName}"))
         val addr = known[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown Kasa device"))
         return when (val r = exchange(addr, KasaProtocol.setRelay(command.on))) {
-            is PatchbayResult.Ok -> KasaProtocol.parseSetRelay(r.value).also { if (it is PatchbayResult.Err) rejectedMessages++ }
-            is PatchbayResult.Err -> r
+            is PatchbayResult.Ok -> KasaProtocol.parseSetRelay(r.value).also { if (it is PatchbayResult.Err) rejected("set_relay: ${it.error.message}") }
+            is PatchbayResult.Err -> { problems.add("set_relay: ${r.error.message}"); r }
         }
     }
 
@@ -217,9 +235,12 @@ public class KasaAdapter(
     public suspend fun status(device: DeviceId): PatchbayResult<KasaProtocol.Sysinfo> {
         val addr = known[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown Kasa device"))
         return when (val r = exchange(addr, KasaProtocol.GET_SYSINFO)) {
-            is PatchbayResult.Err -> r
+            is PatchbayResult.Err -> { problems.add("get_sysinfo: ${r.error.message}"); r }
             is PatchbayResult.Ok -> KasaProtocol.parseSysinfo(r.value).also {
-                if (it is PatchbayResult.Ok) lastContact[device] = clock() else rejectedMessages++
+                when (it) {
+                    is PatchbayResult.Ok -> { lastContact[device] = clock(); lastInfo[device] = it.value }
+                    is PatchbayResult.Err -> rejected(it.error.message)
+                }
             }
         }
     }

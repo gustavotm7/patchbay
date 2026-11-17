@@ -6,6 +6,7 @@ import dev.patchbay.core.adapter.DiscoveredDevice
 import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.adapter.cast.CastAdapter
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
@@ -74,7 +75,7 @@ public class HomeKitAdapter(
 
     private class Known(val address: LanAddress, @Volatile var port: Int, var keys: HapPairingKeys?, val name: String)
 
-    private class Link(val conn: HapConnection, val layout: ThermostatLayout)
+    private class Link(val conn: HapConnection, val layout: ThermostatLayout, val shape: String)
 
     private val known = ConcurrentHashMap<DeviceId, Known>()
     private val links = ConcurrentHashMap<DeviceId, Link>()
@@ -82,6 +83,13 @@ public class HomeKitAdapter(
     private val wakes = ConcurrentHashMap<DeviceId, Channel<Unit>>()
     private val layouts = ConcurrentHashMap<DeviceId, ThermostatLayout>()
     private val trustBroken = ConcurrentHashMap.newKeySet<DeviceId>()
+
+    private val problems = RecentProblems()
+    private val pairMethodUsed = ConcurrentHashMap<DeviceId, Int>()
+    private val shapes = ConcurrentHashMap<DeviceId, String>()
+    @Volatile private var sessionsOpened = 0L
+    @Volatile private var timeouts = 0L
+    @Volatile private var retriesAfterDrop = 0L
 
     /** What each thermostat's mDNS announcement said about hardware authentication, so pairing can try the likelier method first. */
     private val authChip = ConcurrentHashMap<DeviceId, Boolean>()
@@ -175,10 +183,12 @@ public class HomeKitAdapter(
             try {
                 conn.setReadTimeout(config.pairingTimeoutMs)
                 keys = withContext(Dispatchers.IO) { HapPairing.setup(conn, code, method) }
+                pairMethodUsed[id] = method
                 break
             } catch (e: HapException) {
                 if (e.kind != HapException.Kind.METHOD_REJECTED) return PatchbayResult.Err(mapPairingError(e))
                 lastRefusal = e
+                problems.add("pair-setup method $method refused: ${e.message}")
             } catch (e: IOException) {
                 return PatchbayResult.Err(PatchbayError.Unreachable("lost the connection while pairing"))
             } finally {
@@ -273,15 +283,18 @@ public class HomeKitAdapter(
                             if (resp.status != 200) throw HapException(HapException.Kind.REJECTED, "accessory list refused (HTTP ${resp.status})")
                             val db = HapDb.parseAccessories(resp.body) ?: throw HapException(HapException.Kind.PROTOCOL, "unreadable accessory list")
                             val layout = ThermostatLayout.find(db) ?: throw HapException(HapException.Kind.PROTOCOL, "no thermostat found on this accessory")
-                            Link(c.value, layout)
+                            val shape = db.joinToString(" | ") { a -> "aid ${a.aid}: " + a.services.joinToString(",") { sv -> if (sv.type >= 0) "0x%02X".format(sv.type) else "?" } }.take(300)
+                            sessionsOpened++
+                            Link(c.value, layout, shape)
                         } catch (e: Exception) {
                             c.value.close(); throw e
                         }
-                    }.also { links[device] = it; layouts[device] = it.layout }
+                    }.also { links[device] = it; layouts[device] = it.layout; shapes[device] = it.shape }
                 }
                 PatchbayResult.Ok(withContext(Dispatchers.IO) { block(link) })
             } catch (e: HapException) {
                 drop(device)
+                problems.add("${e.kind}: ${e.message}")
                 when {
                     e.kind == HapException.Kind.UNTRUSTED_ACCESSORY -> {
                         trustBroken += device
@@ -294,10 +307,12 @@ public class HomeKitAdapter(
                 }
             } catch (e: java.net.SocketTimeoutException) {
                 drop(device)
-                if (reused && mayRetry) null else PatchbayResult.Err(PatchbayError.Timeout("thermostat didn't answer"))
+                timeouts++; problems.add("timeout")
+                if (reused && mayRetry) { retriesAfterDrop++; null } else PatchbayResult.Err(PatchbayError.Timeout("thermostat didn't answer"))
             } catch (e: IOException) {
                 drop(device)
-                if (reused && mayRetry) null else PatchbayResult.Err(PatchbayError.Unreachable("connection failed: ${e.javaClass.simpleName}"))
+                problems.add("io: ${e.javaClass.simpleName}")
+                if (reused && mayRetry) { retriesAfterDrop++; null } else PatchbayResult.Err(PatchbayError.Unreachable("connection failed: ${e.javaClass.simpleName}"))
             }
         }
     }
@@ -387,6 +402,17 @@ public class HomeKitAdapter(
         val v = HapDb.parseValues(resp.body)?.get(link.layout.targetState.id) ?: return null
         return HapDb.asDouble(v)?.toInt()?.let(ThermostatLayout::modeOf)
     }
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        add("pair-setup method used in this session: ${pairMethodUsed[device] ?: "none (restored from storage)"}; accessory announced an authentication chip: ${authChip[device] ?: "unknown"}")
+        known[device]?.let { add("port ${it.port}; pairing keys present: ${it.keys != null}") }
+        shapes[device]?.let { add("accessories and services: $it") }
+        layouts[device]?.let { add("thermostat layout: ${it.summary()}") }
+        links[device]?.conn?.let { add("replies seen chunked: ${it.sawChunked}") }
+    }
+
+    override fun adapterDiagnostics(): List<String> =
+        listOf("sessions opened $sessionsOpened, timeouts $timeouts, reconnects after a dropped connection $retriesAfterDrop") + problems.list().map { "problem: $it" }
 
     override suspend fun health(device: DeviceId): AdapterHealth {
         val k = known[device] ?: return AdapterHealth(HealthState.UNPAIRED, null, "not discovered yet")

@@ -7,6 +7,7 @@ import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.ManualAdd
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
 import dev.patchbay.core.model.Command
@@ -74,6 +75,22 @@ public class RtspCameraAdapter(
     /** Responses rejected as out of spec (diagnostics only). */
     @Volatile public var rejectedMessages: Long = 0
         private set
+
+    private val problems = RecentProblems()
+    private val probes = ConcurrentHashMap<LanAddress, String>()
+
+    private fun rejected(why: String) {
+        rejectedMessages++
+        problems.add(why)
+    }
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        val k = known[device]
+        add("login stored: ${k?.credentials != null}; stream path configured: /${config.path}")
+        k?.address?.let(probes::get)?.let { add("last check of the stream: $it") }
+    }
+
+    override fun adapterDiagnostics(): List<String> = listOf("responses rejected as out of spec: $rejectedMessages") + problems.list().map { "problem: $it" }
 
     init {
         require(RtspProtocol.isSafePath(config.path)) { "unsafe stream path" }
@@ -181,20 +198,22 @@ public class RtspCameraAdapter(
         val uri = "rtsp://$host:${config.port}/${config.path}"
         val first = when (val r = request(addr, RtspProtocol.describe(uri, 1))) {
             is PatchbayResult.Ok -> r.value
-            is PatchbayResult.Err -> return r
+            is PatchbayResult.Err -> { probes[addr] = "no usable answer (${r.error.message.filter { it.code in 32..126 }.take(60)})"; return r }
         }
         return when (first.status) {
-            200 -> PatchbayResult.Ok(Unit)
+            200 -> { probes[addr] = "RTSP 200 without asking for a login"; PatchbayResult.Ok(Unit) }
             401 -> {
-                if (creds == null) return PatchbayResult.Err(PatchbayError.Unauthorized("the camera needs a username and password"))
+                val scheme = first.header("www-authenticate").firstOrNull()?.trim()?.takeWhile { it.isLetter() }?.take(12)?.ifEmpty { null } ?: "none offered"
+                if (creds == null) { probes[addr] = "RTSP 401, login method $scheme, no login stored"; return PatchbayResult.Err(PatchbayError.Unauthorized("the camera needs a username and password")) }
                 val challenge = RtspProtocol.parseChallenge(first.header("www-authenticate"))
-                    ?: return PatchbayResult.Err(PatchbayError.Unsupported("the camera offered no login method Patchbay supports"))
+                    ?: run { probes[addr] = "RTSP 401, login method $scheme is not supported"; problems.add("login method not supported: $scheme"); return PatchbayResult.Err(PatchbayError.Unsupported("the camera offered no login method Patchbay supports")) }
                 val cnonce = Random.nextBytes(8).joinToString("") { "%02x".format(it) }
                 val auth = RtspAuth.authorization(challenge, creds.user, creds.password, "DESCRIBE", uri, cnonce)
                 val second = when (val r = request(addr, RtspProtocol.describe(uri, 2, auth))) {
                     is PatchbayResult.Ok -> r.value
-                    is PatchbayResult.Err -> return r
+                    is PatchbayResult.Err -> { probes[addr] = "RTSP 401 ($scheme), then no usable answer"; return r }
                 }
+                probes[addr] = "RTSP 401 ($scheme), then ${second.status.coerceIn(0, 999)}"
                 when (second.status) {
                     200 -> PatchbayResult.Ok(Unit)
                     401 -> PatchbayResult.Err(PatchbayError.Unauthorized("the camera rejected the username or password"))
@@ -202,8 +221,8 @@ public class RtspCameraAdapter(
                     else -> PatchbayResult.Err(PatchbayError.Unreachable("the camera answered RTSP ${second.status}"))
                 }
             }
-            404 -> notFound()
-            else -> PatchbayResult.Err(PatchbayError.Unreachable("the camera answered RTSP ${first.status}"))
+            404 -> { probes[addr] = "RTSP 404 (no stream at /${config.path})"; notFound() }
+            else -> { probes[addr] = "RTSP ${first.status.coerceIn(0, 999)}"; PatchbayResult.Err(PatchbayError.Unreachable("the camera answered RTSP ${first.status}")) }
         }
     }
 
@@ -230,15 +249,17 @@ public class RtspCameraAdapter(
                         tail = ((tail shl 8) or b) // last four bytes
                         if (tail == 0x0D0A0D0A) break
                         if (buf.size() > RtspProtocol.MAX_HEADER_BYTES) {
-                            rejectedMessages++
+                            rejected("header block too large")
                             return@use PatchbayResult.Err(PatchbayError.ProtocolViolation("rtsp: header block too large"))
                         }
                     }
-                    RtspProtocol.parseResponse(buf.toByteArray()).also { r -> if (r is PatchbayResult.Err) rejectedMessages++ }
+                    RtspProtocol.parseResponse(buf.toByteArray()).also { r -> if (r is PatchbayResult.Err) rejected(r.error.message) }
                 }
             } catch (e: SocketTimeoutException) {
+                problems.add("no answer from the camera")
                 PatchbayResult.Err(PatchbayError.Timeout("the camera didn't answer"))
             } catch (e: IOException) {
+                problems.add("connection failed: ${e.javaClass.simpleName}")
                 PatchbayResult.Err(PatchbayError.Unreachable("camera connection failed: ${e.javaClass.simpleName}"))
             }
         }

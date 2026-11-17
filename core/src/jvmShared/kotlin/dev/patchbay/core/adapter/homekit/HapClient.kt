@@ -115,6 +115,10 @@ internal class HapConnection(private val socket: Socket, private val host: Strin
     @Volatile var secure: Boolean = false
         private set
 
+    /** True once any reply used `Transfer-Encoding: chunked` (for the diagnostics report). */
+    @Volatile var sawChunked: Boolean = false
+        private set
+
     fun request(method: String, path: String, contentType: String? = null, body: ByteArray = ByteArray(0), accept: String? = null): HapResponse {
         val head = buildString {
             append("$method $path HTTP/1.1\r\nHost: $host\r\n")
@@ -151,6 +155,7 @@ internal class HapConnection(private val socket: Socket, private val host: Strin
                 "transfer-encoding" -> if (value.lowercase() == "chunked") chunked = true else throw HapException(HapException.Kind.PROTOCOL, "unsupported transfer encoding")
             }
         }
+        if (chunked) sawChunked = true
         val body = if (chunked) readChunked() else readExactly(length)
         if (isEvent) return null
         val code = status.substring(9).take(3).toIntOrNull() ?: throw HapException(HapException.Kind.PROTOCOL, "bad status")

@@ -85,6 +85,15 @@ public interface DeviceAdapter {
      */
     public fun relocate(device: DeviceId, found: DiscoveredDevice, pairing: Pairing?): PatchbayResult<Unit> = restore(device, found.address, pairing)
 
+    /**
+     * Short facts about how this device has behaved, for the diagnostics report (what it announced, which variant of the protocol worked, the *shape* of what
+     * it reports). Plain lines; **never** secrets (keys, codes, passwords, setup codes), never raw payloads, never titles or other content. No network I/O.
+     */
+    public fun diagnostics(device: DeviceId): List<String> = emptyList()
+
+    /** The same for the adapter as a whole: counters and the last few things it could not make sense of. Same rules as [diagnostics]. */
+    public fun adapterDiagnostics(): List<String> = emptyList()
+
     /** Hot flow of state for a paired device. Reconnects with back-off; never hammers. */
     public fun observe(device: DeviceId): Flow<DeviceSnapshot>
 

@@ -45,7 +45,7 @@ Not confirmed by these files: how Apple-certified firmware (the ecobee) behaves 
 
 ## Unverified until a real ecobee
 
-1. Which pair-setup method the ecobee accepts (both are now tried; HARDWARE_TEST E2.x asks you to report which one worked via the diagnostics report).
+1. Which pair-setup method the ecobee accepts (both are now tried; the diagnostics report's ecobee block says which one worked, so HARDWARE_TEST E2.x only asks you to paste it).
 2. Whether it needs the Flags TLV (not implemented).
 3. Whether the minimum setpoint gap (we assume 1 °C) matches the thermostat.
 4. Whether sensors appear as extra accessories (we read occupancy services from any accessory).

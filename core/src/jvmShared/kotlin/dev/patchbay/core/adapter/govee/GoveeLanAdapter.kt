@@ -6,6 +6,7 @@ import dev.patchbay.core.adapter.DiscoveredDevice
 import dev.patchbay.core.adapter.HealthState
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.adapter.RecentProblems
 import dev.patchbay.core.model.AdapterId
 import dev.patchbay.core.model.Capability
 import dev.patchbay.core.model.Command
@@ -89,6 +90,26 @@ public class GoveeLanAdapter(
     @Volatile public var rejectedMessages: Long = 0
         private set
 
+    private val problems = RecentProblems()
+    private val scanInfo = ConcurrentHashMap<DeviceId, Pair<GoveeProtocol.Message.ScanReply, Boolean>>()
+    private val statusTimeouts = java.util.concurrent.atomic.AtomicLong()
+
+    private fun rejected(why: String) {
+        rejectedMessages++
+        problems.add(why)
+    }
+
+    override fun diagnostics(device: DeviceId): List<String> = buildList {
+        scanInfo[device]?.let { (info, ipMatches) ->
+            add("model ${info.sku.take(20)}; Wi-Fi firmware ${info.wifiFirmware?.take(20) ?: "not reported"}; Bluetooth firmware ${info.bleFirmware?.take(20) ?: "not reported"}")
+            add("the address the light reports for itself ${if (info.claimedIp == null) "was not included" else if (ipMatches) "matches" else "differs from"} the address it answered from")
+        }
+        add("address known: ${known.containsKey(device)}")
+    }
+
+    override fun adapterDiagnostics(): List<String> =
+        listOf("messages rejected as out of spec: $rejectedMessages; status requests that got no answer: ${statusTimeouts.get()}") + problems.list().map { "problem: $it" }
+
     /** Binds the listen socket and starts the receive loop. Idempotent. */
     public fun start(): PatchbayResult<Int> {
         socket?.let { return PatchbayResult.Ok(it.localPort) }
@@ -103,7 +124,7 @@ public class GoveeLanAdapter(
             while (isActive && !s.isClosed) {
                 val d = (s.receive(GoveeProtocol.MAX_MESSAGE_BYTES, 1_000) as? PatchbayResult.Ok)?.value ?: continue
                 when (val m = GoveeProtocol.parse(d.payload)) {
-                    is PatchbayResult.Err -> rejectedMessages++
+                    is PatchbayResult.Err -> rejected(m.error.message)
                     is PatchbayResult.Ok -> when (val msg = m.value) {
                         is GoveeProtocol.Message.ScanReply -> scanReplies.tryEmit(d.from to msg)
                         is GoveeProtocol.Message.Status -> pendingStatus.remove(d.from)?.complete(msg)
@@ -123,6 +144,7 @@ public class GoveeLanAdapter(
                 if (seen.add(reply.deviceKey)) {
                     val deviceId = deviceIdFor(reply.deviceKey)
                     known[deviceId] = from
+                    scanInfo[deviceId] = reply to (reply.claimedIp == from.literal)
                     send(
                         DiscoveredDevice(
                             adapter = ID, key = reply.deviceKey, address = from.literal, port = config.commandPort,
@@ -223,6 +245,8 @@ public class GoveeLanAdapter(
             lastContact[device] = clock()
             PatchbayResult.Ok(reply)
         } else {
+            statusTimeouts.incrementAndGet()
+            problems.add("devStatus: no answer within ${config.statusTimeoutMs} ms")
             PatchbayResult.Err(PatchbayError.Timeout("Govee device didn't answer devStatus"))
         }
     }

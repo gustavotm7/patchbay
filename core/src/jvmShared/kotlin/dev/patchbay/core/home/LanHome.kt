@@ -558,6 +558,70 @@ public class LanHome(
     private val owners = ConcurrentHashMap<DeviceId, DeviceAdapter>()
     private val observers = ConcurrentHashMap<DeviceId, Job>()
 
+    override fun diagnosticsReport(header: List<String>): String {
+        val now = clock()
+        val live = _devices.value
+        val scan = _report.value
+        val labels = HashMap<String, String>()
+        val devices = live.mapIndexed { index, l ->
+            val d = l.device
+            val label = "#${index + 1} ${listOfNotNull(d.vendor, d.model).joinToString(" ").ifBlank { "device" }} (${d.kind.name.lowercase()})"
+            labels.putIfAbsent(d.name, label)
+            val snap = l.snapshot
+            DeviceReport(
+                label = label,
+                adapterId = d.adapter?.value ?: "none",
+                id = DiagnosticsReport.maskId(d.id.value),
+                address = DiagnosticsReport.maskAddress(l.address),
+                reachability = (snap?.reachability ?: Reachability.NEVER_CONNECTED).name.lowercase().replace('_', ' '),
+                lastReadingSecondsAgo = snap?.takeIf { it.states.isNotEmpty() }?.let { (now - it.observedAt.value) / 1_000 },
+                offlineForSeconds = offlineSince[d.id]?.let { (now - it) / 1_000 },
+                needsPairing = l.needsPairing,
+                trustChanged = l.trustChanged,
+                firmware = d.firmware,
+                readings = snap?.states?.map { it::class.simpleName ?: "?" }?.distinct().orEmpty(),
+                lines = owners[d.id]?.let { safeLines { it.diagnostics(d.id) } }.orEmpty(),
+            )
+        }
+        val systems = adapters.map { a ->
+            val found = scan.firstOrNull { it.name == a.systemName }
+            SystemReport(
+                name = a.systemName, adapterId = a.id.value, paired = live.count { owners[it.device.id] === a },
+                found = found?.takeIf { it.discoverable }?.found, scanNote = found?.note, lines = safeLines { a.adapterDiagnostics() },
+            )
+        }
+        val offsetMinutes = zone.rules.getOffset(java.time.Instant.ofEpochMilli(now)).totalSeconds / 60
+        return DiagnosticsReport.build(
+            DiagnosticsInput(
+                header = header + listOf(
+                    "Java ${System.getProperty("java.version")} on ${System.getProperty("os.name")} ${System.getProperty("os.version")} (${System.getProperty("os.arch")})",
+                ),
+                nowMillis = now,
+                utcOffsetMinutes = offsetMinutes,
+                systems = systems,
+                devices = devices,
+                netStats = netGuard.stats.value,
+                census = _census.value,
+                // "Renamed (was X)" carries a name that is no longer in use anywhere else, so only the fact is kept.
+                activity = _activity.value.take(40).map {
+                    it.copy(deviceName = labels[it.deviceName] ?: "(a device or scene)", event = if (it.event.startsWith("Renamed")) "Renamed" else it.event)
+                },
+                logTail = recentLog(120).lines(),
+                personalNames = buildList {
+                    for (l in live) {
+                        val plain = listOfNotNull(l.device.vendor, l.device.model).joinToString(" ")
+                        if (!l.device.name.equals(plain, ignoreCase = true)) add(l.device.name) // an auto-made "Govee H6076" is not personal
+                    }
+                    addAll(_scenes.value.map { it.name }); addAll(_automations.value.map { it.name }); addAll(_rooms.value)
+                },
+            ),
+        )
+    }
+
+    /** An adapter that fails while describing itself must not take the whole report down. */
+    private fun safeLines(block: () -> List<String>): List<String> =
+        try { block() } catch (e: Exception) { listOf("diagnostics unavailable: ${e.javaClass.simpleName}") }
+
     init {
         restoreSaved()
         refreshRooms()

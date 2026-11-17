@@ -139,6 +139,15 @@ internal class ThermostatLayout private constructor(
         valid.mapNotNull(::modeOf).toSet().ifEmpty { setOf(HvacMode.OFF) }
     }
 
+    /** What was found, as types and ranges only (no names, no values): for the diagnostics report. */
+    fun summary(): String {
+        fun c(label: String, ch: HapChar?) = ch?.let { "$label(iid ${it.iid}${it.min?.let { m -> ", $m" } ?: ""}${it.max?.let { m -> "..$m" } ?: ""}${it.step?.let { st -> " step $st" } ?: ""}${if (it.writable) ", writable" else ""})" }
+        return listOfNotNull(
+            c("current-temp", currentTemp), c("target-temp", targetTemp), c("current-state", currentState), c("target-state", targetState),
+            c("cool-threshold", coolThreshold), c("heat-threshold", heatThreshold), c("humidity", humidity),
+        ).joinToString(" ") + " modes=${modes.joinToString("/") { it.name.lowercase() }} occupancy-sensors=${occupancy.size}"
+    }
+
     fun capabilities(): List<Capability> {
         fun range(c: HapChar?, fallback: ClosedFloatingPointRange<Double>) = Celsius((c?.min ?: fallback.start)).rangeTo(Celsius(c?.max ?: fallback.endInclusive))
         val tMin = targetTemp.min ?: 10.0; val tMax = targetTemp.max ?: 38.0

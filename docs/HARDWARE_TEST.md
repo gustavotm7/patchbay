@@ -1,7 +1,12 @@
 # Hardware test checklist
 
 Run these on your real phone and laptop. Each phase appends a section. Report failures with the step number
-and, if possible, the session log (`patchbay_<platform>_<timestamp>.log`; logging arrives in Phase 1).
+and the **diagnostics report**: Settings → Diagnostics → **Copy diagnostics** (press **Read it first** to see what it holds).
+Press it right after the step that failed, while the problem is still fresh, and paste it with the step number. It has the app version,
+which system and device is which (kinds and masked ids, no names), whether each device answers and how recently, the *shape* of what each
+device reports (data point numbers and types, report field names, message kinds, which pairing variant worked), counters, the last few
+problems each system hit, and the redacted log tail. It never contains passwords, codes, keys, the names you gave things, readings, or full
+addresses. If you spot anything in it you would rather not share, tell me and I will remove it at the source.
 
 ## Phase 0 — shells install and render the demo home
 
@@ -373,3 +378,14 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 |---|---|---|
 | M2.1 | With Patchbay open, change a paired TV's or thermostat's address in the router (or restart the router) and do **not** press Scan | Within a few minutes the tile goes offline and then comes back by itself, as the same tile |
 | M2.2 | Switch a device off for 10 minutes, then on again | It comes back within a minute or two of being on; no flood of network scans (the Network screen's counters should not climb quickly) |
+
+## Phase 2 — Diagnostics report (D1.x)
+
+| # | Step | Expected |
+|---|---|---|
+| D1.1 | Settings → Diagnostics → **Read it first** | A scrollable text. Systems (with how many devices each has), devices numbered `#1`, `#2`… with kind, masked id (`tuya-…ef12`) and masked address (`192.168.*.23`), a Network summary, Recent activity, and the log tail |
+| D1.2 | Read it for anything private | No passwords, codes, setup codes, access codes or keys; none of the names you gave devices, rooms, scenes or automations (they read `(name)`); no full IP addresses or serial numbers |
+| D1.3 | Press **Copy diagnostics**, paste it somewhere | The same text. The button says "Copied" |
+| D1.4 | Pair or use one of each device you have, then copy again | Each device's block gains its own facts. For example: ecobee shows the pairing method that worked, the accessory and service layout and the thermostat's characteristic ranges; Tuya shows data point numbers with types; Bambu shows field names; webOS shows which requests the TV answered or refused; Google TV and Cast show message kinds; RTSP shows the login method and last status |
+| D1.5 | Switch the router's Wi-Fi off for a minute, then copy | The devices show offline for N minutes, and the systems list the problems they hit (timeouts, refused connections), newest last |
+
