@@ -38,6 +38,7 @@ kotlin {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(project(":simulators"))
+                implementation(libs.compose.ui.test)
             }
         }
     }

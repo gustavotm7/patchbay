@@ -46,6 +46,7 @@ Build-only transitive tooling seen in the verification metadata, not shipped (ab
 | `org.jetbrains.kotlin:kotlin-test(-junit5)` | 2.4.21 | Assertions + JUnit 5 integration | Apache-2.0 |
 | `org.junit.jupiter:*`, `org.junit.platform:junit-platform-launcher` | 5.10.1 / 1.10.1 | Test engine (via kotlin-test-junit5) | EPL-2.0 |
 | `org.jetbrains.kotlinx:kotlinx-coroutines-test` | 1.11.0 | Virtual time for Flow tests | Apache-2.0 |
+| `org.jetbrains.compose.ui:ui-test` (desktop variant; pulls in `junit:junit` 4.13.2 and `org.hamcrest:hamcrest-core` 1.3 at test runtime) | 1.12.2 | Headless UI behaviour tests (`ui` desktopTest): click, type and press keys on the real screens and check what they do (command bar, tiles, pairing, lock, navigation). Never on a shipped classpath, never makes network calls | Apache-2.0 (JUnit 4: EPL-1.0, Hamcrest: BSD-3-Clause) |
 
 ## Build tooling (not shipped)
 
