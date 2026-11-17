@@ -55,9 +55,9 @@ Last updated: 2026-11-17. Work branch: **`ci/verification-bootstrap`** (ahead of
 
 ## Get the builds
 
-Latest build: CI run `44154144708` on `c4d4b20` (all 6 jobs green; the Windows portable build below is from it; the Android and MSI links further down are older, ask for fresh ones). You need to be signed in to GitHub; artifacts are kept about 30 days. If the links have expired, open the latest green `ci` run on `ci/verification-bootstrap` and download from its Artifacts.
+Latest build: CI run `44175457726` on `e1c768a` (all 6 jobs green; the Windows portable build below is from it; the Android and MSI links further down are older, ask for fresh ones). You need to be signed in to GitHub; artifacts are kept about 30 days. If the links have expired, open the latest green `ci` run on `ci/verification-bootstrap` and download from its Artifacts.
 
-- Windows portable (no install, recommended): https://github.com/gustavotm7/patchbay/actions/runs/44154144708/artifacts/14361235459
+- Windows portable (no install, recommended): https://github.com/gustavotm7/patchbay/actions/runs/44175457726/artifacts/14369198008
 - Android (install `app-android-debug.apk` from inside; ignore the unsigned release one): https://github.com/gustavotm7/patchbay/actions/runs/43152004291/artifacts/13914656295
 - Windows MSI (optional installer): https://github.com/gustavotm7/patchbay/actions/runs/43152004291/artifacts/13913279426
 
