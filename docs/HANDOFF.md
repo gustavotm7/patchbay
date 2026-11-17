@@ -25,7 +25,7 @@ The pre-hardware plan in `docs/PLAN.md` was executed: Wycheproof vectors for the
 LanHome split into parts, encrypted backup (ADR 0013), and 44 headless UI behaviour tests. A new restore test found a real start-up crash (a saved device that needs pairing); fixed.
 **First hardware pass:** run `docs/HARDWARE_TEST.md` and after each device press Settings → Diagnostics → Copy diagnostics and send it with the failing step.
 W3.3 interop is done (`docs/protocols/interop.md`, `tools/interop/`). Still open: the owner decisions in PLAN W5 (Home Assistant or continue; keep hand-written crypto or adopt a library).
-Known gaps: camera video failures are only shown on screen (not in the diagnostics report); each scan runs several separate mDNS censuses (harmless, wasteful).
+Known gaps: each scan runs several separate mDNS censuses (harmless, wasteful).
 
 ## Paste this to start a new session
 
