@@ -39,7 +39,8 @@ class TuyaQuirksTest {
 
     private inner class Rig(version: String, val address: String) : AutoCloseable {
         val bulb = TuyaSimulator(address, devId, key, version = version)
-        val adapter = TuyaLocalAdapter(NetGuard(), TuyaLocalAdapter.Config(port = bulb.port, ioTimeoutMs = 800, pollIntervalMs = 100, maxBackoffMs = 400))
+        val now = java.util.concurrent.atomic.AtomicLong(1_000_000L)
+        val adapter = TuyaLocalAdapter(NetGuard(), TuyaLocalAdapter.Config(port = bulb.port, ioTimeoutMs = 800, pollIntervalMs = 100, maxBackoffMs = 400), clock = { now.get() })
         override fun close() = bulb.close()
 
         suspend fun pair(label: String = TuyaBulbProfile.V2.label, withKey: String = key): PatchbayResult<dev.patchbay.core.adapter.Pairing> {
@@ -114,6 +115,12 @@ class TuyaQuirksTest {
             val before = r.bulb.numberQueries.get()
             r.online(id)
             assertTrue(r.bulb.numberQueries.get() - before in 1..2, "later readings ask once, not once per range (${r.bulb.numberQueries.get() - before})")
+
+            // A data point that only appears later (a vacuum's cleaning figures) is not missed for long: the ranges are searched again after a while.
+            r.bulb.dps["105"] = JsonPrimitive(7)
+            assertEquals(setOf("1", "3", "101", "104"), r.online(id).state<CapabilityState.DiagnosticValues>()!!.values.keys) // within the window: the remembered numbers
+            r.now.addAndGet(25_000)
+            assertEquals(setOf("1", "3", "101", "104", "105"), r.online(id).state<CapabilityState.DiagnosticValues>()!!.values.keys)
         }
     }
 

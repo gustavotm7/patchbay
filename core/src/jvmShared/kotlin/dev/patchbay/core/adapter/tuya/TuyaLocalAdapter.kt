@@ -76,8 +76,11 @@ public class TuyaLocalAdapter(
         /** Set once a protocol 3.3 device has answered the normal query with "data unvalid": it is then asked for its data points by number. */
         @Volatile var device22: Boolean = false
 
-        /** The data point numbers that answered when they were looked for by number, so later readings ask for just those. */
+        /** The data point numbers that answered when they were looked for by number, so later readings ask for just those (see [knownDpsAt]). */
         @Volatile var knownDps: List<String>? = null
+
+        /** When [knownDps] was found. A device type that does not know its own numbers looks through the ranges again from time to time, because some data points only appear in some states (a vacuum while it cleans). */
+        @Volatile var knownDpsAt: Long = 0
     }
 
     private val known = ConcurrentHashMap<DeviceId, Known>()
@@ -162,6 +165,7 @@ public class TuyaLocalAdapter(
             // A fourth line says the device had to be asked for its data points by number; what a moved device had already found out is kept.
             it.device22 = parts?.getOrNull(3) == "device22" || previous?.device22 == true
             it.knownDps = previous?.knownDps
+            it.knownDpsAt = previous?.knownDpsAt ?: 0
         }
         return PatchbayResult.Ok(Unit)
     }
@@ -289,8 +293,9 @@ public class TuyaLocalAdapter(
             (checkReturn(reply) as? PatchbayResult.Err)?.let { return it }
             return TuyaProtocol.parseDps(reply.plain)
         }
-        val wanted = k.knownDps ?: k.profile.requestDps
-        if (wanted != null) return noteReading(device, ask(wanted))
+        k.profile.requestDps?.let { return noteReading(device, ask(it)) }
+        val remembered = k.knownDps
+        if (remembered != null && clock() - k.knownDpsAt < RESCAN_MS) return noteReading(device, ask(remembered))
         // Unknown numbers: look through the usual ranges (a request can only carry so many), always including 1.
         val found = LinkedHashMap<String, JsonPrimitive>()
         var lastError: PatchbayResult.Err? = null
@@ -302,6 +307,7 @@ public class TuyaLocalAdapter(
         }
         if (found.isEmpty()) return noteReading(device, lastError ?: PatchbayResult.Err(PatchbayError.ProtocolViolation("tuya: the device reported no data points")))
         k.knownDps = found.keys.toList()
+        k.knownDpsAt = clock()
         return noteReading(device, PatchbayResult.Ok(found))
     }
 
@@ -357,6 +363,9 @@ public class TuyaLocalAdapter(
         public fun deviceIdFor(key: String): DeviceId = DeviceId("tuya-$key")
         private const val MAX_DPS_IN_REPORT = 30
         private const val CLOSED = "the device closed the connection"
+
+        /** How long a read-only device's data point numbers are trusted before the ranges are searched again. */
+        private const val RESCAN_MS = 20_000L
 
         /** Where data point numbers are found in practice; asked for in these groups because a request has a small size limit. */
         private val DISCOVERY_RANGES: List<IntRange> = listOf(2..10, 11..20, 21..30, 50..60, 61..70, 100..110, 111..120, 121..130, 131..140)

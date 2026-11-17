@@ -28,7 +28,8 @@ different local key, and the message says that. A firmware update can change a d
 - **"device22" devices.** Some protocol 3.3 devices, often with 22-character ids (the vacuum's id in `docs/TUYA_KEYS.md` has 22), answer the normal query with "data unvalid" and only
   answer the control-style command `0D` carrying `"dps":{"1":null,"2":null,...}`, naming the data points wanted. Patchbay notices "data unvalid" in a reply (whatever return code comes
   with it), asks that way from then on, and records it in the pairing (a fourth line, `device22`). A bulb profile asks for its own five data points; the read-only profile tries the usual
-  ranges (2-10, 11-20, 21-30, 50-60, 61-70, 100-110, 111-120, 121-130, 131-140, always with 1) once and then asks only for the numbers that answered. Not done for 3.4 and 3.5.
+  ranges (2-10, 11-20, 21-30, 50-60, 61-70, 100-110, 111-120, 121-130, 131-140, always with 1), then asks only for the numbers that answered and searches the ranges again every
+  20 seconds (some data points, such as a vacuum's cleaning figures, only appear in some states). Not done for 3.4 and 3.5.
 - An error reply's payload is decrypted when it can be (the reason may be in it) and left unread when it is plain text.
 
 Checked against: the tinytuya library's own frames and session keys (`TuyaSecureFramesTest`, vectors from `tools/interop/tuya_vectors.py`) and tinytuya as a client against our simulators
