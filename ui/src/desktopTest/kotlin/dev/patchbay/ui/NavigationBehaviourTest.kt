@@ -101,7 +101,7 @@ class NavigationBehaviourTest {
         onNodeWithText("Copy diagnostics").performScrollTo().assertExists()
         onNodeWithText("Read it first").performScrollTo().performClick()
         // The report is built off the main thread, so wait for it instead of for idle.
-        waitUntil(5_000) { onAllNodes(hasText("diagnostics for", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 5_000L) { onAllNodes(hasText("diagnostics for", substring = true)).fetchSemanticsNodes().isNotEmpty() }
 
         onNodeWithText("diagnostics for", substring = true).assertExists()
         val header = assertNotNull(live.diagnosticsHeaders)
