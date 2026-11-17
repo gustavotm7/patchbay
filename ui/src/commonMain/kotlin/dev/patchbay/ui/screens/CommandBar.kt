@@ -102,7 +102,7 @@ internal fun CommandBar(items: List<PaletteItem>, onClose: () -> Unit) {
                         Key.Escape -> { onClose(); true }
                         Key.DirectionDown -> { if (results.isNotEmpty()) selected = (selected + 1) % results.size; true }
                         Key.DirectionUp -> { if (results.isNotEmpty()) selected = (selected - 1 + results.size) % results.size; true }
-                        Key.Enter, Key.NumPadEnter -> { results.getOrNull(selected)?.let(::run); true }
+                        Key.Enter, Key.NumPadEnter -> { true }
                         else -> false
                     }
                 },

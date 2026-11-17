@@ -82,7 +82,7 @@ internal fun tileStatus(d: LiveDevice): String {
 
 /** Lights and plugs switch on a tap; everything else opens its page (a TV or printer is never one careless tap from turning off). */
 internal fun tileToggles(d: LiveDevice): Boolean =
-    !d.needsPairing && !d.trustChanged && d.snapshot?.reachability == Reachability.ONLINE && (d.device.kind == DeviceKind.LIGHT || d.device.kind == DeviceKind.PLUG) && d.device.capability<Capability.Power>() != null
+    !d.needsPairing && d.snapshot?.reachability == Reachability.ONLINE && (d.device.kind == DeviceKind.LIGHT || d.device.kind == DeviceKind.PLUG) && d.device.capability<Capability.Power>() != null
 
 /**
  * A device tile: glyph, name, one line of status. "On" is the inverse fill (a light tile with dark text on dark themes),

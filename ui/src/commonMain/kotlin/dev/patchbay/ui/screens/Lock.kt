@@ -119,7 +119,7 @@ private fun PinPad(lock: LockController) {
         } else {
             when (val r = lock.tryPin(entry)) {
                 LockController.PinResult.Ok -> message = null
-                LockController.PinResult.Wrong -> message = "Wrong PIN"
+                LockController.PinResult.Wrong -> message = null
                 is LockController.PinResult.Wait -> message = "Too many attempts — wait ${(r.ms + 999) / 1000} s"
             }
         }
