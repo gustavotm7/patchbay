@@ -46,11 +46,17 @@ Last updated: 2026-11-17. Work branch: **`ci/verification-bootstrap`** (ahead of
 | **Android background watching** | Opt-in foreground service keeps polling and automations running with the screen off; alerts as notifications (lock-screen text generic); new permissions POST_NOTIFICATIONS, FOREGROUND_SERVICE(+SPECIAL_USE) (ADR 0011) | Builds in CI, permission allowlist updated. **Not yet tried on a phone** (HARDWARE_TEST N2.x) |
 | **Camera video on Windows** | Guarded RTSP client (Digest/Basic, interleaved RTP, H.264 depacketizer) feeds a local ffmpeg you place next to Patchbay.exe (ADR 0012) | 12 depacketizer/SDP/MJPEG tests (25 000-input mutation), 7 stream tests vs the simulated camera, 3 pipeline tests. **Not yet tried on a real camera** (HARDWARE_TEST C2.x) |
 
+| **Diagnostics report** | Settings → Diagnostics: copy (or read first) a redacted report: systems and devices as kinds and masked ids, the shape of what each device reports, counters, the last problems, redacted log tail. No names, secrets, readings or full addresses | `DiagnosticsSecretsTest` (every adapter paired with a known secret; no spelling of it appears), `LanHomeDiagnosticsTest`, `DiagnosticsReportTest` |
+| **Self-healing and moved devices** | A device that gets a new IP is re-registered with its pairing intact after one rescan; offline for 90 s triggers a quiet, rate-limited search. Cast and Google TV devices are identified by what they announce, not by IP | `DeviceMovesTest`, `SelfHealTest` |
+| **Encrypted backup** | Settings → Backup: passphrase-encrypted one-line backup of devices, pairings, rooms, scenes, automations, settings (ADR 0013); restore replaces what it covers, after a restart | `BackupTest` (15), `BackupRoundTripTest`; panel verified in CI only |
+| **UI behaviour tests** | 44 headless tests drive the real screens (command bar, tiles, pairing, lock, navigation) | CI; mutation-checked once |
+| **Start-up fix (2026-11-17)** | Restoring a saved device that needs pairing used to make the app fail while starting (paired devices since the IP-move fix; never-paired ones before that). Fixed and covered | `RestoreAfterRestartTest` |
+
 ## Get the builds
 
-Latest build: CI run on `0567ae0` (all jobs green). You need to be signed in to GitHub; artifacts are kept about 30 days. If the links have expired, open the latest green `ci` run on `ci/verification-bootstrap` and download from its Artifacts.
+Latest build: CI run `44111210359` on `914b838` (all 6 jobs green; the Windows portable build below is from it; the Android and MSI links further down are older, ask for fresh ones). You need to be signed in to GitHub; artifacts are kept about 30 days. If the links have expired, open the latest green `ci` run on `ci/verification-bootstrap` and download from its Artifacts.
 
-- Windows portable (no install, recommended): https://github.com/gustavotm7/patchbay/actions/runs/43152004291/artifacts/13913693290
+- Windows portable (no install, recommended): https://github.com/gustavotm7/patchbay/actions/runs/44111210359/artifacts/14340342955
 - Android (install `app-android-debug.apk` from inside; ignore the unsigned release one): https://github.com/gustavotm7/patchbay/actions/runs/43152004291/artifacts/13914656295
 - Windows MSI (optional installer): https://github.com/gustavotm7/patchbay/actions/runs/43152004291/artifacts/13913279426
 
