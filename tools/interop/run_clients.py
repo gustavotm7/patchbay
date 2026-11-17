@@ -19,6 +19,15 @@ d.turn_off()
 after = d.status()
 check("tinytuya reads and writes", before["dps"]["20"] is True and after["dps"]["20"] is False, json.dumps(after)[:100])
 
+# tinytuya, protocols 3.4 and 3.5: the session-key handshake, then HMAC (3.4) or AES-GCM (3.5) frames, from the reference client.
+for ver, addr, key in ((3.4, "127.0.0.176", "tuya34"), (3.5, "127.0.0.177", "tuya35")):
+    d = tinytuya.BulbDevice("bf1234567890abcdef12", addr, "0123456789abcdef", version=ver, port=int(ports[key]), connection_timeout=5)
+    d.set_socketPersistent(False)
+    before = d.status()
+    d.turn_off()
+    after = d.status()
+    check("tinytuya %s reads and writes" % ver, before.get("dps", {}).get("20") is True and after.get("dps", {}).get("20") is False, json.dumps(after)[:100])
+
 # python-kasa, legacy XOR protocol.
 from kasa import DeviceConfig
 from kasa.deviceconfig import DeviceConnectionParameters, DeviceFamily, DeviceEncryptionType

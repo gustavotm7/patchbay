@@ -28,7 +28,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-/** Contract test: the real TuyaLocalAdapter against a simulated Tuya bulb (protocol 3.3) over loopback TCP. */
+/** Contract test: the real TuyaLocalAdapter against a simulated Tuya bulb (protocol 3.3) over loopback TCP. Protocols 3.4 and 3.5: [TuyaSecureVersionsTest]. */
 class TuyaContractTest {
 
     private val devId = "bf1234567890abcdef12"
@@ -71,7 +71,7 @@ class TuyaContractTest {
     @Test
     fun pairsWithTheRightKeyAndStoresProfileAndKeyAsTheSecret(): Unit = runBlocking {
         val p = adapter.pair(found(), Prompt(key)).getOrNull()!!
-        assertEquals("bulb-v2\n$key", p.secret.decodeToString())
+        assertEquals("bulb-v2\n$key\n3.3", p.secret.decodeToString()) // profile, key and the protocol version that answered
         assertFalse(p.toString().contains(key), "Pairing.toString must redact the secret")
     }
 

@@ -1,9 +1,28 @@
 # Tuya-based devices (Lepro LampUX bulbs, Lefant robot vacuum — to be confirmed)
 
-Status: 2026-11-06. ADR 0007 **accepted**. **Bulb adapter built** (`core/.../adapter/tuya/`): protocol **3.3** only, added by address,
+Status: 2026-11-17. ADR 0007 **accepted**. **Bulb adapter built** (`core/.../adapter/tuya/`): protocols **3.3, 3.4 and 3.5** (ADR 0015), added by address,
 user-supplied local key (`docs/TUYA_KEYS.md`), two allowlisted layouts ("standard" data points 20 to 24, "older" 1 to 5). **Not built:**
-protocol 3.4/3.5, and the **vacuum**: its data points differ per model, so it needs the model number and its data-point list (from the tinytuya
+the **vacuum's controls**: its data points differ per model, so it needs the model number and its data-point list (from the tinytuya
 wizard) before any command is allowed. The Kelvin range (2700 to 6500) is an assumption to calibrate on the real bulb.
+
+## How the three versions differ (as implemented)
+
+| | 3.3 | 3.4 | 3.5 |
+|---|---|---|---|
+| Frame | `55AA`, CRC-32 | `55AA`, HMAC-SHA256 (32 bytes) instead of the CRC | `6699`, AES-128-GCM; the 14 header bytes after the prefix are authenticated |
+| Payload cipher | AES-128-ECB, local key | AES-128-ECB, **session key** | AES-GCM, **session key** (12-byte IV in the frame) |
+| Session | none (one request, one reply) | handshake first: our nonce (command 3), the device's nonce and an HMAC of ours (4), an HMAC of theirs (5) | the same handshake inside GCM frames |
+| Session key | the local key | AES-ECB of (our nonce XOR theirs) under the local key | AES-GCM of (our nonce XOR theirs), IV = first 12 bytes of our nonce, first 16 ciphertext bytes |
+| Query / control | commands `0A` / `07` | `10` with `{}` / `0D` with `{"protocol":5,"t":…,"data":{"dps":{…}}}` after a "3.4" + 12 zero bytes header | the same, header "3.5" |
+| Reply | return code, then payload | return code, then the encrypted payload; data points under `data.dps` | the return code is the first 4 bytes of the sealed plaintext |
+
+The handshake proves the device holds the local key (its HMAC covers our nonce), so a device with another key never completes it. Pairing does not know which version a device speaks,
+so it tries 3.3, then 3.4, then 3.5 and keeps the first that answers (stored as a third line of the pairing secret; older secrets without it are 3.3). If none answers, the message depends on
+what happened: a device that refused the key or sent something that is not Tuya says so; a device that took the connection and then never answered usefully in any version almost always has a
+different local key, and the message says that. A firmware update can change a device's version; forget and add it again to detect it afresh.
+
+Checked against: the tinytuya library's own frames and session keys (`TuyaSecureFramesTest`, vectors from `tools/interop/tuya_vectors.py`) and tinytuya as a client against our simulators
+(`docs/protocols/interop.md`). Not checked against any real device.
 
 ## Why these two are grouped
 

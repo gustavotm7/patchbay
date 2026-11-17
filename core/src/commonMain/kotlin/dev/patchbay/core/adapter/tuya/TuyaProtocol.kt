@@ -11,7 +11,8 @@ import kotlinx.serialization.json.put
 
 /**
  * Tuya local protocol 3.3 framing and messages (docs/protocols/tuya.md, ADR 0007). Pure and platform-free; the AES
- * lives in `TuyaCipher` (jvmShared). Protocol 3.4 and 3.5 (session keys, HMAC, AES-GCM) are not implemented.
+ * lives in `TuyaCipher` (jvmShared). The 3.4 and 3.5 frames (HMAC, AES-GCM, session keys) are in `TuyaSecureFrames` and
+ * `TuyaLinks` (jvmShared); the JSON messages for them are here.
  *
  * Frame: `00 00 55 AA | seq | cmd | length | [retcode (device to client)] payload | CRC-32 | 00 00 AA 55`, where
  * length counts everything after the 16-byte header. Every frame from the device is untrusted: lengths are bounded,
@@ -28,6 +29,13 @@ public object TuyaProtocol {
     public const val CMD_CONTROL: Int = 0x07
     public const val CMD_STATUS: Int = 0x08
     public const val CMD_DP_QUERY: Int = 0x0A
+
+    /** Protocol 3.4 and 3.5 use these instead of [CMD_CONTROL] and [CMD_DP_QUERY], after a session key has been agreed with the device. */
+    public const val CMD_CONTROL_NEW: Int = 0x0D
+    public const val CMD_DP_QUERY_NEW: Int = 0x10
+    public const val CMD_SESSION_START: Int = 0x03
+    public const val CMD_SESSION_RESPONSE: Int = 0x04
+    public const val CMD_SESSION_FINISH: Int = 0x05
 
     /** Version marker that precedes the ciphertext in control frames: "3.3" and twelve zero bytes. */
     public val VERSION_HEADER: ByteArray = "3.3".encodeToByteArray() + ByteArray(12)
@@ -83,9 +91,23 @@ public object TuyaProtocol {
         put("dps", JsonObject(dps))
     }.toString().encodeToByteArray()
 
-    /** Drops the "3.3" version marker if the device included one. */
+    /** Protocol 3.4 and 3.5 ask for the data points with an empty JSON object. */
+    public fun dpQueryJsonNew(): ByteArray = "{}".encodeToByteArray()
+
+    /** Protocol 3.4 and 3.5 control message: the data points sit under `data.dps`. */
+    public fun controlJsonNew(dps: Map<String, JsonPrimitive>, nowSeconds: Long): ByteArray = buildJsonObject {
+        put("protocol", 5); put("t", nowSeconds)
+        put("data", buildJsonObject { put("dps", JsonObject(dps)) })
+    }.toString().encodeToByteArray()
+
+    /** The marker that precedes control payloads and sometimes replies: the version ("3.3", "3.4" or "3.5") and twelve zero bytes. */
+    public fun versionHeader(label: String): ByteArray = label.encodeToByteArray() + ByteArray(12)
+
+    /** Drops the version marker ("3.3", "3.4" or "3.5" and twelve zero bytes) if the device included one. */
     public fun stripVersionHeader(payload: ByteArray): ByteArray =
-        if (payload.size > VERSION_HEADER.size && payload.copyOf(3).contentEquals(VERSION_HEADER.copyOf(3))) payload.copyOfRange(VERSION_HEADER.size, payload.size) else payload
+        if (payload.size > VERSION_HEADER.size && payload[0] == '3'.code.toByte() && payload[1] == '.'.code.toByte() &&
+            payload[2] in '3'.code.toByte()..'5'.code.toByte() && (3 until VERSION_HEADER.size).all { payload[it] == 0.toByte() }
+        ) payload.copyOfRange(VERSION_HEADER.size, payload.size) else payload
 
     /** Parses decrypted JSON into data points. Keys are 1–3 digits; values are booleans, integers or short strings. */
     public fun parseDps(plain: ByteArray): PatchbayResult<Map<String, JsonPrimitive>> {
@@ -95,7 +117,8 @@ public object TuyaProtocol {
         } catch (e: Exception) {
             return violation("not json")
         }
-        val dps = root["dps"] as? JsonObject ?: return violation("no dps")
+        // 3.3 puts the data points at the top; 3.4 and 3.5 put them under "data".
+        val dps = root["dps"] as? JsonObject ?: (root["data"] as? JsonObject)?.get("dps") as? JsonObject ?: return violation("no dps")
         if (dps.size > 64) return violation("too many dps")
         val out = LinkedHashMap<String, JsonPrimitive>()
         for ((k, v) in dps) {
@@ -126,5 +149,5 @@ public object TuyaProtocol {
         ((b[at].toInt() and 0xFF) shl 24) or ((b[at + 1].toInt() and 0xFF) shl 16) or ((b[at + 2].toInt() and 0xFF) shl 8) or (b[at + 3].toInt() and 0xFF)
 
     private fun violation(why: String): PatchbayResult.Err =
-        PatchbayResult.Err(PatchbayError.ProtocolViolation("tuya: $why. The device may use a protocol version Patchbay doesn't support yet (only 3.3)"))
+        PatchbayResult.Err(PatchbayError.ProtocolViolation("tuya: $why. The device may use a different protocol version than the one Patchbay is speaking to it"))
 }

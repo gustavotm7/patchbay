@@ -22,4 +22,4 @@ talking to vendor clouds; the key is, however, a one-time fact the owner can loo
 
 - The owner has to fetch keys once, outside the app, and re-fetch them if they re-add a device to the vendor app.
 - Models whose firmware blocks local control stay in the Exposure Map as cloud-only.
-- The bulb adapter exists (protocol 3.3). Vacuum support waits for a model number and its data-point list, because the profiles are model-specific.
+- The bulb adapter exists (protocols 3.3, 3.4 and 3.5; see ADR 0015). Vacuum support waits for a model number and its data-point list, because the profiles are model-specific.

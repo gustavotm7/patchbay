@@ -42,4 +42,4 @@ Add it as **Robot vacuum or other (read-only: shows its data points)**: Add by a
 "serial number" in the app is the Tuya device ID, e.g. `ebf5889331f7b82250fasi`), then Pair with the local key (steps above). Patchbay lists every data point
 the vacuum reports (status, battery, mode, ...) and sends it nothing. Press **Copy data points** and send them to me together with what the vacuum was doing
 (docked, cleaning, paused); with that I build the real start/pause/dock profile.
-If it says the reply "wasn't a protocol 3.3 message", the vacuum uses 3.4/3.5, and that support is the next step.
+Patchbay finds out which protocol the device speaks (3.3, 3.4 or 3.5) when you pair, by trying each. If pairing says the device "answered the connection but not with the protocol and local key you gave", the local key is the usual cause: it changes whenever the device is removed from the Tuya app and added again, so fetch it again.

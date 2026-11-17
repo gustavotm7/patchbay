@@ -136,20 +136,21 @@ Please report: plug models and firmware versions (Kasa app → device settings �
 
 ## Phase 1 — Tuya bulbs (Lepro LampUX and others)
 
-Prerequisite: the bulb's device ID, local key, IP and protocol version (3.3 only): follow `docs/TUYA_KEYS.md`.
+Prerequisite: the bulb's device ID, local key and IP (the protocol version, 3.3, 3.4 or 3.5, is found out when you pair): follow `docs/TUYA_KEYS.md`.
 
 | # | Step | Expected |
 |---|---|---|
 | U1.1 | Network screen → **Add by address** → "Tuya bulb" → **Bulb (standard)** → IP + device ID → Add | A "Tuya bulb-v2" entry with a Pair button |
 | U1.2 | Open it → **Pair** → paste the local key | Pairing completes; within about 6 s the bulb shows its on/off state |
-| U1.3 | Wrong key (one character off) | "the device didn't accept the local key" |
+| U1.2a | Settings → Diagnostics → Read it first, find the bulb's block | A line "protocol spoken: 3.3", "3.4" or "3.5". Tell me which (and, if you know it, what `tinytuya scan` says) |
+| U1.3 | Wrong key (one character off) | Within about 10 seconds: "the device didn't accept the local key", or (newer devices that simply hang up) "answered the connection but not with the protocol and local key you gave" |
 | U1.4 | Toggle power, drag brightness | The bulb follows within about 1 s |
 | U1.5 | Colour temperature pad: warmest and coolest ends | The bulb goes from warm to cool white. Tell me the real range if it looks different from 2700 to 6500 K |
 | U1.6 | Colour: pick red, green, blue | The bulb shows them. If not, say what happens (and whether "Bulb (older)" behaves differently) |
 | U1.7 | Change the bulb from its own app | Patchbay follows within about 6 s |
 | U1.8 | Restart Patchbay | The bulb is listed and works without asking for the key again |
 
-Please report: bulb model, protocol version (from `tinytuya scan`), and which steps differed.
+Please report: bulb model, the protocol version the diagnostics show (and `tinytuya scan`'s, if you ran it), and which steps differed.
 
 ## Phase 1 — eufy cameras (RTSP)
 
@@ -336,7 +337,7 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | # | Step | Expected |
 |---|---|---|
 | V1.1 | Get the vacuum's local key (`docs/TUYA_KEYS.md`); Network → Add by address → Tuya → "Robot vacuum or other (read-only…)" → its IP and device ID | A tile appears, "Tap to pair" |
-| V1.2 | Pair with the local key | The page lists "DP 1 = …" style rows. If it says "wasn't a protocol 3.3 message", tell me: it is 3.4/3.5 |
+| V1.2 | Pair with the local key | The page lists "DP 1 = …" style rows. Pairing may take a few seconds longer than for other devices (it tries each protocol version). If it says "answered the connection but not with the protocol and local key", re-fetch the local key; if that does not help, tell me and copy diagnostics (the Tuya block lists the problems seen per version) |
 | V1.3 | Copy data points while it is docked, again while it cleans, again while paused | Send me the three lists. Nothing is ever sent to the vacuum |
 
 ## Phase 2 — Command bar and quiet hours

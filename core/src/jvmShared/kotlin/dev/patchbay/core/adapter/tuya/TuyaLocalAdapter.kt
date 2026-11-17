@@ -37,19 +37,19 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 import java.io.IOException
 import java.net.SocketTimeoutException
+import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import javax.crypto.BadPaddingException
-import javax.crypto.IllegalBlockSizeException
 import kotlin.math.min
 
 /**
- * Tuya-platform bulbs on the local protocol 3.3 (ADR 0007, docs/protocols/tuya.md). Patchbay never contacts Tuya: the
- * owner enters the device's LAN address, device ID and local key once (the key can only be fetched from Tuya's cloud,
- * by the owner, outside this app). Devices are added by address; there is no discovery.
+ * Tuya-platform bulbs on the local protocol, versions 3.3, 3.4 and 3.5 (ADR 0007, docs/protocols/tuya.md). Patchbay never
+ * contacts Tuya: the owner enters the device's LAN address, device ID and local key once (the key can only be fetched from
+ * Tuya's cloud, by the owner, outside this app). Devices are added by address; there is no discovery. Which protocol
+ * version a device speaks depends on its firmware, so pairing tries each in turn and remembers the one that worked.
  *
  * Only the data points in a [TuyaBulbProfile] are ever written or read. The local key is the pairing secret
- * (encrypted at rest, never logged). Protocol 3.4 and 3.5 devices are not supported yet and report that clearly.
+ * (encrypted at rest, never logged).
  */
 public class TuyaLocalAdapter(
     private val netGuard: NetGuard,
@@ -72,12 +72,13 @@ public class TuyaLocalAdapter(
         ID, "Tuya bulb (Lepro and others)", "Device ID (20–24 letters and numbers)", TuyaProfiles.ALL.map { it.label },
     )
 
-    private class Known(val address: LanAddress, val profile: TuyaProfile, val localKey: ByteArray?)
+    private class Known(val address: LanAddress, val profile: TuyaProfile, val localKey: ByteArray?, val version: TuyaVersion = TuyaVersion.V33)
 
     private val known = ConcurrentHashMap<DeviceId, Known>()
     private val locks = ConcurrentHashMap<LanAddress, Mutex>()
     private val lastContact = ConcurrentHashMap<DeviceId, Long>()
     private val seq = AtomicInteger(1)
+    private val random = SecureRandom()
 
     /** Frames rejected as out of spec (diagnostics only). */
     @Volatile public var rejectedMessages: Long = 0
@@ -106,7 +107,7 @@ public class TuyaLocalAdapter(
 
     override fun diagnostics(device: DeviceId): List<String> = buildList {
         val k = known[device]
-        add("device type: ${k?.profile?.id ?: "unknown"}; local key stored: ${k?.localKey != null}; protocol spoken: 3.3 only")
+        add("device type: ${k?.profile?.id ?: "unknown"}; local key stored: ${k?.localKey != null}; protocol spoken: ${k?.version?.label ?: "unknown"}")
         dpShapes[device]?.let { add("data points in the last reading (type only): $it") }
     }
 
@@ -145,7 +146,9 @@ public class TuyaLocalAdapter(
         val parts = pairing?.secret?.toString(Charsets.UTF_8)?.split('\n')
         val profile = parts?.getOrNull(0)?.let(TuyaProfiles::byId) ?: known[device]?.profile ?: TuyaBulbProfile.V2
         val key = parts?.getOrNull(1)?.takeIf { it.length == 16 }?.toByteArray(Charsets.UTF_8)
-        known[device] = Known(a, profile, key)
+        // Secrets saved before 3.4 and 3.5 were supported have no third line: they are 3.3.
+        val version = TuyaVersion.byLabel(parts?.getOrNull(2)) ?: known[device]?.version ?: TuyaVersion.V33
+        known[device] = Known(a, profile, key, version)
         return PatchbayResult.Ok(Unit)
     }
 
@@ -162,18 +165,35 @@ public class TuyaLocalAdapter(
         }
         val key = keyText.toByteArray(Charsets.US_ASCII)
         val id = deviceId(device)
-        val k = Known(addr, profile, key)
-        return when (val r = query(id, k, device.key)) {
-            is PatchbayResult.Err -> r
-            is PatchbayResult.Ok -> {
-                if (!profile.recognises(r.value)) {
-                    return PatchbayResult.Err(PatchbayError.Unsupported("The device didn't report a power switch where this device type expects it; try the other type"))
+        // Which version a device speaks depends on its firmware and is not announced to us, so try each and keep the one that answers.
+        val errors = mutableListOf<PatchbayError>()
+        for (version in TuyaVersion.entries) {
+            val k = Known(addr, profile, key, version)
+            when (val r = query(id, k, device.key)) {
+                is PatchbayResult.Err -> errors += r.error
+                is PatchbayResult.Ok -> {
+                    if (!profile.recognises(r.value)) {
+                        return PatchbayResult.Err(PatchbayError.Unsupported("The device didn't report a power switch where this device type expects it; try the other type"))
+                    }
+                    known[id] = k
+                    return PatchbayResult.Ok(Pairing(id, "${profile.id}\n$keyText\n${version.label}".toByteArray(Charsets.UTF_8), pinnedFingerprint = null))
                 }
-                known[id] = k
-                PatchbayResult.Ok(Pairing(id, "${profile.id}\n$keyText".toByteArray(Charsets.UTF_8), pinnedFingerprint = null))
             }
         }
+        return PatchbayResult.Err(pairFailure(errors))
     }
+
+    /**
+     * What to tell the owner when no protocol version worked. A device that refused the key, or sent something that isn't Tuya, says so; one that
+     * accepted the connection and then never gave a usable answer in any version almost always has a different local key (it changes whenever the
+     * device is removed from the Tuya app and added again); anything else (nothing at that address) is reported as it was.
+     */
+    private fun pairFailure(errors: List<PatchbayError>): PatchbayError =
+        errors.firstOrNull { it is PatchbayError.Unauthorized }
+            ?: errors.firstOrNull { it is PatchbayError.ProtocolViolation }
+            ?: if (errors.all { it is PatchbayError.Timeout || (it is PatchbayError.Unreachable && it.message.startsWith(CLOSED)) }) {
+                PatchbayError.Unauthorized("The device answered the connection but not with the protocol (3.3, 3.4 or 3.5) and local key you gave. Check the device ID and the local key")
+            } else errors.first()
 
     override fun observe(device: DeviceId): Flow<DeviceSnapshot> = flow {
         var failures = 0
@@ -202,9 +222,8 @@ public class TuyaLocalAdapter(
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
         }
-        val plain = TuyaProtocol.controlJson(tuyaId(device), dps, clock() / 1000)
-        val payload = TuyaProtocol.VERSION_HEADER + TuyaCipher.encrypt(key, plain)
-        return when (val r = exchange(k.address, TuyaProtocol.CMD_CONTROL, payload)) {
+        val json = if (k.version == TuyaVersion.V33) TuyaProtocol.controlJson(tuyaId(device), dps, clock() / 1000) else TuyaProtocol.controlJsonNew(dps, clock() / 1000)
+        return when (val r = withLink(k, key) { it.control(json) }) {
             is PatchbayResult.Err -> r
             is PatchbayResult.Ok -> checkReturn(r.value)
         }
@@ -219,22 +238,13 @@ public class TuyaLocalAdapter(
 
     private suspend fun query(device: DeviceId, k: Known, tuyaId: String): PatchbayResult<Map<String, JsonPrimitive>> {
         val key = k.localKey ?: return PatchbayResult.Err(PatchbayError.Unauthorized("enter the device's local key first"))
-        val payload = TuyaCipher.encrypt(key, TuyaProtocol.dpQueryJson(tuyaId, clock() / 1000))
-        val frame = when (val r = exchange(k.address, TuyaProtocol.CMD_DP_QUERY, payload)) {
+        val json = if (k.version == TuyaVersion.V33) TuyaProtocol.dpQueryJson(tuyaId, clock() / 1000) else TuyaProtocol.dpQueryJsonNew()
+        val reply = when (val r = withLink(k, key) { it.query(json) }) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
         }
-        (checkReturn(frame) as? PatchbayResult.Err)?.let { return it }
-        val plain = try {
-            TuyaCipher.decrypt(key, TuyaProtocol.stripVersionHeader(frame.payload))
-        } catch (e: BadPaddingException) {
-            problems.add("reply could not be decrypted with the stored local key")
-            return PatchbayResult.Err(PatchbayError.Unauthorized("the device didn't accept the local key"))
-        } catch (e: IllegalBlockSizeException) {
-            rejected("reply wasn't a protocol 3.3 message")
-            return PatchbayResult.Err(PatchbayError.ProtocolViolation("tuya: reply wasn't a protocol 3.3 message"))
-        }
-        return TuyaProtocol.parseDps(plain).also {
+        (checkReturn(reply) as? PatchbayResult.Err)?.let { return it }
+        return TuyaProtocol.parseDps(reply.plain).also {
             when (it) {
                 is PatchbayResult.Err -> rejected(it.error.message)
                 is PatchbayResult.Ok -> { lastContact[device] = clock(); dpShapes[device] = shapeOf(it.value) }
@@ -242,51 +252,49 @@ public class TuyaLocalAdapter(
         }
     }
 
-    private fun checkReturn(f: TuyaProtocol.Frame): PatchbayResult<Unit> =
-        if (f.retcode == 0) PatchbayResult.Ok(Unit) else {
-            problems.add("the device answered with return code ${f.retcode} (wrong device ID or local key?)")
+    private fun checkReturn(r: TuyaReply): PatchbayResult<Unit> =
+        if (r.retcode == 0) PatchbayResult.Ok(Unit) else {
+            problems.add("the device answered with return code ${r.retcode} (wrong device ID or local key?)")
             PatchbayResult.Err(PatchbayError.Unauthorized("the device refused the request; check the device ID and local key"))
         }
 
-    /** One request and one reply on a fresh connection (Tuya bulbs accept very few at once), serialised per device. */
-    private suspend fun exchange(addr: LanAddress, cmd: Int, payload: ByteArray): PatchbayResult<TuyaProtocol.Frame> =
-        locks.getOrPut(addr) { Mutex() }.withLock {
-            val socket = when (val c = netGuard.connectTcp(addr, config.port, config.ioTimeoutMs)) {
+    /**
+     * One connection for one job (Tuya bulbs accept very few at once), serialised per device: connect, agree a session key if the protocol has one,
+     * run [block], hang up. Failures are noted for the diagnostics report and returned as errors, never thrown.
+     */
+    private suspend fun <T> withLink(k: Known, key: ByteArray, block: (TuyaLink) -> PatchbayResult<T>): PatchbayResult<T> =
+        locks.getOrPut(k.address) { Mutex() }.withLock {
+            val socket = when (val c = netGuard.connectTcp(k.address, config.port, config.ioTimeoutMs)) {
                 is PatchbayResult.Ok -> c.value
                 is PatchbayResult.Err -> return@withLock c
             }
             withContext(Dispatchers.IO) {
                 try {
                     socket.use {
-                        it.getOutputStream().apply { write(TuyaProtocol.encode(seq.getAndIncrement(), cmd, payload)); flush() }
-                        val input = it.getInputStream()
-                        val header = input.readExactly(TuyaProtocol.HEADER_BYTES)
-                        val remaining = when (val n = TuyaProtocol.remainingAfterHeader(header)) {
-                            is PatchbayResult.Ok -> n.value
-                            is PatchbayResult.Err -> { rejected(n.error.message); return@use n }
+                        val link = when (val l = TuyaLinks.open(k.version, key, it.getInputStream(), it.getOutputStream(), seq, random)) {
+                            is PatchbayResult.Ok -> l.value
+                            is PatchbayResult.Err -> return@use noted(l)
                         }
-                        TuyaProtocol.decode(header + input.readExactly(remaining), fromDevice = true)
-                            .also { r -> if (r is PatchbayResult.Err) rejected(r.error.message) }
+                        noted(block(link))
                     }
                 } catch (e: SocketTimeoutException) {
-                    problems.add("no answer within ${config.ioTimeoutMs} ms")
+                    problems.add("no answer within ${config.ioTimeoutMs} ms (protocol ${k.version.label})")
                     PatchbayResult.Err(PatchbayError.Timeout("the device didn't answer"))
                 } catch (e: IOException) {
-                    problems.add("connection failed: ${e.javaClass.simpleName}")
-                    PatchbayResult.Err(PatchbayError.Unreachable("connection failed: ${e.javaClass.simpleName}"))
+                    problems.add("connection failed: ${e.javaClass.simpleName} (protocol ${k.version.label})")
+                    PatchbayResult.Err(
+                        PatchbayError.Unreachable(if (e.message == "closed") "$CLOSED (protocol ${k.version.label})" else "connection failed: ${e.javaClass.simpleName}"),
+                    )
                 }
             }
         }
 
-    private fun java.io.InputStream.readExactly(n: Int): ByteArray {
-        val out = ByteArray(n)
-        var off = 0
-        while (off < n) {
-            val r = read(out, off, n - off)
-            if (r < 0) throw IOException("closed")
-            off += r
+    private fun <T> noted(r: PatchbayResult<T>): PatchbayResult<T> {
+        if (r is PatchbayResult.Err) {
+            val e = r.error
+            if (e is PatchbayError.ProtocolViolation) rejected(e.message) else if (e is PatchbayError.Unauthorized) problems.add("the device didn't accept the stored local key")
         }
-        return out
+        return r
     }
 
     private fun tuyaId(device: DeviceId): String = device.value.removePrefix("tuya-")
@@ -295,5 +303,6 @@ public class TuyaLocalAdapter(
         public val ID: AdapterId = AdapterId("tuya-local")
         public fun deviceIdFor(key: String): DeviceId = DeviceId("tuya-$key")
         private const val MAX_DPS_IN_REPORT = 30
+        private const val CLOSED = "the device closed the connection"
     }
 }

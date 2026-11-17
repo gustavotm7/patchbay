@@ -21,4 +21,6 @@ Set up once, in a throwaway virtualenv outside the repository:
     /tmp/pbvenv/bin/python tools/interop/run_clients.py /tmp/pbhost
     touch /tmp/pbhost/stop
 
+`tools/interop/tuya_vectors.py` prints the known-answer vectors (3.4 and 3.5 frames, session keys, HMACs) from tinytuya's own codec; they are pinned in `TuyaSecureFramesTest`.
+
 Results on 2026-11-17 are in `docs/protocols/interop.md`.

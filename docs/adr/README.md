@@ -31,3 +31,4 @@ Status: Proposed · Date: YYYY-MM-DD
 | [0012](0012-windows-camera-video-ffmpeg-pipe.md) | Windows camera video: guarded RTSP client + piped ffmpeg decoder | Accepted |
 | [0013](0013-encrypted-backup.md) | Encrypted backup: one line of text, a passphrase, AES-GCM | Accepted |
 | [0014](0014-device-triggered-automations.md) | Device-triggered automations: events from report changes, no chaining | Accepted |
+| [0015](0015-tuya-34-35-version-detection.md) | Tuya local protocols 3.4 and 3.5; the version is found out at pairing | Accepted |

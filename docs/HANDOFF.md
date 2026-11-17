@@ -17,7 +17,7 @@ Built since the last test build: print-finished alerts (Bambu), the ecobee over 
 thermostat and TV volume in scenes, Android background watching with notifications (ADR 0011, adds POST_NOTIFICATIONS and a foreground service), and Windows
 camera video through a guarded RTSP client + a user-supplied ffmpeg (ADR 0012). New hardware checks: E2.x (ecobee), N2.x (Android background), S2.x (scenes), C2.x (camera video).
 Unverified assumptions to check first on real hardware: the ecobee `/pair-setup` path and plain PairSetup method, the 1 degree minimum setpoint gap, whether ecobee sensors appear as extra accessories,
-and whether the eufy stream is H.264 (H.265 is refused). Not built: ESPHome, the Lefant vacuum, Tuya 3.4/3.5, HomeKit event subscriptions (polling every 5 s instead), Android start-at-boot.
+and whether the eufy stream is H.264 (H.265 is refused). Not built: ESPHome, the Lefant vacuum's controls, HomeKit event subscriptions (polling every 5 s instead), Android start-at-boot.
 
 ## Update 2026-11-17 (max effort, "keep developing, except real devices")
 

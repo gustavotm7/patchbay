@@ -63,7 +63,7 @@ public object AdapterRegistry {
     /** RTSP cameras (eufy with RTSP switched on): added by address, view-only, status check. */
     public val RTSP_CAMERA: AdapterFactory = AdapterFactory { ctx -> RtspCameraAdapter(ctx.netGuard) }
 
-    /** Tuya bulbs (Lepro and others) on local protocol 3.3, added by address with a user-supplied local key (ADR 0007). */
+    /** Tuya bulbs (Lepro and others) on local protocol 3.3, 3.4 or 3.5 (found out at pairing), added by address with a user-supplied local key (ADR 0007). */
     public val TUYA_LOCAL: AdapterFactory = AdapterFactory { ctx -> TuyaLocalAdapter(ctx.netGuard) }
 
     /** HomeKit thermostats (ecobee): HAP over the LAN with the setup code; found through the network census (mDNS). */
