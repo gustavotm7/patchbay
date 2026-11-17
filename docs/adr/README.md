@@ -29,3 +29,4 @@ Status: Proposed · Date: YYYY-MM-DD
 | [0010](0010-homekit-thermostat-own-crypto.md) | HomeKit (HAP) thermostats: local pairing, own Curve25519, no new dependency | Accepted |
 | [0011](0011-android-background-watching.md) | Android: opt-in background watching and alerts (foreground service, notifications) | Accepted |
 | [0012](0012-windows-camera-video-ffmpeg-pipe.md) | Windows camera video: guarded RTSP client + piped ffmpeg decoder | Accepted |
+| [0013](0013-encrypted-backup.md) | Encrypted backup: one line of text, a passphrase, AES-GCM | Accepted |

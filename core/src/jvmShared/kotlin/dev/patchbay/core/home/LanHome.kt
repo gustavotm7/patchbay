@@ -24,6 +24,7 @@ import dev.patchbay.core.store.HomeStore
 import dev.patchbay.core.store.StoredDevice
 import dev.patchbay.core.store.StoredPairing
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -120,6 +122,34 @@ public class LanHome(
     override val away: StateFlow<AwayState> = awayMode.away
     override suspend fun setAway(active: Boolean, simulate: Set<DeviceId>): Unit = awayMode.set(active, simulate)
     override fun diagnosticsReport(header: List<String>): String = diagnostics.report(header)
+
+    override suspend fun createBackup(passphrase: String): PatchbayResult<String> {
+        val s = store ?: return PatchbayResult.Err(PatchbayError.Unsupported("Nothing is saved on this device, so there is nothing to back up"))
+        val chars = passphrase.toCharArray()
+        return try {
+            withContext(Dispatchers.Default) { dev.patchbay.core.backup.Backup.create(s, chars, clock()) }
+        } finally {
+            chars.fill('\u0000')
+        }
+    }
+
+    override suspend fun restoreBackup(text: String, passphrase: String): PatchbayResult<String> {
+        val s = store ?: return PatchbayResult.Err(PatchbayError.Unsupported("Nothing is saved on this device, so there is nowhere to restore to"))
+        val chars = passphrase.toCharArray()
+        val r = try {
+            withContext(Dispatchers.Default) { dev.patchbay.core.backup.Backup.restore(s, text, chars, clock()) }
+        } finally {
+            chars.fill('\u0000')
+        }
+        return when (r) {
+            is PatchbayResult.Err -> r
+            is PatchbayResult.Ok -> {
+                log?.info("home", "restored a backup: ${r.value.devices} devices, ${r.value.pairings} pairings")
+                report("Backup restored. Close Patchbay and open it again to use it.")
+                PatchbayResult.Ok("Restored ${r.value.devices} devices and ${r.value.pairings} pairings. Close Patchbay and open it again to use them.")
+            }
+        }
+    }
 
     /**
      * Each of these runs one round of its job: automations whose minute it is, adaptive colour, away-mode presence, and a quiet search for devices that

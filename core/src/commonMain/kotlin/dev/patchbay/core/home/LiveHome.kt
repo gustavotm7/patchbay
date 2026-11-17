@@ -51,6 +51,18 @@ public interface LiveHome {
     /** Clears the problem banner. */
     public fun dismissProblem()
 
+    /**
+     * An encrypted copy of the devices, pairings, rooms, scenes, automations and settings, as one line of text, so losing this device does not mean
+     * pairing everything again. Only the passphrase opens it (at least 8 characters). Made only when asked; nothing is sent anywhere.
+     */
+    public suspend fun createBackup(passphrase: String): PatchbayResult<String>
+
+    /**
+     * Puts a backup back, replacing what it covers. Returns a sentence saying what was restored. A wrong passphrase or a damaged backup changes nothing.
+     * The restored home is used after Patchbay is closed and opened again.
+     */
+    public suspend fun restoreBackup(text: String, passphrase: String): PatchbayResult<String>
+
     /** The tail of this session's log (already redacted), for the explicit "Copy log" action. */
     public fun recentLog(maxLines: Int = 300): String
 

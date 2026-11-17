@@ -389,3 +389,13 @@ This is the first real-camera test of the RTSP/H.264 code: tell me exactly what 
 | D1.4 | Pair or use one of each device you have, then copy again | Each device's block gains its own facts. For example: ecobee shows the pairing method that worked, the accessory and service layout and the thermostat's characteristic ranges; Tuya shows data point numbers with types; Bambu shows field names; webOS shows which requests the TV answered or refused; Google TV and Cast show message kinds; RTSP shows the login method and last status |
 | D1.5 | Switch the router's Wi-Fi off for a minute, then copy | The devices show offline for N minutes, and the systems list the problems they hit (timeouts, refused connections), newest last |
 
+## Phase 2 — Backup and restore (B1.x)
+
+| # | Step | Expected |
+|---|---|---|
+| B1.1 | Pair at least one device that needs pairing. Settings → Backup: type a passphrase of 8 or more characters, press **Copy encrypted backup** | The button is disabled below 8 characters. "Copied" appears. Paste into a text editor: one line starting `PATCHBAY-BACKUP-1:` and nothing readable after it |
+| B1.2 | Close Patchbay and start it again | The paired device comes back by itself, paired (this also checks the start-up fix: a saved paired device used to stop the app from starting) |
+| B1.3 | Settings → Backup: type a wrong passphrase, put the backup on the clipboard, **Restore from clipboard**, **Confirm restore** | "That passphrase doesn't open this backup, or the backup is damaged". Nothing changes |
+| B1.4 | Same with the right passphrase | "Restored N devices and M pairings. Close Patchbay and open it again". After restarting, devices, rooms, scenes and automations are back, and paired devices do not ask for their code |
+| B1.5 | Restore on another computer or phone (a fresh install) | Same result; devices show offline for a minute at most, then come back as the app finds them at their new addresses |
+

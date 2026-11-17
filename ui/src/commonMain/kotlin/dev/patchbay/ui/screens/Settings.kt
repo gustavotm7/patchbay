@@ -9,6 +9,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import dev.patchbay.core.result.PatchbayResult
+import dev.patchbay.ui.designsystem.ButtonKind
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -118,6 +121,7 @@ fun SettingsScreen(s: AppSettings, modifier: Modifier = Modifier, live: dev.patc
             }
         }
         if (live != null) DiagnosticsPanel(s, live)
+        if (live != null) BackupPanel(live)
         VSpace(Space.m)
         Panel(Modifier.fillMaxWidth()) {
             Legend("Your data")
@@ -177,6 +181,71 @@ private fun DiagnosticsPanel(s: AppSettings, live: dev.patchbay.core.home.LiveHo
             Column(Modifier.fillMaxWidth().heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
                 PText(text, Patchbay.type.mono, c.textSecondary)
             }
+        }
+    }
+}
+
+/**
+ * Losing this phone or laptop should not mean pairing everything again. The backup is one line of text, encrypted with a passphrase typed here
+ * (only that opens it), copied to the clipboard when asked and read back from it when asked. Restoring replaces what is saved, so it takes a second tap.
+ */
+@Composable
+private fun BackupPanel(live: dev.patchbay.core.home.LiveHome) {
+    val c = Patchbay.colors
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    var passphrase by remember { mutableStateOf("") }
+    var confirmingRestore by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    fun show(r: PatchbayResult<String>, success: (String) -> String) {
+        failed = r is PatchbayResult.Err
+        message = when (r) { is PatchbayResult.Ok -> success(r.value); is PatchbayResult.Err -> r.error.message }
+    }
+    VSpace(Space.m)
+    Panel(Modifier.fillMaxWidth()) {
+        Legend("Backup")
+        VSpace(Space.xs)
+        PText(
+            "An encrypted copy of your devices, pairings, scenes and automations, so a new phone or laptop does not mean pairing everything again. Only the passphrase opens it: if you forget it, the backup cannot be read. Nothing is sent anywhere.",
+            Patchbay.type.caption, c.textSecondary,
+        )
+        VSpace(Space.s)
+        PText("Passphrase (at least 8 characters)", Patchbay.type.bodyStrong)
+        VSpace(Space.xs)
+        BasicTextField(
+            value = passphrase, onValueChange = { passphrase = it.filter { ch -> !ch.isISOControl() }.take(128); confirmingRestore = false },
+            singleLine = true, visualTransformation = PasswordVisualTransformation(),
+            textStyle = Patchbay.type.valueM.copy(color = c.text), modifier = Modifier.fillMaxWidth().androidx_border(c),
+        )
+        VSpace(Space.s)
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            PButton("Copy encrypted backup", {
+                scope.launch {
+                    val r = live.createBackup(passphrase)
+                    if (r is PatchbayResult.Ok) clipboard.setText(AnnotatedString(r.value))
+                    show(r) { "Copied. Paste it into a note or a file and keep it somewhere safe." }
+                }
+            }, enabled = passphrase.length >= 8)
+            if (!confirmingRestore) {
+                PButton("Restore from clipboard", { confirmingRestore = true; message = null }, enabled = passphrase.isNotEmpty())
+            }
+        }
+        if (confirmingRestore) {
+            VSpace(Space.s)
+            PText("This replaces your saved devices, pairings, scenes and automations with the ones in the backup on the clipboard.", Patchbay.type.caption, c.attention)
+            VSpace(Space.xs)
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                PButton("Confirm restore", {
+                    confirmingRestore = false
+                    scope.launch { show(live.restoreBackup(clipboard.getText()?.text.orEmpty(), passphrase)) { it } }
+                }, kind = ButtonKind.DESTRUCTIVE)
+                PButton("Cancel", { confirmingRestore = false })
+            }
+        }
+        message?.let {
+            VSpace(Space.s)
+            PText(it, Patchbay.type.caption, if (failed) c.alarm else c.textSecondary)
         }
     }
 }
