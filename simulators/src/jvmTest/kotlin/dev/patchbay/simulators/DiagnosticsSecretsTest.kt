@@ -91,7 +91,8 @@ class DiagnosticsSecretsTest {
             val lines = report(adapter, p.deviceId)
             assertTrue(lines.any { "local key stored: true" in it }, lines.toString())
             assertTrue(lines.any { it.startsWith("data points in the last reading (type only): ") && "20=bool" in it }, lines.toString())
-            assertTrue(lines.any { "the device answered with return code" in it || "could not be decrypted" in it }, "the wrong key should be on the record: $lines")
+            // How a device refuses a wrong key varies (an error code, garbage, or a closed connection); that it is on the record does not.
+            assertTrue(lines.any { it.startsWith("problem: ") }, "the wrong key should be on the record: $lines")
             assertSafe(lines, key.encodeToByteArray(), "fedcba9876543210".encodeToByteArray(), p.secret, devId.encodeToByteArray())
         } finally { bulb.close() }
     }

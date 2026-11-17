@@ -4,12 +4,15 @@ import dev.patchbay.core.adapter.DeviceAdapter
 import dev.patchbay.core.adapter.DiscoveredDevice
 import dev.patchbay.core.adapter.Pairing
 import dev.patchbay.core.adapter.PairingPrompt
+import dev.patchbay.core.discovery.Finding
+import dev.patchbay.core.discovery.NetworkCensus
 import dev.patchbay.core.log.SessionLog
 import dev.patchbay.core.model.CapabilityState
 import dev.patchbay.core.model.Command
 import dev.patchbay.core.model.CommandValidator
 import dev.patchbay.core.model.Device
 import dev.patchbay.core.model.DeviceId
+import dev.patchbay.core.model.DeviceKind
 import dev.patchbay.core.model.DeviceSnapshot
 import dev.patchbay.core.model.EpochMillis
 import dev.patchbay.core.model.Reachability
@@ -20,13 +23,12 @@ import dev.patchbay.core.result.PatchbayResult
 import dev.patchbay.core.store.HomeStore
 import dev.patchbay.core.store.StoredDevice
 import dev.patchbay.core.store.StoredPairing
-import dev.patchbay.core.discovery.Finding
-import dev.patchbay.core.discovery.NetworkCensus
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,7 +36,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
-/** [LiveHome] over real adapters. One instance per process, created by Bootstrap. */
+/**
+ * [LiveHome] over real adapters. One instance per process, created by Bootstrap.
+ *
+ * This class owns the list of devices and how devices come and go: scanning, adding by address, pairing, forgetting, and the observers that keep
+ * each device's state current. Everything else the home does is a separate part it wires together (they share a [HomeContext]): the activity list,
+ * scenes, automations, adaptive lighting, away mode, notifications, what the devices' reports mean for the owner, self-healing rediscovery,
+ * preferences and the diagnostics report.
+ */
 public class LanHome(
     private val netGuard: NetGuard,
     private val adapters: List<DeviceAdapter>,
@@ -47,6 +56,8 @@ public class LanHome(
     private val random: kotlin.random.Random = kotlin.random.Random.Default,
 ) : LiveHome {
 
+    // Everything below is declared before `init` runs: restoring saved devices starts observers that use all of it at once.
+
     private val _devices = MutableStateFlow<List<LiveDevice>>(emptyList())
     override val devices: StateFlow<List<LiveDevice>> = _devices.asStateFlow()
     private val _scan = MutableStateFlow(ScanState.IDLE)
@@ -55,581 +66,82 @@ public class LanHome(
     private val _census = MutableStateFlow<List<Finding>>(emptyList())
     override val census: StateFlow<List<Finding>> = _census.asStateFlow()
     private val _problem = MutableStateFlow<String?>(null)
-    private val _report = MutableStateFlow<List<dev.patchbay.core.home.AdapterScan>>(emptyList())
-    private val _rooms = MutableStateFlow<List<String>>(emptyList())
-    private val _scenes = MutableStateFlow<List<Scene>>(emptyList())
-    private var storedScenes: List<StoredScene> = emptyList()
-    private val _automations = MutableStateFlow<List<Automation>>(emptyList())
-    private var storedAutomations: List<StoredAutomation> = emptyList()
-    private val lastAutomationRun = ConcurrentHashMap<String, Long>()
-    private val _adaptive = MutableStateFlow<Set<DeviceId>>(emptySet())
-    private val adaptiveApplied = ConcurrentHashMap<DeviceId, Int>()
-    private val adaptiveAppliedAt = ConcurrentHashMap<DeviceId, Long>()
-    private val adaptiveOverridden = ConcurrentHashMap.newKeySet<DeviceId>()
-    private val _away = MutableStateFlow(AwayState())
-    private val _location = MutableStateFlow<HomeLocation?>(null)
-    private val _favourites = MutableStateFlow<Set<DeviceId>>(emptySet())
-    private val _notifications = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
-    private val lastNotified = ConcurrentHashMap<String, Long>()
-    /** When each device was first seen offline in its current stretch (cleared when it answers again); drives the quiet rescans below. */
-    private val offlineSince = ConcurrentHashMap<DeviceId, Long>()
-    private class HealState { @Volatile var nextAt: Long = 0; @Volatile var backoffMs: Long = HEAL_FIRST_BACKOFF_MS }
-    private val healStates = ConcurrentHashMap<dev.patchbay.core.model.AdapterId, HealState>()
-    private val healLock = kotlinx.coroutines.sync.Mutex()
-    private val recorder = TrendRecorder()
-    @Volatile private var trendsSavedAt = 0L
-    override val trends: dev.patchbay.core.model.TrendSource = dev.patchbay.core.model.TrendSource { device, metric -> recorder.trend(device, metric, clock()) }
-    private val _quiet = MutableStateFlow<QuietHours?>(null)
-    override val quietHours: StateFlow<QuietHours?> = _quiet.asStateFlow()
-    private val printStartedAt = ConcurrentHashMap<DeviceId, Long>()
-    private val nextFlip = ConcurrentHashMap<DeviceId, Long>()
-    @Volatile private var simOffDay = -1L
-    private val _activity = MutableStateFlow<List<LedgerEntry>>(emptyList())
-    private data class Summary(
-        val reach: dev.patchbay.core.model.Reachability,
-        val power: Boolean?,
-        val stage: dev.patchbay.core.model.PrintStage?,
-        val media: dev.patchbay.core.model.PlaybackStatus?,
-    )
-    private val lastSummary = ConcurrentHashMap<DeviceId, Summary>()
-    private val lastCommandAt = ConcurrentHashMap<DeviceId, Long>()
-    private val trustAlerted = ConcurrentHashMap.newKeySet<DeviceId>()
-    @Volatile private var ledgerFlush: Job? = null
-    private val sceneJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
     override val problem: StateFlow<String?> = _problem.asStateFlow()
-    override val scanReport: StateFlow<List<dev.patchbay.core.home.AdapterScan>> = _report.asStateFlow()
-
-    override val activity: StateFlow<List<LedgerEntry>> = _activity.asStateFlow()
-
-    override fun timeLabel(epochMillis: Long): String {
-        val zone = java.time.ZoneId.systemDefault()
-        val t = java.time.Instant.ofEpochMilli(epochMillis).atZone(zone)
-        val today = java.time.Instant.ofEpochMilli(clock()).atZone(zone).toLocalDate()
-        val hhmm = "%02d:%02d".format(t.hour, t.minute)
-        return when (t.toLocalDate()) {
-            today -> "Today $hhmm"
-            today.minusDays(1) -> "Yesterday $hhmm"
-            else -> "${t.dayOfMonth} ${t.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)} $hhmm"
-        }
-    }
-
-    override fun activityCsv(): String = LedgerCsv.of(_activity.value) { java.time.Instant.ofEpochMilli(it).toString() }
-
-    private fun loadLedger() {
-        val raw = store?.setting("ledger") ?: return
-        _activity.value = try {
-            sceneJson.decodeFromString<List<StoredLedgerEntry>>(raw).map { LedgerEntry(it.t, it.d, it.e) }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    /** Adds an entry (newest first, at most 300) and schedules a write; writes are batched so a burst costs one. */
-    private fun record(deviceName: String, event: String) {
-        _activity.update { (listOf(LedgerEntry(clock(), deviceName, event)) + it).take(300) }
-        if (store != null && ledgerFlush == null) {
-            ledgerFlush = scope.launch {
-                delay(2_000)
-                ledgerFlush = null
-                store.putSetting("ledger", sceneJson.encodeToString(_activity.value.map { StoredLedgerEntry(it.atMillis, it.deviceName, it.event) }))
-            }
-        }
-    }
-
-    override suspend fun forget(device: DeviceId) {
-        val name = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return
-        observers.remove(device)?.cancel()
-        try { owners[device]?.unpair(device) } catch (e: Exception) { log?.warn("home", "could not ask a device to forget us: ${e.javaClass.simpleName}") }
-        recorder.forget(device)
-        pairings.remove(device)
-        offlineSince.remove(device)
-        owners.remove(device); pendingPairing.remove(device); lastSummary.remove(device); trustAlerted.remove(device)
-        synchronized(this) {
-            _devices.update { list -> list.filterNot { it.device.id == device } }
-            refreshRooms()
-        }
-        store?.forget(device)
-        record(name, "Removed from Patchbay")
-        log?.info("home", "removed a device and its saved pairing")
-    }
-
-    override suspend fun allOff(): PatchbayResult<Int> {
-        val targets = _devices.value.filter {
-            val snap = it.snapshot
-            (it.device.kind == dev.patchbay.core.model.DeviceKind.LIGHT || it.device.kind == dev.patchbay.core.model.DeviceKind.PLUG) &&
-                snap != null && snap.reachability == dev.patchbay.core.model.Reachability.ONLINE &&
-                snap.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on == true
-        }
-        var failed = 0
-        for (t in targets) {
-            if (send(t.device.id, Command.SetPower(false)) is PatchbayResult.Err) failed++
-            delay(40)
-        }
-        record("All lights and plugs", "Switched off from Patchbay (${targets.size - failed} of ${targets.size})")
-        return if (failed == 0) PatchbayResult.Ok(targets.size)
-        else PatchbayResult.Err(PatchbayError.Unreachable("$failed of ${targets.size} didn't respond"))
-    }
-
-    override val automations: StateFlow<List<Automation>> = _automations.asStateFlow()
-
-    private fun loadAutomations() {
-        val raw = store?.setting("automations") ?: return
-        storedAutomations = try { sceneJson.decodeFromString(raw) } catch (e: Exception) { emptyList() }
-        publishAutomations()
-    }
-
-    private fun publishAutomations() {
-        _automations.value = storedAutomations.map { a ->
-            Automation(a.id, a.name, a.sceneId, storedScenes.firstOrNull { it.id == a.sceneId }?.name, a.hour, a.minute, a.days.toSet(), a.enabled, a.sun, a.offset)
-        }
-    }
-
-    private fun persistAutomations() {
-        store?.putSetting("automations", sceneJson.encodeToString(storedAutomations))
-        publishAutomations()
-    }
-
-    override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> {
-        val clean = name.trim().replace(Regex("\\s+"), " ")
-        if (clean.length !in 1..32 || !clean.all { it.isLetterOrDigit() || it == ' ' || it == '-' }) {
-            return PatchbayResult.Err(PatchbayError.InvalidArgument("Give the automation a short name using letters, numbers, spaces or hyphens"))
-        }
-        if (sun != null) {
-            if (sun != "sunrise" && sun != "sunset") return PatchbayResult.Err(PatchbayError.InvalidArgument("Choose sunrise or sunset"))
-            if (offsetMinutes !in -180..180) return PatchbayResult.Err(PatchbayError.InvalidArgument("The offset can be up to 3 hours before or after"))
-            if (_location.value == null) return PatchbayResult.Err(PatchbayError.InvalidArgument("Set your home location in Settings first"))
-        } else if (hour !in 0..23 || minute !in 0..59) {
-            return PatchbayResult.Err(PatchbayError.InvalidArgument("The time must be between 00:00 and 23:59"))
-        }
-        if (days.isEmpty() || days.any { it !in 1..7 }) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick at least one day"))
-        if (storedScenes.none { it.id == sceneId }) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick a scene to run"))
-        synchronized(this) {
-            storedAutomations = storedAutomations + StoredAutomation(
-                java.util.UUID.randomUUID().toString().take(8), clean, sceneId, if (sun == null) hour else 0, if (sun == null) minute else 0,
-                days.sorted(), true, sun, if (sun == null) 0 else offsetMinutes,
-            )
-            persistAutomations()
-        }
-        return PatchbayResult.Ok(Unit)
-    }
-
-    override suspend fun setAutomationEnabled(id: String, enabled: Boolean) {
-        synchronized(this) {
-            storedAutomations = storedAutomations.map { if (it.id == id) it.copy(enabled = enabled) else it }
-            persistAutomations()
-        }
-    }
-
-    override suspend fun deleteAutomation(id: String) {
-        synchronized(this) {
-            storedAutomations = storedAutomations.filterNot { it.id == id }
-            persistAutomations()
-        }
-    }
-
-    /**
-     * Runs every enabled automation whose time is this minute on a matching day, once per minute. Called every 15 seconds
-     * while Patchbay runs; public so tests can drive it with a fixed clock.
-     */
-    public fun tickAutomations(nowMillis: Long = clock()) {
-        val t = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
-        val minuteKey = t.toLocalDate().toEpochDay() * 1_440 + t.hour * 60 + t.minute
-        for (a in storedAutomations) {
-            if (!a.enabled || t.dayOfWeek.value !in a.days) continue
-            val sunName = a.sun
-            if (sunName == null) {
-                if (t.hour != a.hour || t.minute != a.minute) continue
-            } else {
-                val loc = _location.value ?: continue
-                val (rise, set) = SunTimes.compute(loc.latitude, loc.longitude, t.dayOfYear) ?: continue
-                val minutes = if (sunName == "sunrise") rise else set
-                val instant = t.toLocalDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant().plusSeconds((minutes * 60).toLong() + a.offset * 60L)
-                val local = instant.atZone(zone)
-                if (local.toLocalDate() != t.toLocalDate() || local.hour != t.hour || local.minute != t.minute) continue
-            }
-            if (lastAutomationRun[a.id] == minuteKey) continue
-            lastAutomationRun[a.id] = minuteKey
-            val scene = storedScenes.firstOrNull { it.id == a.sceneId }
-            if (scene == null) {
-                record("Automation: ${a.name}", "Skipped: its scene was deleted")
-                continue
-            }
-            record("Automation: ${a.name}", "Running scene ${scene.name}")
-            scope.launch { runScene(scene.id) }
-        }
-    }
-
-    override val adaptive: StateFlow<Set<DeviceId>> = _adaptive.asStateFlow()
-    override val away: StateFlow<AwayState> = _away.asStateFlow()
-
-    private fun loadAdaptiveAndAway() {
-        store?.setting("adaptive")?.let { raw ->
-            _adaptive.value = try { sceneJson.decodeFromString<List<String>>(raw).map(::DeviceId).toSet() } catch (e: Exception) { emptySet() }
-        }
-        store?.setting("away")?.let { raw ->
-            _away.value = try { sceneJson.decodeFromString<StoredAway>(raw).let { AwayState(it.active, it.simulate.map(::DeviceId).toSet()) } } catch (e: Exception) { AwayState() }
-        }
-    }
-
-    override suspend fun setAdaptive(device: DeviceId, on: Boolean) {
-        _adaptive.update { if (on) it + device else it - device }
-        adaptiveApplied.remove(device); adaptiveOverridden.remove(device)
-        store?.putSetting("adaptive", sceneJson.encodeToString(_adaptive.value.map { it.value }))
-        val name = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return
-        record(name, if (on) "Adaptive lighting turned on" else "Adaptive lighting turned off")
-    }
-
-    /**
-     * Moves the white colour of each adaptive light that is on toward the day's curve. A light you change yourself is left alone
-     * until you switch it off and on again. Colour-mode lights are never touched. Public so tests can drive it with a fixed clock.
-     */
-    public fun tickAdaptive(nowMillis: Long = clock()) {
-        val t = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
-        val minute = t.hour * 60 + t.minute
-        for (id in _adaptive.value) {
-            val live = _devices.value.firstOrNull { it.device.id == id } ?: continue
-            val snap = live.snapshot ?: continue
-            if (snap.reachability != dev.patchbay.core.model.Reachability.ONLINE) continue
-            if (snap.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on != true) {
-                adaptiveApplied.remove(id); adaptiveOverridden.remove(id); continue
-            }
-            val k = snap.state<dev.patchbay.core.model.CapabilityState.ColourTemperatureState>()?.kelvin?.value ?: continue
-            val last = adaptiveApplied[id]
-            if (last != null && nowMillis - (adaptiveAppliedAt[id] ?: 0L) > 20_000 && kotlin.math.abs(k - last) > 250) adaptiveOverridden += id
-            if (id in adaptiveOverridden) continue
-            val cap = live.device.capability<dev.patchbay.core.model.Capability.ColourTemperature>() ?: continue
-            val target = AdaptiveCurve.kelvinAt(minute).coerceIn(cap.warmest.value, cap.coolest.value)
-            if (kotlin.math.abs(k - target) > 100) {
-                adaptiveApplied[id] = target; adaptiveAppliedAt[id] = nowMillis
-                scope.launch { send(id, Command.SetColourTemperature(dev.patchbay.core.model.Kelvin(target))) }
-            }
-        }
-    }
-
-    override suspend fun setAway(active: Boolean, simulate: Set<DeviceId>) {
-        val was = _away.value.active
-        _away.value = AwayState(active, if (active) simulate else emptySet())
-        store?.putSetting("away", sceneJson.encodeToString(StoredAway(active, _away.value.simulate.map { it.value })))
-        nextFlip.clear()
-        if (active && !was) {
-            record("Away mode", "Turned on" + if (simulate.isNotEmpty()) " (simulating presence with ${simulate.size} lights)" else "")
-            allOff()
-        } else if (!active && was) {
-            record("Away mode", "Turned off")
-        }
-    }
-
-    /**
-     * While away with simulation on: between 18:00 and 22:59 each chosen light flips at irregular intervals (20 to 60 minutes),
-     * and at 23:00 they all go off once. Public so tests can drive it with a fixed clock and a seeded random.
-     */
-    public fun tickAway(nowMillis: Long = clock()) {
-        val a = _away.value
-        if (!a.active || a.simulate.isEmpty()) return
-        val t = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone)
-        when {
-            t.hour in 18..22 -> for (id in a.simulate) {
-                val live = _devices.value.firstOrNull { it.device.id == id } ?: continue
-                val snap = live.snapshot ?: continue
-                if (snap.reachability != dev.patchbay.core.model.Reachability.ONLINE) continue
-                val due = nextFlip.getOrPut(id) { nowMillis + random.nextInt(1, 40) * 60_000L }
-                if (nowMillis < due) continue
-                nextFlip[id] = nowMillis + random.nextInt(20, 61) * 60_000L
-                val on = snap.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on == true
-                record("Away mode", "Simulated presence: ${live.device.name} ${if (on) "off" else "on"}")
-                scope.launch { send(id, Command.SetPower(!on)) }
-            }
-            t.hour == 23 && simOffDay != t.toLocalDate().toEpochDay() -> {
-                simOffDay = t.toLocalDate().toEpochDay()
-                nextFlip.clear()
-                for (id in a.simulate) scope.launch { send(id, Command.SetPower(false)) }
-                record("Away mode", "Simulated presence ended for the night")
-            }
-            t.hour < 18 -> nextFlip.clear()
-        }
-    }
-
-    override val location: StateFlow<HomeLocation?> = _location.asStateFlow()
-    override val favourites: StateFlow<Set<DeviceId>> = _favourites.asStateFlow()
-    override val notifications: kotlinx.coroutines.flow.Flow<String> = _notifications
-
-    private fun loadLocationAndFavourites() {
-        store?.setting("quiet")?.let { _quiet.value = QuietHours.parse(it) }
-        store?.setting("trends")?.let { raw ->
-            try { recorder.import(sceneJson.decodeFromString<List<StoredTrend>>(raw).map { TrendRecorder.Exported(it.d, it.m, it.t, it.v) }) } catch (e: Exception) { /* a damaged history is dropped, never fatal */ }
-        }
-        store?.setting("location")?.let { raw ->
-            _location.value = try { sceneJson.decodeFromString<StoredLocation>(raw).let { HomeLocation(it.lat, it.lon) } } catch (e: Exception) { null }
-        }
-        store?.setting("favourites")?.let { raw ->
-            _favourites.value = try { sceneJson.decodeFromString<List<String>>(raw).map(::DeviceId).toSet() } catch (e: Exception) { emptySet() }
-        }
-    }
-
-    override suspend fun setLocation(latitude: Double, longitude: Double): PatchbayResult<Unit> {
-        if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return PatchbayResult.Err(PatchbayError.InvalidArgument("Latitude is -90 to 90 and longitude -180 to 180"))
-        _location.value = HomeLocation(latitude, longitude)
-        store?.putSetting("location", sceneJson.encodeToString(StoredLocation(latitude, longitude)))
-        return PatchbayResult.Ok(Unit)
-    }
-
-    override suspend fun setFavourite(device: DeviceId, on: Boolean) {
-        _favourites.update { if (on) it + device else it - device }
-        store?.putSetting("favourites", sceneJson.encodeToString(_favourites.value.map { it.value }))
-    }
-
-    override suspend fun rename(device: DeviceId, name: String): PatchbayResult<Unit> {
-        val clean = name.trim().replace(Regex("\\s+"), " ")
-        if (clean.length !in 1..32 || !clean.all { it.isLetterOrDigit() || it == ' ' || it == '-' }) {
-            return PatchbayResult.Err(PatchbayError.InvalidArgument("Use a short name with letters, numbers, spaces or hyphens"))
-        }
-        val old = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown device"))
-        synchronized(this) {
-            _devices.update { list -> list.map { if (it.device.id == device) it.copy(device = it.device.copy(name = clean)) else it } }
-        }
-        store?.devices()?.firstOrNull { it.id == device }?.let { store.saveDevice(it.copy(name = clean), clock()) }
-        if (old != clean) record(clean, "Renamed (was $old)")
-        return PatchbayResult.Ok(Unit)
-    }
-
-    override suspend fun setQuietHours(quiet: QuietHours?) {
-        _quiet.value = quiet
-        store?.putSetting("quiet", quiet?.text() ?: "")
-    }
-
-    /**
-     * At most one notification per device and kind per hour, so a flapping device can't spam. Outside [urgent] alerts, nothing is sent during quiet
-     * hours (it is still in Activity).
-     */
-    private fun notify(key: String, message: String, windowMs: Long = 3_600_000, urgent: Boolean = false) {
-        val now = clock()
-        if (!urgent) {
-            val q = _quiet.value
-            if (q != null) {
-                val t = java.time.Instant.ofEpochMilli(now).atZone(zone)
-                if (q.contains(t.hour * 60 + t.minute)) return
-            }
-        }
-        val last = lastNotified[key]
-        if (last != null && now - last < windowMs) return
-        lastNotified[key] = now
-        _notifications.tryEmit(message)
-    }
-
+    private val _report = MutableStateFlow<List<AdapterScan>>(emptyList())
+    override val scanReport: StateFlow<List<AdapterScan>> = _report.asStateFlow()
+    private val _rooms = MutableStateFlow<List<String>>(emptyList())
     override val rooms: StateFlow<List<String>> = _rooms.asStateFlow()
-    override val scenes: StateFlow<List<Scene>> = _scenes.asStateFlow()
-
-    private fun refreshRooms() {
-        _rooms.value = _devices.value.mapNotNull { it.device.roomId?.value }.distinct().sortedBy { it.lowercase() }
-    }
-
-    override suspend fun assignRoom(device: DeviceId, room: String?) {
-        val name = room?.trim()?.replace(Regex("\\s+"), " ")
-        if (room != null && (name.isNullOrEmpty() || name.length > 24 || !name.all { it.isLetterOrDigit() || it == ' ' || it == '-' })) return
-        val roomId = name?.let { dev.patchbay.core.model.RoomId(it) }
-        synchronized(this) {
-            _devices.update { list -> list.map { if (it.device.id == device) it.copy(device = it.device.copy(roomId = roomId)) else it } }
-            refreshRooms()
-        }
-        store?.setRoom(device, roomId)
-    }
-
-    private fun loadScenes() {
-        val raw = store?.setting("scenes") ?: return
-        storedScenes = try {
-            sceneJson.decodeFromString<List<StoredScene>>(raw)
-        } catch (e: Exception) {
-            log?.warn("home", "saved scenes could not be read; starting with none")
-            emptyList()
-        }
-        _scenes.value = storedScenes.map { s -> Scene(s.id, s.name, s.steps.map { DeviceId(it.device) }) }
-    }
-
-    private fun persistScenes() {
-        store?.putSetting("scenes", sceneJson.encodeToString(storedScenes))
-        _scenes.value = storedScenes.map { s -> Scene(s.id, s.name, s.steps.map { DeviceId(it.device) }) }
-    }
-
-    override suspend fun saveScene(name: String, devices: List<DeviceId>): PatchbayResult<Unit> {
-        val clean = name.trim().replace(Regex("\\s+"), " ")
-        if (clean.length !in 1..32 || !clean.all { it.isLetterOrDigit() || it == ' ' || it == '-' }) {
-            return PatchbayResult.Err(PatchbayError.InvalidArgument("Give the scene a short name using letters, numbers, spaces or hyphens"))
-        }
-        val steps = devices.mapNotNull { id ->
-            val live = _devices.value.firstOrNull { it.device.id == id } ?: return@mapNotNull null
-            // Lights, plugs, thermostats and the volume of TVs and speakers only: nothing that moves, records, locks or heats a printer can be part of a scene.
-            val kind = live.device.kind
-            val isThermostat = kind == dev.patchbay.core.model.DeviceKind.THERMOSTAT
-            val isVolume = kind == dev.patchbay.core.model.DeviceKind.TV || kind == dev.patchbay.core.model.DeviceKind.MEDIA_RECEIVER || kind == dev.patchbay.core.model.DeviceKind.SPEAKER
-            if (kind != dev.patchbay.core.model.DeviceKind.LIGHT && kind != dev.patchbay.core.model.DeviceKind.PLUG && !isThermostat && !isVolume) return@mapNotNull null
-            val snap = live.snapshot ?: return@mapNotNull null
-            if (snap.reachability != dev.patchbay.core.model.Reachability.ONLINE) return@mapNotNull null
-            if (isVolume) {
-                val v = snap.state<dev.patchbay.core.model.CapabilityState.VolumeState>() ?: return@mapNotNull null
-                return@mapNotNull StoredStep(device = id.value, power = true, volume = v.level, muted = v.muted)
-            }
-            if (isThermostat) {
-                val t = snap.state<dev.patchbay.core.model.CapabilityState.ThermostatState>() ?: return@mapNotNull null
-                return@mapNotNull StoredStep(device = id.value, power = t.mode != dev.patchbay.core.model.HvacMode.OFF, hvacMode = t.mode.name, heat = t.heatSetpoint?.value, cool = t.coolSetpoint?.value)
-            }
-            val power = snap.state<dev.patchbay.core.model.CapabilityState.PowerState>() ?: return@mapNotNull null
-            StoredStep(
-                device = id.value, power = power.on,
-                brightness = if (power.on) snap.state<dev.patchbay.core.model.CapabilityState.BrightnessState>()?.level?.value else null,
-                kelvin = if (power.on) snap.state<dev.patchbay.core.model.CapabilityState.ColourTemperatureState>()?.kelvin?.value else null,
-                rgb = if (power.on && snap.state<dev.patchbay.core.model.CapabilityState.ColourTemperatureState>() == null) {
-                    snap.state<dev.patchbay.core.model.CapabilityState.RgbState>()?.colour?.let { listOf(it.r, it.g, it.b) }
-                } else null,
-            )
-        }
-        if (steps.isEmpty()) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick at least one light or plug that is reachable right now"))
-        synchronized(this) {
-            val existing = storedScenes.firstOrNull { it.name.equals(clean, ignoreCase = true) }
-            val scene = StoredScene(existing?.id ?: java.util.UUID.randomUUID().toString().take(8), clean, steps)
-            storedScenes = storedScenes.filterNot { it.id == scene.id } + scene
-            persistScenes()
-        }
-        log?.info("home", "saved a scene with ${steps.size} devices")
-        return PatchbayResult.Ok(Unit)
-    }
-
-    override suspend fun runScene(id: String): PatchbayResult<Unit> {
-        val scene = storedScenes.firstOrNull { it.id == id } ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown scene"))
-        var failed = 0
-        for (step in scene.steps) {
-            val target = DeviceId(step.device)
-            val hvac = step.hvacMode?.let { m -> dev.patchbay.core.model.HvacMode.entries.firstOrNull { it.name == m } }
-            val commands = if (step.volume != null) buildList<Command> {
-                add(Command.SetVolume(step.volume.coerceIn(0, 100)))
-                step.muted?.let { add(Command.SetMute(it)) }
-            } else if (step.hvacMode != null) buildList<Command> {
-                if (hvac != null) {
-                    add(Command.SetHvacMode(hvac))
-                    // Setpoints only for the mode being restored; the thermostat ignores the rest anyway.
-                    val h = step.heat?.takeIf { it.isFinite() && it in dev.patchbay.core.model.Celsius.MIN..dev.patchbay.core.model.Celsius.MAX }?.let { dev.patchbay.core.model.Celsius(it) }
-                    val k = step.cool?.takeIf { it.isFinite() && it in dev.patchbay.core.model.Celsius.MIN..dev.patchbay.core.model.Celsius.MAX }?.let { dev.patchbay.core.model.Celsius(it) }
-                    when (hvac) {
-                        dev.patchbay.core.model.HvacMode.HEAT -> if (h != null) add(Command.SetSetpoints(h, null))
-                        dev.patchbay.core.model.HvacMode.COOL -> if (k != null) add(Command.SetSetpoints(null, k))
-                        dev.patchbay.core.model.HvacMode.AUTO -> if (h != null || k != null) add(Command.SetSetpoints(h, k))
-                        dev.patchbay.core.model.HvacMode.OFF -> {}
-                    }
-                }
-            } else buildList<Command> {
-                add(Command.SetPower(step.power))
-                if (step.power) {
-                    step.brightness?.let { add(Command.SetBrightness(dev.patchbay.core.model.Percent(it))) }
-                    val k = step.kelvin
-                    val rgb = step.rgb
-                    if (k != null) add(Command.SetColourTemperature(dev.patchbay.core.model.Kelvin(k)))
-                    else if (rgb != null && rgb.size == 3) add(Command.SetColour(dev.patchbay.core.model.Rgb(rgb[0], rgb[1], rgb[2])))
-                }
-            }
-            var ok = true
-            for (c in commands) {
-                if (send(target, c) is PatchbayResult.Err) ok = false
-                delay(40)
-            }
-            if (!ok) failed++
-        }
-        record("Scene: ${scene.name}", "Ran (${scene.steps.size - failed} of ${scene.steps.size} devices responded)")
-        log?.info("home", "ran a scene: ${scene.steps.size - failed} of ${scene.steps.size} devices responded")
-        return if (failed == 0) PatchbayResult.Ok(Unit)
-        else PatchbayResult.Err(PatchbayError.Unreachable("$failed of ${scene.steps.size} devices didn't respond"))
-    }
-
-    override suspend fun deleteScene(id: String) {
-        synchronized(this) {
-            storedScenes = storedScenes.filterNot { it.id == id }
-            persistScenes()
-            publishAutomations()
-        }
-    }
-
-    override fun dismissProblem() {
-        _problem.value = null
-    }
-
-    override fun recentLog(maxLines: Int): String {
-        val f = log?.file?.takeIf { it.exists() } ?: return "No log yet."
-        return f.readLines().takeLast(maxLines.coerceIn(1, 2_000)).joinToString("\n")
-    }
 
     private val owners = ConcurrentHashMap<DeviceId, DeviceAdapter>()
     private val observers = ConcurrentHashMap<DeviceId, Job>()
+    private val pendingPairing = ConcurrentHashMap<DeviceId, DiscoveredDevice>()
 
-    override fun diagnosticsReport(header: List<String>): String {
-        val now = clock()
-        val live = _devices.value
-        val scan = _report.value
-        val labels = HashMap<String, String>()
-        val devices = live.mapIndexed { index, l ->
-            val d = l.device
-            val label = "#${index + 1} ${listOfNotNull(d.vendor, d.model).joinToString(" ").ifBlank { "device" }} (${d.kind.name.lowercase()})"
-            labels.putIfAbsent(d.name, label)
-            val snap = l.snapshot
-            DeviceReport(
-                label = label,
-                adapterId = d.adapter?.value ?: "none",
-                id = DiagnosticsReport.maskId(d.id.value),
-                address = DiagnosticsReport.maskAddress(l.address),
-                reachability = (snap?.reachability ?: Reachability.NEVER_CONNECTED).name.lowercase().replace('_', ' '),
-                lastReadingSecondsAgo = snap?.takeIf { it.states.isNotEmpty() }?.let { (now - it.observedAt.value) / 1_000 },
-                offlineForSeconds = offlineSince[d.id]?.let { (now - it) / 1_000 },
-                needsPairing = l.needsPairing,
-                trustChanged = l.trustChanged,
-                firmware = d.firmware,
-                readings = snap?.states?.map { it::class.simpleName ?: "?" }?.distinct().orEmpty(),
-                lines = owners[d.id]?.let { safeLines { it.diagnostics(d.id) } }.orEmpty(),
-            )
-        }
-        val systems = adapters.map { a ->
-            val found = scan.firstOrNull { it.name == a.systemName }
-            SystemReport(
-                name = a.systemName, adapterId = a.id.value, paired = live.count { owners[it.device.id] === a },
-                found = found?.takeIf { it.discoverable }?.found, scanNote = found?.note, lines = safeLines { a.adapterDiagnostics() },
-            )
-        }
-        val offsetMinutes = zone.rules.getOffset(java.time.Instant.ofEpochMilli(now)).totalSeconds / 60
-        return DiagnosticsReport.build(
-            DiagnosticsInput(
-                header = header + listOf(
-                    "Java ${System.getProperty("java.version")} on ${System.getProperty("os.name")} ${System.getProperty("os.version")} (${System.getProperty("os.arch")})",
-                ),
-                nowMillis = now,
-                utcOffsetMinutes = offsetMinutes,
-                systems = systems,
-                devices = devices,
-                netStats = netGuard.stats.value,
-                census = _census.value,
-                // "Renamed (was X)" carries a name that is no longer in use anywhere else, so only the fact is kept.
-                activity = _activity.value.take(40).map {
-                    it.copy(deviceName = labels[it.deviceName] ?: "(a device or scene)", event = if (it.event.startsWith("Renamed")) "Renamed" else it.event)
-                },
-                logTail = recentLog(120).lines(),
-                personalNames = buildList {
-                    for (l in live) {
-                        val plain = listOfNotNull(l.device.vendor, l.device.model).joinToString(" ")
-                        if (!l.device.name.equals(plain, ignoreCase = true)) add(l.device.name) // an auto-made "Govee H6076" is not personal
-                    }
-                    addAll(_scenes.value.map { it.name }); addAll(_automations.value.map { it.name }); addAll(_rooms.value)
-                },
-            ),
-        )
-    }
+    /** What each paired device's adapter was last given, kept so a device that moves can be re-registered at its new address without losing its secret or pinned key. */
+    private val pairings = ConcurrentHashMap<DeviceId, Pairing>()
 
-    /** An adapter that fails while describing itself must not take the whole report down. */
-    private fun safeLines(block: () -> List<String>): List<String> =
-        try { block() } catch (e: Exception) { listOf("diagnostics unavailable: ${e.javaClass.simpleName}") }
+    private val ctx = HomeContext(scope, clock, zone, random, store, log, devices)
+    private val activityLog = ActivityLog(ctx)
+    private val notifier = Notifier(ctx)
+    private val prefs = HomePreferences(ctx)
+    private val sceneBook = Scenes(ctx, activityLog) { id, command -> send(id, command) }
+    private val schedule = Automations(ctx, sceneBook, activityLog, prefs.location) { id -> runScene(id) }
+    private val adaptiveLights = AdaptiveLighting(ctx, activityLog) { id, command -> send(id, command) }
+    private val awayMode = AwayMode(ctx, activityLog, { id, command -> send(id, command) }) { allOff() }
+    private val watcher = DeviceWatcher(ctx, activityLog, notifier) { message -> report(message) }
+    private val healer = SelfHeal(ctx, adapters, { owners[it] }, { _scan.value == ScanState.SCANNING }) { adapter, found -> synchronized(this) { add(adapter, found) } }
+    private val diagnostics = DiagnosticsCollector(
+        ctx, adapters, { owners[it] }, healer, { netGuard.stats.value }, { _report.value }, { _census.value }, activityLog,
+        sceneBook.scenes, schedule.automations, _rooms, { maxLines -> recentLog(maxLines) },
+    )
+
+    // What the parts publish, as the interface asks for it.
+    override val activity: StateFlow<List<LedgerEntry>> = activityLog.entries
+    override fun timeLabel(epochMillis: Long): String = activityLog.timeLabel(epochMillis)
+    override fun activityCsv(): String = activityLog.csv()
+    override val trends: dev.patchbay.core.model.TrendSource = watcher.trends
+    override val quietHours: StateFlow<QuietHours?> = notifier.quietHours
+    override suspend fun setQuietHours(quiet: QuietHours?): Unit = notifier.setQuietHours(quiet)
+    override val notifications: Flow<String> = notifier.messages
+    override val location: StateFlow<HomeLocation?> = prefs.location
+    override suspend fun setLocation(latitude: Double, longitude: Double): PatchbayResult<Unit> = prefs.setLocation(latitude, longitude)
+    override val favourites: StateFlow<Set<DeviceId>> = prefs.favourites
+    override suspend fun setFavourite(device: DeviceId, on: Boolean): Unit = prefs.setFavourite(device, on)
+    override val scenes: StateFlow<List<Scene>> = sceneBook.scenes
+    override suspend fun saveScene(name: String, devices: List<DeviceId>): PatchbayResult<Unit> = sceneBook.save(name, devices)
+    override suspend fun runScene(id: String): PatchbayResult<Unit> = sceneBook.run(id)
+    override suspend fun deleteScene(id: String): Unit = sceneBook.delete(id)
+    override val automations: StateFlow<List<Automation>> = schedule.automations
+    override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> =
+        schedule.save(name, sceneId, hour, minute, days, sun, offsetMinutes)
+    override suspend fun setAutomationEnabled(id: String, enabled: Boolean): Unit = schedule.setEnabled(id, enabled)
+    override suspend fun deleteAutomation(id: String): Unit = schedule.delete(id)
+    override val adaptive: StateFlow<Set<DeviceId>> = adaptiveLights.adaptive
+    override suspend fun setAdaptive(device: DeviceId, on: Boolean): Unit = adaptiveLights.set(device, on)
+    override val away: StateFlow<AwayState> = awayMode.away
+    override suspend fun setAway(active: Boolean, simulate: Set<DeviceId>): Unit = awayMode.set(active, simulate)
+    override fun diagnosticsReport(header: List<String>): String = diagnostics.report(header)
+
+    /**
+     * Each of these runs one round of its job: automations whose minute it is, adaptive colour, away-mode presence, and a quiet search for devices that
+     * stopped answering. They run by themselves every 15 seconds; public so tests can drive them with a fixed clock.
+     */
+    public fun tickAutomations(nowMillis: Long = clock()): Unit = schedule.tick(nowMillis)
+    public fun tickAdaptive(nowMillis: Long = clock()): Unit = adaptiveLights.tick(nowMillis)
+    public fun tickAway(nowMillis: Long = clock()): Unit = awayMode.tick(nowMillis)
+    public suspend fun tickHeal(nowMillis: Long = clock()): Unit = healer.tick(nowMillis)
 
     init {
+        sceneBook.onDeleted = { schedule.publish() }
+        sceneBook.load()
+        activityLog.load()
+        schedule.load()
+        adaptiveLights.load()
+        awayMode.load()
+        notifier.load()
+        prefs.load()
+        watcher.loadTrends()
         restoreSaved()
         refreshRooms()
-        loadScenes()
-        loadLedger()
-        loadAutomations()
-        loadAdaptiveAndAway()
-        loadLocationAndFavourites()
         scope.launch {
             while (true) {
                 delay(15_000)
@@ -645,6 +157,24 @@ public class LanHome(
             }
         }
     }
+
+    override fun dismissProblem() {
+        _problem.value = null
+    }
+
+    override fun recentLog(maxLines: Int): String {
+        val f = log?.file?.takeIf { it.exists() } ?: return "No log yet."
+        return f.readLines().takeLast(maxLines.coerceIn(1, 2_000)).joinToString("\n")
+    }
+
+    internal fun reportStartupProblem(message: String): Unit = report(message)
+
+    private fun report(message: String) {
+        _problem.value = message
+        log?.warn("home", message)
+    }
+
+    // ---- devices: coming, going and staying current
 
     /** Devices saved by earlier sessions appear immediately and are polled; no scan needed. */
     private fun restoreSaved() {
@@ -668,11 +198,6 @@ public class LanHome(
         }
         if (saved.isNotEmpty()) log?.info("home", "restored ${_devices.value.size} saved device(s)")
     }
-
-    private val pendingPairing = ConcurrentHashMap<DeviceId, DiscoveredDevice>()
-
-    /** What each paired device's adapter was last given, kept so a device that moves can be re-registered at its new address without losing its secret or pinned key. */
-    private val pairings = ConcurrentHashMap<DeviceId, Pairing>()
 
     private fun track(adapter: DeviceAdapter, device: Device, address: String?, observe: Boolean = true) {
         owners[device.id] = adapter
@@ -730,31 +255,70 @@ public class LanHome(
         return provider.streamLease(device).also { if (it is PatchbayResult.Ok) log?.info("home", "stream opened for a camera") }
     }
 
-    /**
-     * Self-healing: a device that has been offline for a while may simply have moved (a new address after a DHCP change or a router reboot), so
-     * look for it again without the user pressing Scan. Only the adapters that have such a device are searched, in the background (the Scan
-     * button and the report are untouched), never while a scan is running, and with a back-off per adapter (2 minutes, doubling to 30) that
-     * resets when one of its devices answers. Adapters that can't discover (cameras and Tuya devices are added by address) are skipped.
-     */
-    public suspend fun tickHeal(nowMillis: Long = clock()) {
-        if (_scan.value == ScanState.SCANNING) return
-        val due = adapters.filter { a ->
-            a.discoverable && _devices.value.any { d -> owners[d.device.id] === a && offlineSince[d.device.id]?.let { nowMillis - it >= HEAL_AFTER_MS } == true }
+    override suspend fun forget(device: DeviceId) {
+        val name = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return
+        observers.remove(device)?.cancel()
+        try { owners[device]?.unpair(device) } catch (e: Exception) { log?.warn("home", "could not ask a device to forget us: ${e.javaClass.simpleName}") }
+        watcher.forget(device)
+        healer.forget(device)
+        pairings.remove(device)
+        owners.remove(device); pendingPairing.remove(device)
+        synchronized(this) {
+            _devices.update { list -> list.filterNot { it.device.id == device } }
+            refreshRooms()
         }
-        for (a in due) {
-            val st = healStates.getOrPut(a.id) { HealState() }
-            if (nowMillis < st.nextAt) continue
-            if (!healLock.tryLock()) return
-            try {
-                st.nextAt = nowMillis + st.backoffMs
-                st.backoffMs = (st.backoffMs * 2).coerceAtMost(HEAL_MAX_BACKOFF_MS)
-                log?.info("home", "${a.systemName}: looking again for devices that stopped answering")
-                a.discover().collect { found -> synchronized(this@LanHome) { add(a, found) } }
-            } finally {
-                healLock.unlock()
-            }
-        }
+        store?.forget(device)
+        activityLog.record(name, "Removed from Patchbay")
+        log?.info("home", "removed a device and its saved pairing")
     }
+
+    override suspend fun allOff(): PatchbayResult<Int> {
+        val targets = _devices.value.filter {
+            val snap = it.snapshot
+            (it.device.kind == DeviceKind.LIGHT || it.device.kind == DeviceKind.PLUG) &&
+                snap != null && snap.reachability == Reachability.ONLINE &&
+                snap.state<CapabilityState.PowerState>()?.on == true
+        }
+        var failed = 0
+        for (t in targets) {
+            if (send(t.device.id, Command.SetPower(false)) is PatchbayResult.Err) failed++
+            delay(40)
+        }
+        activityLog.record("All lights and plugs", "Switched off from Patchbay (${targets.size - failed} of ${targets.size})")
+        return if (failed == 0) PatchbayResult.Ok(targets.size)
+        else PatchbayResult.Err(PatchbayError.Unreachable("$failed of ${targets.size} didn't respond"))
+    }
+
+    private fun refreshRooms() {
+        _rooms.value = _devices.value.mapNotNull { it.device.roomId?.value }.distinct().sortedBy { it.lowercase() }
+    }
+
+    override suspend fun assignRoom(device: DeviceId, room: String?) {
+        val name = room?.trim()?.replace(Regex("\\s+"), " ")
+        if (room != null && (name.isNullOrEmpty() || name.length > 24 || !name.all { it.isLetterOrDigit() || it == ' ' || it == '-' })) return
+        val roomId = name?.let { dev.patchbay.core.model.RoomId(it) }
+        synchronized(this) {
+            _devices.update { list -> list.map { if (it.device.id == device) it.copy(device = it.device.copy(roomId = roomId)) else it } }
+            refreshRooms()
+        }
+        store?.setRoom(device, roomId)
+    }
+
+    override suspend fun rename(device: DeviceId, name: String): PatchbayResult<Unit> {
+        val clean = name.trim().replace(Regex("\\s+"), " ")
+        if (clean.length !in 1..32 || !clean.all { it.isLetterOrDigit() || it == ' ' || it == '-' }) {
+            return PatchbayResult.Err(PatchbayError.InvalidArgument("Use a short name with letters, numbers, spaces or hyphens"))
+        }
+        val old = _devices.value.firstOrNull { it.device.id == device }?.device?.name ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("unknown device"))
+        synchronized(this) {
+            _devices.update { list -> list.map { if (it.device.id == device) it.copy(device = it.device.copy(name = clean)) else it } }
+        }
+        store?.devices()?.firstOrNull { it.id == device }?.let { store.saveDevice(it.copy(name = clean), clock()) }
+        if (old != clean) activityLog.record(clean, "Renamed (was $old)")
+        return PatchbayResult.Ok(Unit)
+    }
+
+    // ---- finding devices
 
     override suspend fun scan(): PatchbayResult<Int> {
         _scan.value = ScanState.SCANNING
@@ -762,13 +326,11 @@ public class LanHome(
             coroutineScope {
                 val censusJob = censusEngine?.let { c -> async { c.run() } }
                 // All adapters listen at once, so a scan takes as long as the slowest one, not the sum.
-                val counts = java.util.concurrent.ConcurrentHashMap<dev.patchbay.core.model.AdapterId, Int>()
+                val counts = ConcurrentHashMap<dev.patchbay.core.model.AdapterId, Int>()
                 adapters.map { a ->
                     launch { a.discover().collect { found -> counts.merge(a.id, 1, Int::plus); synchronized(this@LanHome) { add(a, found) } } }
                 }.forEach { it.join() }
-                _report.value = adapters.map { a ->
-                    dev.patchbay.core.home.AdapterScan(a.systemName, counts[a.id] ?: 0, a.discoveryNote, a.discoverable)
-                }
+                _report.value = adapters.map { a -> AdapterScan(a.systemName, counts[a.id] ?: 0, a.discoveryNote, a.discoverable) }
                 when (val r = censusJob?.await()) {
                     is PatchbayResult.Ok -> _census.value = r.value
                     is PatchbayResult.Err -> report(r.error.message)
@@ -789,6 +351,7 @@ public class LanHome(
         return PatchbayResult.Ok(_devices.value.size)
     }
 
+    /** A device found by a scan, a quiet search or an address: new ones are added, a known one at a new address is told about it. Called under this home's lock. */
     private fun add(adapter: DeviceAdapter, found: DiscoveredDevice) {
         val id = adapter.deviceId(found)
         val existing = _devices.value.firstOrNull { it.device.id == id }
@@ -813,7 +376,7 @@ public class LanHome(
             val kept = pairings[id]
             if (!adapter.requiresPairing || kept != null) {
                 adapter.relocate(id, found, kept)
-                record(existing.device.name, "Found again at a new address")
+                activityLog.record(existing.device.name, "Found again at a new address")
                 log?.info("home", "${existing.device.name} moved to ${found.address}")
             }
         }
@@ -826,6 +389,8 @@ public class LanHome(
             now = clock(),
         )
     }
+
+    // ---- what a device reports, and commands to it
 
     private fun updateSnapshot(snap: DeviceSnapshot) {
         // Capabilities can grow once a device is connected (e.g. a TV's input list), so refresh them too.
@@ -840,86 +405,8 @@ public class LanHome(
                 )
             }
         }
-        when (snap.reachability) {
-            dev.patchbay.core.model.Reachability.OFFLINE -> offlineSince.putIfAbsent(snap.deviceId, clock())
-            dev.patchbay.core.model.Reachability.ONLINE -> { offlineSince.remove(snap.deviceId); owners[snap.deviceId]?.id?.let { healStates.remove(it) } }
-            else -> {}
-        }
-        if (snap.reachability == dev.patchbay.core.model.Reachability.ONLINE) recordTrends(snap)
-        val live = _devices.value.firstOrNull { it.device.id == snap.deviceId } ?: return
-        if (trust && trustAlerted.add(snap.deviceId)) {
-            record(live.device.name, "Presented a different security key than the one you paired (stopped talking to it)")
-            report("${live.device.name} presented a different security key than the one you paired. Open it for details.")
-            notify("trust-${snap.deviceId.value}", "${live.device.name} presented a different security key than the one you paired.", urgent = true)
-        } else if (!trust) {
-            trustAlerted.remove(snap.deviceId)
-        }
-        val s = live.snapshot ?: return
-        val now = Summary(s.reachability, s.state<dev.patchbay.core.model.CapabilityState.PowerState>()?.on, s.state<dev.patchbay.core.model.CapabilityState.PrintJobState>()?.stage, s.state<dev.patchbay.core.model.CapabilityState.MediaState>()?.status)
-        val before = lastSummary.put(snap.deviceId, now)
-        if (now.stage == dev.patchbay.core.model.PrintStage.PRINTING && before?.stage != dev.patchbay.core.model.PrintStage.PRINTING) printStartedAt.putIfAbsent(snap.deviceId, clock())
-        if (before != null && before.stage != null && before.stage != now.stage &&
-            (now.stage == dev.patchbay.core.model.PrintStage.FINISHED || now.stage == dev.patchbay.core.model.PrintStage.FAILED) &&
-            (before.stage == dev.patchbay.core.model.PrintStage.PRINTING || before.stage == dev.patchbay.core.model.PrintStage.PREPARING || before.stage == dev.patchbay.core.model.PrintStage.PAUSED)
-        ) {
-            val took = printStartedAt[snap.deviceId]?.let { " after " + durationText(clock() - it) } ?: ""
-            notify("print-${snap.deviceId.value}", "${live.device.name}: print ${if (now.stage == dev.patchbay.core.model.PrintStage.FAILED) "failed" else "finished"}$took.", windowMs = 60_000)
-        }
-        if (before != null && before != now) describeChange(before, now, snap.deviceId)?.let { record(live.device.name, it) }
-        if (now.stage != dev.patchbay.core.model.PrintStage.PRINTING && now.stage != dev.patchbay.core.model.PrintStage.PAUSED && now.stage != dev.patchbay.core.model.PrintStage.PREPARING) printStartedAt.remove(snap.deviceId)
-        if (before != null && before.reach != dev.patchbay.core.model.Reachability.OFFLINE && now.reach == dev.patchbay.core.model.Reachability.OFFLINE) {
-            notify("offline-${snap.deviceId.value}", "${live.device.name} stopped answering.")
-        }
-    }
-
-    private fun recordTrends(snap: DeviceSnapshot) {
-        val now = clock()
-        val id = snap.deviceId
-        snap.state<dev.patchbay.core.model.CapabilityState.ThermostatState>()?.let { recorder.record(id, dev.patchbay.core.model.Metric.INDOOR_TEMPERATURE, it.current.value, now) }
-        snap.state<dev.patchbay.core.model.CapabilityState.HumidityReading>()?.let { recorder.record(id, dev.patchbay.core.model.Metric.HUMIDITY, it.relative.value, now) }
-        snap.state<dev.patchbay.core.model.CapabilityState.PrinterThermalsState>()?.let { t ->
-            t.nozzles.getOrNull(0)?.let { recorder.record(id, dev.patchbay.core.model.Metric.NOZZLE_1, it.current.value, now) }
-            t.nozzles.getOrNull(1)?.let { recorder.record(id, dev.patchbay.core.model.Metric.NOZZLE_2, it.current.value, now) }
-            recorder.record(id, dev.patchbay.core.model.Metric.BED, t.bed.current.value, now)
-            t.chamber?.let { recorder.record(id, dev.patchbay.core.model.Metric.CHAMBER, it.current.value, now) }
-        }
-        if (now - trendsSavedAt > 10 * 60_000) {
-            trendsSavedAt = now
-            store?.putSetting("trends", sceneJson.encodeToString(recorder.export().map { StoredTrend(it.device, it.metric, it.times, it.values) }))
-        }
-    }
-
-    private fun durationText(ms: Long): String {
-        val minutes = (ms / 60_000).toInt()
-        return when {
-            minutes >= 60 -> "${minutes / 60} h ${minutes % 60} min"
-            minutes >= 1 -> "$minutes min"
-            else -> "under a minute"
-        }
-    }
-
-    /** What happened, in words, or null when the change isn't worth a line (a brief "no reply" flicker). */
-    private fun describeChange(a: Summary, b: Summary, id: DeviceId): String? {
-        val parts = mutableListOf<String>()
-        var stateChange = false
-        if (a.reach != dev.patchbay.core.model.Reachability.OFFLINE && b.reach == dev.patchbay.core.model.Reachability.OFFLINE) parts += "Went offline"
-        if (a.reach == dev.patchbay.core.model.Reachability.OFFLINE && b.reach == dev.patchbay.core.model.Reachability.ONLINE) parts += "Back online"
-        if (a.power != null && b.power != null && a.power != b.power) { parts += if (b.power) "Turned on" else "Turned off"; stateChange = true }
-        if (b.stage != null && a.stage != b.stage) {
-            val took = if (b.stage == dev.patchbay.core.model.PrintStage.FINISHED || b.stage == dev.patchbay.core.model.PrintStage.FAILED) printStartedAt[id]?.let { " after " + durationText(clock() - it) } ?: "" else ""
-            parts += "Printer: ${b.stage.name.lowercase()}$took"; stateChange = true
-        }
-        if (b.media != null && a.media != b.media && b.media != dev.patchbay.core.model.PlaybackStatus.BUFFERING) {
-            parts += when (b.media) {
-                dev.patchbay.core.model.PlaybackStatus.PLAYING -> "Playing"
-                dev.patchbay.core.model.PlaybackStatus.PAUSED -> "Paused"
-                else -> "Stopped"
-            }
-            stateChange = true
-        }
-        if (parts.isEmpty()) return null
-        val cause = if (!stateChange) "" else if (clock() - (lastCommandAt[id] ?: 0L) < 15_000) " (from Patchbay)" else " (at the device or another app)"
-        return parts.joinToString("; ") + cause
+        healer.noteReachability(snap.deviceId, snap.reachability)
+        watcher.onSnapshot(snap, trust)
     }
 
     /** An unreachable poll keeps the last known values, marked with the new reachability. */
@@ -932,7 +419,7 @@ public class LanHome(
         val ok = CommandValidator.validate(live.device, command, live.snapshot)
         if (ok is PatchbayResult.Err) return ok
         val adapter = owners[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("no adapter"))
-        lastCommandAt[device] = clock()
+        watcher.commandSent(device)
         val r = adapter.command(device, command)
         if (r is PatchbayResult.Ok) optimistic(device, command)
         else report((r as PatchbayResult.Err).error.message)
@@ -941,39 +428,13 @@ public class LanHome(
 
     /** Shows the commanded value immediately; the next poll confirms or corrects it. */
     private fun optimistic(device: DeviceId, command: Command) {
-        val apply: (List<CapabilityState>) -> List<CapabilityState> = { states ->
-            val replacement: CapabilityState? = when (command) {
-                is Command.SetPower -> CapabilityState.PowerState(command.on)
-                is Command.SetBrightness -> CapabilityState.BrightnessState(command.level)
-                is Command.SetColour -> CapabilityState.RgbState(command.colour)
-                is Command.SetColourTemperature -> CapabilityState.ColourTemperatureState(command.kelvin)
-                else -> null
-            }
-            if (replacement == null) states else {
-                val colourModes = setOf(CapabilityState.RgbState::class, CapabilityState.ColourTemperatureState::class)
-                val drop = if (replacement::class in colourModes) colourModes else setOf(replacement::class)
-                states.filterNot { it::class in drop } + replacement
-            }
-        }
         _devices.update { list ->
             list.map {
                 if (it.device.id != device) it else {
                     val s = it.snapshot ?: DeviceSnapshot(device, Reachability.ONLINE, emptyList(), EpochMillis(clock()))
-                    it.copy(snapshot = s.copy(states = apply(s.states)))
+                    it.copy(snapshot = s.copy(states = optimisticStates(s.states, command)))
                 }
             }
         }
     }
-
-    internal fun reportStartupProblem(message: String): Unit = report(message)
-
-    private fun report(message: String) {
-        _problem.value = message
-        log?.warn("home", message)
-    }
 }
-
-/** How long a device must have been offline before a quiet rescan looks for it, the first pause between rescans per adapter, and the longest. */
-private const val HEAL_AFTER_MS = 90_000L
-private const val HEAL_FIRST_BACKOFF_MS = 120_000L
-private const val HEAL_MAX_BACKOFF_MS = 30 * 60_000L
