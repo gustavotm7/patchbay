@@ -2,8 +2,8 @@
 
 > Continuing in a new session? Start with `docs/HANDOFF.md`: it has a copy-paste prompt and the next steps.
 
-Last updated: 2026-11-05, autonomous session. Work branch: **`ci/verification-bootstrap`** (ahead of `main`).
-`main` holds the Phase 0 baseline. Open a PR from the branch when you're ready to review. I didn't open one.
+Last updated: 2026-11-17. Work branch: **`ci/verification-bootstrap`** (ahead of `main`).
+`main` holds the Phase 0 baseline. No pull request is open (the author's GitHub token can't create one): open one from the compare page when you want a reviewed baseline.
 
 ## Works today
 
@@ -61,19 +61,15 @@ Then run `docs/HARDWARE_TEST.md`: app lock, Govee, TV, Bambu, Kasa, then ecobee 
 ADR 0007 is accepted and the Tuya **bulb** adapter exists (Lepro). The **vacuum** needs its model number and its data-point list (tinytuya wizard)
 before any command is allowed; see `docs/protocols/tuya.md` and `docs/TUYA_KEYS.md`.
 
-## Not done yet (Phase 1 remainder, in the order I'd do it)
+## Not built yet (accurate as of 2026-11-17)
 
-1. Adapters, each with a simulator and contract tests like Govee:
-   - ~~LG webOS~~ done (including power-on after restart)
-   - ~~eufy RTSP cameras~~ done for status; in-app video playback (Media3 on Android, TBD on desktop) is next
-   - Cast v2 / Android TV Remote v2
-   - ~~Bambu H2D~~ done, including manual add; follow-up: camera (RTSPS)
-   - ESPHome (Noise NNpsk0)
-2. Windows Hello (app lock is done on both platforms: Android biometric, Windows PIN).
-3. Rooms and a floor-plan editor for live devices (the schema has `room_id`; the assignment UI is missing).
-4. Census extras: OUI vendor lookup (desktop ARP table only; Android hides MACs), and an opt-in polite
-   port probe.
-5. Jazzer fuzzing in CI. Parsers currently run seeded mutation tests on every build instead.
+- **Peer sync** between the Android and Windows apps (in the brief; nothing in the code). Each device keeps its own data.
+- **`hub/`** is a 12-line stub: no headless daemon yet.
+- **ESPHome** (Noise NNpsk0), **Tuya protocol 3.4/3.5**, the **Lefant vacuum controls** (only a read-only "learn" mode exists, `docs/TUYA_KEYS.md`).
+- **Windows Hello** (the Windows lock is a PIN by decision) and **Jazzer** coverage-guided fuzzing (parsers use seeded mutation tests; both are "possible later" in `CLAUDE.md`).
+- **HomeKit event subscriptions** (the thermostat is polled every 5 s) and **Android start at boot**.
+- **A floor-plan editor for live devices** (rooms for live devices exist; the plan is only for the demo home), OUI vendor lookup, an opt-in port probe.
+- **Everything on real hardware.** The first real-device pass has not happened: see `docs/HARDWARE_TEST.md`.
 
 ## Adding systems (eufy and later ones)
 

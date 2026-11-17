@@ -4,8 +4,8 @@ A local-only, privacy-first home control app for Android and Windows. It discove
 **directly over the LAN**: no accounts, no cloud relays, no telemetry. It also shows your home's privacy
 exposure: which devices are local, which depend on a vendor cloud, and what unknown things are on your network.
 
-> Status: **Phase 0 (foundation)**. The apps render a simulated demo home; no real devices yet.
-> See `docs/archive/PHASE0_REPORT.md`.
+> Status: **early, pre-hardware.** Adapters for Govee, LG webOS, Bambu, Kasa, Tuya, eufy RTSP, Cast, Google TV remote and HomeKit thermostats (ecobee) exist and pass their simulator tests;
+> **none has been run against a real device yet**. See `docs/STATUS.md` for what works and `docs/READ_FIRST.md` for where to start.
 
 - Brief: [`docs/BRIEF.md`](docs/BRIEF.md) · Rules for contributors (human or AI): [`CLAUDE.md`](CLAUDE.md)
 - Decisions: [`docs/adr/`](docs/adr/) · Threat model: [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)
