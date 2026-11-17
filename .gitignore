@@ -10,3 +10,6 @@ captures/
 *.jks
 # Screenshot test actuals (goldens live in docs/design/screens/)
 **/screenshots-actual/
+
+# Claude Code personal settings
+.claude/settings.local.json
