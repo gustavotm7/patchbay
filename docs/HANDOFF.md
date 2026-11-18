@@ -12,8 +12,8 @@ then `docs/STATUS.md`.
   `docs/protocols/interop.md`, `tools/interop/`). Those checks found real bugs (H.265 refused, a four-second video start-up, simulator mistakes), which is why they are worth repeating when a protocol changes.
 - **Next: the owner's first hardware pass** (`docs/HARDWARE_TEST.md`, one section per device; after each device press Settings → Diagnostics → Copy diagnostics and send it with the failing step).
   Reproduce a failure in the simulator first, then fix it. Open owner decisions: `docs/PLAN.md` W5 (Home Assistant or continue; keep the hand-written crypto or adopt a library).
-- Backlog, only after hardware results: automation conditions (only after sunset, only when away), HomeKit event subscriptions, Android widgets and tiles, ESPHome, a read-only to commands step for
-  the Lefant vacuum (needs its model and data points), peer sync or the hub, Windows Hello. Device-triggered automations and Tuya 3.4 and 3.5 are done.
+- Backlog, only after hardware results: HomeKit event subscriptions, Android widgets and tiles, ESPHome, a read-only to commands step for
+  the Lefant vacuum (needs its model and data points), peer sync or the hub, Windows Hello. Device-triggered automations, automation conditions (ADR 0017) and Tuya 3.4 and 3.5 are done.
 - Local builds: `gradle -Ppatchbay.jvmOnly=true --offline :core:jvmTest :simulators:jvmTest :hub:build` (about 1.5 minutes). UI, Android and Windows compile only in CI (no Google Maven here).
   A docs-only push does not start the `ci` workflow; touch a comment in `.github/workflows/ci.yml` to force one (for example after re-recording a screenshot golden).
 

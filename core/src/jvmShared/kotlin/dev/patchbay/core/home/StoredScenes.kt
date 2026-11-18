@@ -34,11 +34,16 @@ internal data class StoredAutomation(
     val sun: String? = null,
     val offset: Int = 0,
     val trigger: StoredTrigger? = null,
+    val condition: StoredCondition? = null,
 )
 
 /** "When [device] does [event]" (a [DeviceEvent] name). */
 @Serializable
 internal data class StoredTrigger(val device: String, val event: String)
+
+/** An [AutomationCondition]: the window's ends as [DayPoint.text] strings, and the away flag. */
+@Serializable
+internal data class StoredCondition(val from: String? = null, val until: String? = null, val away: Boolean? = null)
 
 @Serializable
 internal data class StoredAway(val active: Boolean, val simulate: List<String>)

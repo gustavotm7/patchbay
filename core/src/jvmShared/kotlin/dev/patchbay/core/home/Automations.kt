@@ -16,12 +16,16 @@ import java.util.concurrent.ConcurrentHashMap
  * One limit keeps a device-triggered automation from running away: while an automation's scene is running, and for [CHAIN_WINDOW_MS] afterwards,
  * device events start nothing. The devices that scene just changed would otherwise start more scenes, and two automations that undo each other
  * would fight forever. Automations waiting for the same event all run together. A scene you run yourself can still start automations.
+ *
+ * An automation may also carry an [AutomationCondition] (a daily window and/or home or away). It is checked at the moment the automation would run, for both kinds;
+ * when it does not hold, Activity says why and nothing runs.
  */
 internal class Automations(
     private val ctx: HomeContext,
     private val scenes: Scenes,
     private val activity: ActivityLog,
     private val location: StateFlow<HomeLocation?>,
+    private val isAway: () -> Boolean,
     private val runScene: suspend (String) -> PatchbayResult<Unit>,
 ) {
     private val _automations = MutableStateFlow<List<Automation>>(emptyList())
@@ -48,7 +52,7 @@ internal class Automations(
             val trigger = a.trigger?.let { t ->
                 DeviceTrigger(DeviceId(t.device), deviceName(t.device), DeviceEvent.entries.first { it.name == t.event })
             }
-            Automation(a.id, a.name, a.sceneId, scenes.find(a.sceneId)?.name, a.hour, a.minute, a.days.toSet(), a.enabled, a.sun, a.offset, trigger)
+            Automation(a.id, a.name, a.sceneId, scenes.find(a.sceneId)?.name, a.hour, a.minute, a.days.toSet(), a.enabled, a.sun, a.offset, trigger, Conditions.fromStored(a.condition))
         }
     }
 
@@ -62,6 +66,22 @@ internal class Automations(
     private fun cleanName(name: String): String? =
         name.trim().replace(Regex("\\s+"), " ").takeIf { it.length in 1..32 && it.all { c -> c.isLetterOrDigit() || c == ' ' || c == '-' } }
 
+    /** Null when the condition is acceptable (or absent); otherwise what is wrong with it. */
+    private fun conditionProblem(c: AutomationCondition?): PatchbayError? {
+        val w = c?.window ?: return null
+        fun bad(p: DayPoint) = when (p) {
+            is DayPoint.Clock -> p.hour !in 0..23 || p.minute !in 0..59
+            is DayPoint.Sun -> p.offsetMinutes !in -180..180
+        }
+        if (bad(w.from) || bad(w.until)) return PatchbayError.InvalidArgument("Use times between 00:00 and 23:59, and sunrise or sunset shifted by up to 3 hours")
+        if (w.from == w.until) return PatchbayError.InvalidArgument("The window must start and end at different times")
+        if (w.needsLocation && location.value == null) return PatchbayError.InvalidArgument("Set your home location in Settings first")
+        return null
+    }
+
+    private fun check(a: StoredAutomation, nowMillis: Long): Conditions.Verdict =
+        Conditions.check(Conditions.fromStored(a.condition), nowMillis, ctx.zone, location.value, isAway())
+
     /** Runs [sceneId] and shuts device events out until it has finished and settled (see the class comment). */
     private fun launchScene(sceneId: String) {
         chainBlockedUntil = ctx.clock() + CHAIN_WINDOW_MS
@@ -70,7 +90,7 @@ internal class Automations(
         }
     }
 
-    suspend fun saveDeviceAutomation(name: String, sceneId: String, device: DeviceId, event: DeviceEvent): PatchbayResult<Unit> {
+    suspend fun saveDeviceAutomation(name: String, sceneId: String, device: DeviceId, event: DeviceEvent, condition: AutomationCondition? = null): PatchbayResult<Unit> {
         val clean = cleanName(name)
             ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("Give the automation a short name using letters, numbers, spaces or hyphens"))
         if (scenes.find(sceneId) == null) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick a scene to run"))
@@ -79,9 +99,11 @@ internal class Automations(
         if (event !in DeviceEvent.availableFor(live.device.capabilities)) {
             return PatchbayResult.Err(PatchbayError.InvalidArgument("${live.device.name} can't tell Patchbay when it ${event.label}"))
         }
+        conditionProblem(condition)?.let { return PatchbayResult.Err(it) }
         synchronized(this) {
             stored = stored + StoredAutomation(
                 java.util.UUID.randomUUID().toString().take(8), clean, sceneId, 0, 0, (1..7).toList(), true, null, 0, StoredTrigger(device.value, event.name),
+                condition?.takeUnless { it.isEmpty }?.let(Conditions::toStored),
             )
             persist()
         }
@@ -99,6 +121,7 @@ internal class Automations(
             val title = "Automation: ${a.name}"
             val scene = scenes.find(a.sceneId)
             if (scene == null) { activity.record(title, "Skipped: its scene was deleted"); continue }
+            (check(a, ctx.clock()) as? Conditions.Verdict.Fails)?.let { activity.record(title, "Not run: $who ${event.label}, but it ${it.why}"); continue }
             if (blocked) {
                 activity.record(title, "Not run: $who ${event.label} right after an automation ran, and automations don't start each other")
                 continue
@@ -108,7 +131,7 @@ internal class Automations(
         }
     }
 
-    suspend fun save(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> {
+    suspend fun save(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int, condition: AutomationCondition? = null): PatchbayResult<Unit> {
         val clean = cleanName(name)
             ?: return PatchbayResult.Err(PatchbayError.InvalidArgument("Give the automation a short name using letters, numbers, spaces or hyphens"))
         if (sun != null) {
@@ -120,10 +143,12 @@ internal class Automations(
         }
         if (days.isEmpty() || days.any { it !in 1..7 }) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick at least one day"))
         if (scenes.find(sceneId) == null) return PatchbayResult.Err(PatchbayError.InvalidArgument("Pick a scene to run"))
+        conditionProblem(condition)?.let { return PatchbayResult.Err(it) }
         synchronized(this) {
             stored = stored + StoredAutomation(
                 java.util.UUID.randomUUID().toString().take(8), clean, sceneId, if (sun == null) hour else 0, if (sun == null) minute else 0,
                 days.sorted(), true, sun, if (sun == null) 0 else offsetMinutes,
+                condition = condition?.takeUnless { it.isEmpty }?.let(Conditions::toStored),
             )
             persist()
         }
@@ -168,6 +193,7 @@ internal class Automations(
                 activity.record("Automation: ${a.name}", "Skipped: its scene was deleted")
                 continue
             }
+            (check(a, nowMillis) as? Conditions.Verdict.Fails)?.let { activity.record("Automation: ${a.name}", "Not run: it ${it.why}"); continue }
             activity.record("Automation: ${a.name}", "Running scene ${scene.name}")
             launchScene(scene.id)
         }

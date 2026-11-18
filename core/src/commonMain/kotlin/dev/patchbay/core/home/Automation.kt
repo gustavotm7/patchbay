@@ -18,4 +18,6 @@ public data class Automation(
     val sun: String? = null,
     val offsetMinutes: Int = 0,
     val trigger: DeviceTrigger? = null,
+    /** When it may run, beyond its schedule or trigger; null for no restriction. */
+    val condition: AutomationCondition? = null,
 )

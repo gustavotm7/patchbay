@@ -62,11 +62,12 @@ New device families (ESPHome, Matter), peer sync, the headless hub, Windows Hell
 Run `docs/HARDWARE_TEST.md` in this order: app lock, Govee, TV, Kasa, Bambu, ecobee, Google TV remote, cameras. After each device, press **Copy diagnostics** and send it with the step number that failed. W2 exists so that one report is enough.
 
 ## Backlog (after hardware results, in rough order)
-Automation conditions (only after sunset, only when away), HomeKit event subscriptions instead of polling, Android widgets and quick tiles, ESPHome, Tuya 3.4/3.5, peer sync or hub, Windows Hello.
+HomeKit event subscriptions instead of polling, Android widgets and quick tiles, ESPHome, Tuya 3.4/3.5, peer sync or hub, Windows Hello.
 
 ## Status
 | Item | Status |
 |---|---|
+| Backlog: automation conditions | **done 2026-11-18** (ADR 0017): an optional window (after dark, daytime, between two times with sunrise or sunset ends) and home or away, checked when an automation would run; Activity says why it did not. Tests: `ConditionsTest`, `AutomationConditionTest`, `AutomationsBehaviourTest` |
 | Backlog: automation triggers | **done 2026-11-17** (built on simulators, ADR 0014): when a light or plug turns on or off, a print finishes or fails, or a TV starts or stops playing, run a scene; automations never start each other. Tests: `EventDetectorTest`, `DeviceAutomationTest`, `AutomationsBehaviourTest` |
 | W3.1 Wycheproof | **done 2026-11-17**: all 210 Ed25519 and all 518 X25519 vectors agree, no code change needed |
 | W1.1 IP-change fix | **done 2026-11-17**. Found a second, bigger flaw on the way: Cast and Google TV devices were *identified by their IP address*, so a DHCP change made them a brand-new device with no pairing, room or scenes. They now use the stable id the device announces over mDNS (Cast `id`; the TV's Bluetooth address or instance name), and a rescan that finds a known device at a new address re-registers it with its adapter (pairing and pinned key kept; HomeKit also takes the new port). Tests: `DeviceMovesTest` (Cast, HomeKit) |

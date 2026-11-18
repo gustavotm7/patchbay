@@ -33,3 +33,4 @@ Status: Proposed · Date: YYYY-MM-DD
 | [0014](0014-device-triggered-automations.md) | Device-triggered automations: events from report changes, no chaining | Accepted |
 | [0015](0015-tuya-34-35-version-detection.md) | Tuya local protocols 3.4 and 3.5; the version is found out at pairing | Accepted |
 | [0016](0016-camera-video-h265-and-decoder-probing.md) | Camera video: H.265 support and a small decoder probe (found by checking against ffmpeg) | Accepted |
+| [0017](0017-automation-conditions.md) | Automation conditions: a daily window (after dark, between times) and home or away | Accepted |

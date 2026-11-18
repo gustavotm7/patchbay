@@ -50,7 +50,8 @@ Last updated: 2026-11-17. Work branch: **`ci/verification-bootstrap`** (ahead of
 | **Self-healing and moved devices** | A device that gets a new IP is re-registered with its pairing intact after one rescan; offline for 90 s triggers a quiet, rate-limited search. Cast and Google TV devices are identified by what they announce, not by IP | `DeviceMovesTest`, `SelfHealTest` |
 | **Encrypted backup** | Settings → Backup: passphrase-encrypted one-line backup of devices, pairings, rooms, scenes, automations, settings (ADR 0013); restore replaces what it covers, after a restart | `BackupTest` (15), `BackupRoundTripTest`; panel verified in CI only |
 | **Device-triggered automations** | Automations → New → When: Device. A light or plug turning on or off, a print finishing or failing, a TV or streamer starting or stopping playback runs a scene. Events come from comparing consecutive reports; the first report after start is never an event; automations never start each other (30-second window); a forgotten device leaves the automation marked and idle (ADR 0014) | `EventDetectorTest` (8), `DeviceWatcherEventsTest` (1; changed-key guard), `DeviceAutomationTest` (3; chain rule mutation-checked), `AutomationsBehaviourTest` (4, green in CI). **Not yet tried on real devices** (HARDWARE_TEST A1.x) |
-| **UI behaviour tests** | 48 headless tests drive the real screens (command bar, tiles, pairing, lock, navigation, the automation form) | CI; mutation-checked once |
+| **Automation conditions** | An automation can be limited to a window (after dark, daytime, or between two times with clock or sunrise or sunset ends) and to home or away (the Away switch); checked when it would run, for clock and device automations; Activity says why it did not run (ADR 0017) | `ConditionsTest` (14), `AutomationConditionTest` (4, both paths mutation-checked), 5 form tests (CI). **Not yet tried on real devices** (HARDWARE_TEST A1.10 to A1.13) |
+| **UI behaviour tests** | 53 headless tests drive the real screens (command bar, tiles, pairing, lock, navigation, the automation form) | CI; mutation-checked once |
 | **Start-up fix (2026-11-17)** | Restoring a saved device that needs pairing used to make the app fail while starting (paired devices since the IP-move fix; never-paired ones before that). Fixed and covered | `RestoreAfterRestartTest` |
 
 ## Get the builds
@@ -75,7 +76,7 @@ ADR 0007 is accepted and the Tuya **bulb** adapter exists (Lepro). The **vacuum*
 - **`hub/`** is a 12-line stub: no headless daemon yet.
 - **ESPHome** (Noise NNpsk0), the **Lefant vacuum controls** (only a read-only "learn" mode exists, `docs/TUYA_KEYS.md`).
 - **Windows Hello** (the Windows lock is a PIN by decision) and **Jazzer** coverage-guided fuzzing (parsers use seeded mutation tests; both are "possible later" in `CLAUDE.md`).
-- **HomeKit event subscriptions** (the thermostat is polled every 5 s), **automation conditions** (only after sunset, only when away) and **Android start at boot**.
+- **HomeKit event subscriptions** (the thermostat is polled every 5 s), **Android start at boot**.
 - **A floor-plan editor for live devices** (rooms for live devices exist; the plan is only for the demo home), OUI vendor lookup, an opt-in port probe.
 - **Everything on real hardware.** The first real-device pass has not happened: see `docs/HARDWARE_TEST.md`.
 

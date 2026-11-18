@@ -111,14 +111,16 @@ public interface LiveHome {
 
     /** Schedules a scene. [days] are ISO weekdays 1 to 7. Runs only while Patchbay is open or in the tray. */
     public suspend fun saveAutomation(
-        name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String? = null, offsetMinutes: Int = 0,
+        name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String? = null, offsetMinutes: Int = 0, condition: AutomationCondition? = null,
     ): PatchbayResult<Unit>
 
     /**
      * Runs a scene whenever [device] does [event] (see [DeviceEvent.availableFor]). Runs while Patchbay is open, in the tray or watching in the
      * background. Nothing starts within 30 seconds of another automation running, so automations can't start each other.
      */
-    public suspend fun saveDeviceAutomation(name: String, sceneId: String, device: DeviceId, event: DeviceEvent): PatchbayResult<Unit>
+    public suspend fun saveDeviceAutomation(
+        name: String, sceneId: String, device: DeviceId, event: DeviceEvent, condition: AutomationCondition? = null,
+    ): PatchbayResult<Unit>
 
     /** Recent history for the little graphs (a day of temperature, humidity and printer heat). */
     public val trends: dev.patchbay.core.model.TrendSource

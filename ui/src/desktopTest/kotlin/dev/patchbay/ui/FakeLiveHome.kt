@@ -99,14 +99,23 @@ internal open class FakeLiveHome(private val home: dev.patchbay.core.model.Home,
         ),
     )
     /** What the automation form asked to save for a device trigger; the answer is set by a test. */
-    data class DeviceAutomationRequest(val name: String, val sceneId: String, val device: DeviceId, val event: dev.patchbay.core.home.DeviceEvent)
+    data class DeviceAutomationRequest(
+        val name: String, val sceneId: String, val device: DeviceId, val event: dev.patchbay.core.home.DeviceEvent, val condition: dev.patchbay.core.home.AutomationCondition? = null,
+    )
     val deviceAutomationRequests = CopyOnWriteArrayList<DeviceAutomationRequest>()
     @Volatile var deviceAutomationResult: PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
-    override suspend fun saveDeviceAutomation(name: String, sceneId: String, device: DeviceId, event: dev.patchbay.core.home.DeviceEvent): PatchbayResult<Unit> {
-        deviceAutomationRequests += DeviceAutomationRequest(name, sceneId, device, event)
+    override suspend fun saveDeviceAutomation(
+        name: String, sceneId: String, device: DeviceId, event: dev.patchbay.core.home.DeviceEvent, condition: dev.patchbay.core.home.AutomationCondition?,
+    ): PatchbayResult<Unit> {
+        deviceAutomationRequests += DeviceAutomationRequest(name, sceneId, device, event, condition)
         return deviceAutomationResult
     }
-    override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> = PatchbayResult.Ok(Unit)
+
+    /** What the clock-automation form asked to save, for tests of its conditions. */
+    val timeAutomationRequests = CopyOnWriteArrayList<Pair<String, dev.patchbay.core.home.AutomationCondition?>>()
+    override suspend fun saveAutomation(
+        name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int, condition: dev.patchbay.core.home.AutomationCondition?,
+    ): PatchbayResult<Unit> { timeAutomationRequests += name to condition; return PatchbayResult.Ok(Unit) }
     override val trends: dev.patchbay.core.model.TrendSource = dev.patchbay.core.model.TrendSource { _, _ -> null }
     override val quietHours: StateFlow<dev.patchbay.core.home.QuietHours?> = MutableStateFlow(dev.patchbay.core.home.QuietHours(22 * 60, 7 * 60))
     override suspend fun setQuietHours(quiet: dev.patchbay.core.home.QuietHours?) {}

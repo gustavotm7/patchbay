@@ -33,7 +33,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import dev.patchbay.core.home.AutomationCondition
+import dev.patchbay.core.home.DayPoint
 import dev.patchbay.core.home.DeviceEvent
+import dev.patchbay.core.home.TimeWindow
 import dev.patchbay.core.home.ExposureReport
 import dev.patchbay.core.home.LiveDevice
 import dev.patchbay.core.home.LiveHome
@@ -200,12 +203,13 @@ internal fun daysText(days: Set<Int>): String = when {
     else -> days.sorted().joinToString(" ") { listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[it - 1] }
 }
 
-/** The "when" of an automation in words, for its row. */
+/** The "when" of an automation in words, for its row, with what restricts it ("only after dark") when something does. */
 internal fun whenText(a: dev.patchbay.core.home.Automation): String {
+    val only = a.condition?.describe()?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""
     val t = a.trigger
-    if (t != null) return "When ${t.deviceName ?: "a removed device"} ${t.event.label}"
+    if (t != null) return "When ${t.deviceName ?: "a removed device"} ${t.event.label}$only"
     return (a.sun?.let { sunName -> sunName.replaceFirstChar { ch -> ch.uppercase() } + if (a.offsetMinutes != 0) " %+d min".format(a.offsetMinutes) else "" }
-        ?: "%02d:%02d".format(a.hour, a.minute)) + " · ${daysText(a.days)}"
+        ?: "%02d:%02d".format(a.hour, a.minute)) + " · ${daysText(a.days)}$only"
 }
 
 /** Run a scene at a time on chosen days, or when a device does something. Only while Patchbay is open or in the tray; the panel says so. */
@@ -226,6 +230,10 @@ internal fun AutomationsPanel(live: LiveHome) {
     val watchable = devices.filter { DeviceEvent.availableFor(it.device.capabilities).isNotEmpty() }
     var pickedDevice by remember { mutableStateOf<DeviceId?>(null) }
     var pickedEvent by remember { mutableStateOf<DeviceEvent?>(null) }
+    var windowKind by remember { mutableStateOf("any") }
+    var fromText by remember { mutableStateOf("18:00") }
+    var untilText by remember { mutableStateOf("23:00") }
+    var presence by remember { mutableStateOf("either") }
     val location by live.location.collectAsState()
     var days by remember { mutableStateOf(setOf(1, 2, 3, 4, 5, 6, 7)) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -335,6 +343,43 @@ internal fun AutomationsPanel(live: LiveHome) {
                     }
                 }
             }
+            VSpace(Space.s)
+            PText("Only", Patchbay.type.bodyStrong)
+            VSpace(Space.xs)
+            Segmented(
+                listOf("any", "dark", "day", "between"), windowKind,
+                { when (it) { "any" -> "Any time"; "dark" -> "After dark"; "day" -> "Daytime"; else -> "Between" } }, { windowKind = it }, Modifier.fillMaxWidth(),
+            )
+            if (windowKind == "between") {
+                VSpace(Space.xs)
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    Column(Modifier.weight(1f)) {
+                        PText("From (18:00, sunset, sunset+30)", Patchbay.type.caption, c.textSecondary)
+                        BasicTextField(
+                            value = fromText, onValueChange = { v -> fromText = v.filter { it.isLetterOrDigit() || it == ':' || it == '+' || it == '-' }.take(12) }, singleLine = true,
+                            textStyle = Patchbay.type.valueM.copy(color = c.text),
+                            modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        PText("Until", Patchbay.type.caption, c.textSecondary)
+                        BasicTextField(
+                            value = untilText, onValueChange = { v -> untilText = v.filter { it.isLetterOrDigit() || it == ':' || it == '+' || it == '-' }.take(12) }, singleLine = true,
+                            textStyle = Patchbay.type.valueM.copy(color = c.text),
+                            modifier = Modifier.fillMaxWidth().border(Space.hair, c.outline, Shapes.control).padding(Space.m),
+                        )
+                    }
+                }
+            }
+            if (windowKind == "dark" || windowKind == "day" || (windowKind == "between" && (fromText.contains("sun", ignoreCase = true) || untilText.contains("sun", ignoreCase = true)))) {
+                VSpace(Space.xs)
+                PText(if (location == null) "Sunrise and sunset need your home location: set it in Settings first." else "Worked out from your home location.", Patchbay.type.caption, if (location == null) c.attention else c.textTertiary)
+            }
+            VSpace(Space.xs)
+            Segmented(
+                listOf("either", "home", "away"), presence,
+                { when (it) { "either" -> "Home or away"; "home" -> "Only at home"; else -> "Only away" } }, { presence = it }, Modifier.fillMaxWidth(),
+            )
             error?.let {
                 VSpace(Space.xs)
                 PText(it, Patchbay.type.caption, c.alarm)
@@ -350,11 +395,21 @@ internal fun AutomationsPanel(live: LiveHome) {
                         val sid = sceneId
                         val target = pickedDevice
                         val what = pickedEvent
-                        if (whenKind == "device") {
+                        val startPoint = DayPoint.parse(fromText)
+                        val endPoint = DayPoint.parse(untilText)
+                        val window = when (windowKind) {
+                            "dark" -> TimeWindow.AFTER_DARK
+                            "day" -> TimeWindow.DAYTIME
+                            "between" -> if (startPoint != null && endPoint != null) TimeWindow(startPoint, endPoint) else null
+                            else -> null
+                        }
+                        val condition = AutomationCondition(window, when (presence) { "home" -> false; "away" -> true; else -> null }).takeUnless { it.isEmpty }
+                        if (windowKind == "between" && window == null) error = "Enter the start and end as HH:MM, sunrise or sunset, for example 18:00 or sunset+30"
+                        else if (whenKind == "device") {
                             if (sid == null) error = "Pick a scene"
                             else if (target == null || what == null) error = "Pick a device and what it does"
                             else scope.launch {
-                                when (val r = live.saveDeviceAutomation(name, sid, target, what)) {
+                                when (val r = live.saveDeviceAutomation(name, sid, target, what, condition)) {
                                     is dev.patchbay.core.result.PatchbayResult.Ok -> { creating = false; name = ""; error = null }
                                     is dev.patchbay.core.result.PatchbayResult.Err -> error = r.error.message
                                 }
@@ -364,7 +419,7 @@ internal fun AutomationsPanel(live: LiveHome) {
                         else if (whenKind != "time" && off == null) error = "Enter the offset in minutes, for example 30 or -15"
                         else if (sid == null) error = "Pick a scene"
                         else scope.launch {
-                            when (val r = live.saveAutomation(name, sid, h ?: 0, m ?: 0, days, if (whenKind == "time") null else whenKind, off ?: 0)) {
+                            when (val r = live.saveAutomation(name, sid, h ?: 0, m ?: 0, days, if (whenKind == "time") null else whenKind, off ?: 0, condition)) {
                                 is dev.patchbay.core.result.PatchbayResult.Ok -> { creating = false; name = ""; error = null }
                                 is dev.patchbay.core.result.PatchbayResult.Err -> error = r.error.message
                             }

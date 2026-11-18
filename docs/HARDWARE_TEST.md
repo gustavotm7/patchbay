@@ -418,4 +418,8 @@ Needs a Windows or Android build that has Automations → New → When: **Device
 | A1.7 | TV or Google TV: "starts playing" → a scene. Start a video, pause it, resume it | It runs on the first start; a stalled or buffering video does not run it again |
 | A1.8 | Forget the first light (open it → Forget), then look at Automations | The row says "a removed device" in the attention colour and never runs |
 | A1.9 | Turn the automation's switch off and repeat A1.3 | Nothing runs |
+| A1.10 | Automations → New → When: Device → pick a light and "Turns on" → Only: **After dark** → Save (set your home location in Settings first) | The row reads "When <light> turns on · only after dark · <scene>" |
+| A1.11 | In daylight, switch that light off and on with its own app or button | Nothing runs. Activity shows "Not run: … but it only runs after dark" |
+| A1.12 | After dark (or make a window with **Between** that includes the current time, for example 00:00 until 23:59), repeat | The scene runs |
+| A1.13 | Make an automation with **Only at home**, turn Away mode on (Automations → Away), trigger it; then turn Away mode off and trigger it again | Away: "Not run: … only runs when you are at home". Home: it runs |
 

@@ -87,7 +87,7 @@ public class LanHome(
     private val notifier = Notifier(ctx)
     private val prefs = HomePreferences(ctx)
     private val sceneBook = Scenes(ctx, activityLog) { id, command -> send(id, command) }
-    private val schedule = Automations(ctx, sceneBook, activityLog, prefs.location) { id -> runScene(id) }
+    private val schedule = Automations(ctx, sceneBook, activityLog, prefs.location, { awayMode.away.value.active }) { id -> runScene(id) }
     private val adaptiveLights = AdaptiveLighting(ctx, activityLog) { id, command -> send(id, command) }
     private val awayMode = AwayMode(ctx, activityLog, { id, command -> send(id, command) }) { allOff() }
     private val watcher = DeviceWatcher(ctx, activityLog, notifier, { message -> report(message) }) { id, event -> schedule.onDeviceEvent(id, event) }
@@ -114,10 +114,11 @@ public class LanHome(
     override suspend fun runScene(id: String): PatchbayResult<Unit> = sceneBook.run(id)
     override suspend fun deleteScene(id: String): Unit = sceneBook.delete(id)
     override val automations: StateFlow<List<Automation>> = schedule.automations
-    override suspend fun saveAutomation(name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int): PatchbayResult<Unit> =
-        schedule.save(name, sceneId, hour, minute, days, sun, offsetMinutes)
-    override suspend fun saveDeviceAutomation(name: String, sceneId: String, device: DeviceId, event: DeviceEvent): PatchbayResult<Unit> =
-        schedule.saveDeviceAutomation(name, sceneId, device, event)
+    override suspend fun saveAutomation(
+        name: String, sceneId: String, hour: Int, minute: Int, days: Set<Int>, sun: String?, offsetMinutes: Int, condition: AutomationCondition?,
+    ): PatchbayResult<Unit> = schedule.save(name, sceneId, hour, minute, days, sun, offsetMinutes, condition)
+    override suspend fun saveDeviceAutomation(name: String, sceneId: String, device: DeviceId, event: DeviceEvent, condition: AutomationCondition?): PatchbayResult<Unit> =
+        schedule.saveDeviceAutomation(name, sceneId, device, event, condition)
     override suspend fun setAutomationEnabled(id: String, enabled: Boolean): Unit = schedule.setEnabled(id, enabled)
     override suspend fun deleteAutomation(id: String): Unit = schedule.delete(id)
     override val adaptive: StateFlow<Set<DeviceId>> = adaptiveLights.adaptive
