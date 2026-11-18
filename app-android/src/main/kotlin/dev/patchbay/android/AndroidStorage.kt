@@ -24,8 +24,9 @@ import javax.crypto.spec.GCMParameterSpec
 class KeystoreKeyWrapper(context: Context) : KeyWrapper {
     private val strongBoxAvailable = context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)
     private val keyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
-    private val key: SecretKey = (keyStore.getKey(ALIAS, null) as? SecretKey) ?: generate()
+    // Declared before `key`: generating the key may fall back to the TEE and clear this, and a later initialiser would put it back to true.
     private var strongBox = strongBoxAvailable
+    private val key: SecretKey = (keyStore.getKey(ALIAS, null) as? SecretKey) ?: generate()
 
     override val kind: String get() = if (strongBox) "android-keystore-strongbox" else "android-keystore"
     override val osProtected: Boolean = true

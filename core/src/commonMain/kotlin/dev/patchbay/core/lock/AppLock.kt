@@ -31,6 +31,15 @@ public class AppLock(
     private var failures = 0
     private var blockedUntil = 0L
 
+    /** Called whenever the failed-attempt count or the wait changes, so a shell can keep them across restarts (restarting must not reset the back-off). */
+    public var onBackoffChanged: ((failures: Int, blockedUntil: Long) -> Unit)? = null
+
+    /** Puts back what [onBackoffChanged] last reported. Counts are bounded so damaged saved data cannot lock the owner out for long. */
+    public fun restoreBackoff(failures: Int, blockedUntil: Long) {
+        this.failures = failures.coerceIn(0, 50)
+        this.blockedUntil = blockedUntil.coerceAtMost(clock() + 300_000L)
+    }
+
     public fun onBackground() {
         backgroundedAt = clock()
     }
@@ -47,8 +56,7 @@ public class AppLock(
 
     /** Call after a successful platform authentication (biometric / device credential / Windows Hello). */
     public fun unlocked() {
-        failures = 0
-        blockedUntil = 0
+        if (failures != 0 || blockedUntil != 0L) { failures = 0; blockedUntil = 0; onBackoffChanged?.invoke(0, 0) }
         _state.value = State.UNLOCKED
     }
 
@@ -64,6 +72,7 @@ public class AppLock(
         }
         failures++
         if (failures >= 3) blockedUntil = clock() + minOf(5_000L shl (failures - 3).coerceAtMost(6), 300_000L)
+        onBackoffChanged?.invoke(failures, blockedUntil)
         return false
     }
 

@@ -87,6 +87,44 @@ class DeviceAutomationTest {
     }
 
     @Test
+    fun anAutomationThatKeepsFiringIsHeldBackAfterSixRunsInTenMinutes(): Unit = runBlocking {
+        val db = File(Files.createTempDirectory("pbdevauto").toFile(), "a.db")
+        val (lamp, strip) = sims()
+        lamp.on = true
+        strip.on = false // the scene remembers the strip as off
+        val now = AtomicLong(2_000_000_000_000L)
+        val r = open(db, lamp, strip, now)
+        r.home.scan(); settle(r)
+        assertTrue(r.home.saveScene("Wind down", listOf(stripId)) is PatchbayResult.Ok)
+        val scene = r.home.scenes.value.single()
+        assertTrue(r.home.saveDeviceAutomation("Lamp wind down", scene.id, lampId, DeviceEvent.TURNED_ON) is PatchbayResult.Ok)
+        delay(700)
+
+        // The lamp comes on every 60 seconds, well outside the 30-second chain window: the first six run, the rest are held back.
+        repeat(8) { i ->
+            strip.on = true; delay(300)
+            now.addAndGet(60_000)
+            flick(r)
+            if (i < 6) {
+                until("run ${i + 1}") { !strip.on }
+                until("run ${i + 1} to finish") { sceneRuns(r) == i + 1 }
+            } else {
+                delay(300)
+            }
+        }
+        val l = lines(r, "Automation: Lamp wind down")
+        assertEquals(6, l.count { it.startsWith("Running scene") }, l.toString())
+        assertTrue(l.any { it.contains("being held back") }, l.toString())
+        assertTrue(strip.on, "the seventh and eighth must not have run")
+
+        // Ten minutes after the first run it may run again.
+        now.addAndGet(11 * 60_000L)
+        flick(r)
+        until("the scene to run again") { !strip.on }
+        r.close(); lamp.close(); strip.close()
+    }
+
+    @Test
     fun aDeviceEventRunsTheSceneOnlyForThatEventAndNeverChains(): Unit = runBlocking {
         val db = File(Files.createTempDirectory("pbdevauto").toFile(), "a.db")
         val (lamp, strip) = sims()

@@ -41,4 +41,25 @@ class AppLockTest {
         assertFalse(h.contains("4821"))
         assertFalse(PinHash.isValidPin("12a4")); assertFalse(PinHash.isValidPin("123"))
     }
+
+    @Test
+    fun theBackoffCanBeKeptAcrossARestart() {
+        var saved: Pair<Int, Long>? = null
+        lock.onBackoffChanged = { f, until -> saved = f to until }
+        repeat(3) { lock.attempt(false) }
+        val (failures, until) = saved!!
+        assertEquals(3, failures)
+        assertTrue(lock.waitMs() > 0)
+
+        // A new process: same clock, state put back from what was saved. Still waiting; one more wrong attempt waits longer.
+        val restarted = AppLock(autoLockMs = 60_000) { now }
+        restarted.restoreBackoff(failures, until)
+        assertTrue(restarted.waitMs() > 0)
+        assertEquals(false, restarted.attempt(true)) // refused while waiting, even with the right PIN
+
+        // Damaged saved data cannot lock the owner out for more than five minutes.
+        val damaged = AppLock(autoLockMs = 60_000) { now }
+        damaged.restoreBackoff(1_000_000, Long.MAX_VALUE)
+        assertTrue(damaged.waitMs() <= 300_000L)
+    }
 }

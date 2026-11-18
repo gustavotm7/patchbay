@@ -33,6 +33,7 @@ internal class Automations(
     @Volatile private var stored: List<StoredAutomation> = emptyList()
     /** For each enabled automation, the time of the last tick that looked at it (see [tick]). */
     private val checkedUntil = ConcurrentHashMap<String, Long>()
+    private val recentRuns = ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<Long>>()
     @Volatile private var chainBlockedUntil = Long.MIN_VALUE
 
     companion object {
@@ -40,6 +41,10 @@ internal class Automations(
 
         /** How late a scheduled time may still run (after sleep or Doze); older than this it is skipped. */
         const val GRACE_MS = 10 * 60_000L
+
+        /** A device-triggered automation may start at most this many scenes in [RUN_WINDOW_MS]. */
+        const val MAX_RUNS_PER_WINDOW = 6
+        const val RUN_WINDOW_MS = 10 * 60_000L
     }
 
     fun load() {
@@ -92,6 +97,15 @@ internal class Automations(
     private fun check(a: StoredAutomation, nowMillis: Long): Conditions.Verdict =
         Conditions.check(Conditions.fromStored(a.condition), nowMillis, ctx.zone, location.value, isAway())
 
+    /** True when [id] has already started [MAX_RUNS_PER_WINDOW] scenes in the last [RUN_WINDOW_MS]; otherwise counts this run. */
+    private fun tooBusy(id: String, now: Long): Boolean {
+        val runs = recentRuns.getOrPut(id) { java.util.concurrent.CopyOnWriteArrayList() }
+        runs.removeAll { now - it >= RUN_WINDOW_MS || it > now }
+        if (runs.size >= MAX_RUNS_PER_WINDOW) return true
+        runs += now
+        return false
+    }
+
     /** Runs [sceneId] and shuts device events out until it has finished and settled (see the class comment). */
     private fun launchScene(sceneId: String) {
         chainBlockedUntil = ctx.clock() + CHAIN_WINDOW_MS
@@ -134,6 +148,11 @@ internal class Automations(
             (check(a, ctx.clock()) as? Conditions.Verdict.Fails)?.let { activity.record(title, "Not run: $who ${event.label}, but it ${it.why}"); continue }
             if (blocked) {
                 activity.record(title, "Not run: $who ${event.label} right after an automation ran, and automations don't start each other")
+                continue
+            }
+            // Second line of defence, for loops the 30-second window misses (a device that reports late, two automations that undo each other): a hard cap.
+            if (tooBusy(a.id, ctx.clock())) {
+                activity.record(title, "Not run: it has already run $MAX_RUNS_PER_WINDOW times in the last ${RUN_WINDOW_MS / 60_000} minutes, so it is being held back. Check that it isn't undoing itself")
                 continue
             }
             activity.record(title, "Running scene ${scene.name} because $who ${event.label}")

@@ -11,7 +11,11 @@ import kotlinx.coroutines.flow.StateFlow
  * Locks at start and after the window has been unfocused for the auto-lock time.
  */
 class DesktopLock(private val store: HomeStore) : LockController {
-    private val lock = AppLock(clock = System::currentTimeMillis)
+    private val lock = AppLock(clock = System::currentTimeMillis).also { l ->
+        // The back-off survives a restart: closing and reopening the app must not give a guesser a fresh set of attempts.
+        store.setting(BACKOFF_KEY)?.split(',')?.let { p -> p.getOrNull(0)?.toIntOrNull()?.let { f -> p.getOrNull(1)?.toLongOrNull()?.let { until -> l.restoreBackoff(f, until) } } }
+        l.onBackoffChanged = { failures, until -> store.putSetting(BACKOFF_KEY, "$failures,$until") }
+    }
 
     override val state: StateFlow<AppLock.State> = lock.state
     override val usesSystemAuth: Boolean = false
@@ -41,5 +45,6 @@ class DesktopLock(private val store: HomeStore) : LockController {
 
     private companion object {
         const val KEY = "lock.pin.pbkdf2"
+        const val BACKOFF_KEY = "lock.pin.backoff"
     }
 }
