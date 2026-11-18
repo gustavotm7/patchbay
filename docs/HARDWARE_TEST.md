@@ -67,6 +67,7 @@ isolation" on guest networks breaks it.
 | G1.11 | Exposure → **Copy report**, paste into a note | A Markdown report with your devices, and OpenWrt rules only for lights Patchbay controls. Nothing was changed on your router |
 | G1.12 | Windows: look in `%LOCALAPPDATA%\Patchbay\data\` | `patchbay.db` (an encrypted file, opaque in a text editor) and `dek.wrapped` (DPAPI-protected). No plaintext device list anywhere |
 | G1.13 | Network screen shows "Encrypted storage unavailable…" | Should **not** happen. If it does, send the log line. The app still works but saves nothing |
+| G1.14 | With a VPN connected (phone or laptop), scan, and look in the VPN provider's or router's traffic view | No discovery traffic leaves your home network. Patchbay should not broadcast into the VPN |
 
 Please report:
 - Your Govee model numbers, and which ones didn't appear.
@@ -90,6 +91,7 @@ Prerequisite: the TV is on, on the same network, and Settings → General → De
 | T1.6b | Tap **Turn on** (with "Turn on via Wi-Fi" enabled on the TV) | The TV wakes within a few seconds and Patchbay shows "On" again |
 | T1.7 | Restart Patchbay with the TV on | The TV reconnects **without** a new prompt (stored key, same pin) |
 | T1.8 | (If the TV's firmware updates and its key changes) | Patchbay shows a trust warning rather than silently reconnecting. Re-pair to accept the new key |
+| T1.9 | Try each control: volume, mute, input, power off. Then Settings → Diagnostics → Copy diagnostics | Every control works. Any reply like "insufficient permissions" in diagnostics means the registration needs LG's signed manifest; tell me which command |
 
 Please report: the TV model and webOS version; whether T1.3's prompt appeared; any step that failed, with the
 time it happened (for the log).
@@ -150,6 +152,7 @@ Prerequisite: the bulb's device ID, local key and IP (the protocol version, 3.3,
 | U1.6 | Colour: pick red, green, blue | The bulb shows them. If not, say what happens (and whether "Bulb (older)" behaves differently) |
 | U1.7 | Change the bulb from its own app | Patchbay follows within about 6 s |
 | U1.8 | Restart Patchbay | The bulb is listed and works without asking for the key again |
+| U1.14 | Run Patchbay on the PC and the phone at the same time against one bulb for 10 minutes, once with the Smart Life app also open | No flapping between "No reply" and online, no refused connections. Tuya devices often allow only one local connection at a time |
 
 Please report: bulb model, the protocol version the diagnostics show (and `tinytuya scan`'s, if you ran it), and which steps differed.
 
@@ -167,9 +170,10 @@ Not every model has RTSP; HomeBase-connected cameras expose it on the HomeBase's
 | E1.4 | Open `rtsp://<ip>/live0` in VLC and sign in | The camera's video plays (this checks the path and login outside Patchbay) |
 | E1.5 | Unplug the camera, wait about 1 min | "No reply", then "Offline". Replug: it recovers by itself |
 | E1.6 | Restart Patchbay | The camera is listed with its status and no new login prompt |
-| E1.7 | Android: open the camera → **Watch** | Live video appears in the panel within a few seconds. **Stop** ends it. Windows has no in-app video yet |
+| E1.7 | Android: open the camera → **Watch** | Live video appears in the panel within a few seconds. **Stop** ends it. (Windows video is C2.x) |
 | E1.8 | While watching, open Settings → Apps → Patchbay → data usage, or look at your router's client list | Traffic goes only to the camera's LAN address, over one TCP connection (video is carried inside it) |
 | E1.9 | Screenshot, then Recents while video is up | Blocked or blank (whole-app screenshot blocking) |
+| E1.10 | While a NAS or recorder is recording the same camera, open Patchbay for a few minutes | The recording is not interrupted and Patchbay's status polling does not make the camera refuse either side. Some cameras allow only one RTSP client |
 
 If Watch shows a black picture or an error, tell me the camera model: a camera that only streams RTSP over UDP won't play (TCP only, ADR 0008).
 
@@ -205,6 +209,7 @@ Prerequisite: the device is on, on the same network (not a guest network), and s
 | C1.6 | With nothing playing, press Play | Patchbay says nothing is playing (no error on the device) |
 | C1.7 | Restart Patchbay | The device reconnects without asking to pair again (same fingerprint) |
 | C1.8 | (If a firmware update changes its key) | Patchbay shows a trust warning rather than silently reconnecting; re-pair to accept |
+| C1.9 | Pair a Chromecast or Google TV and note the fingerprint on the pairing screen. Check Settings → the device again after 48 hours and after unplugging it for a minute | The fingerprint stays the same and there is no "Security alert". If it changed and the alert appears, tell me: Cast receivers may renew their certificate every few days, and the pinning approach has to change (review finding F-H1) |
 
 Please report: model (Chromecast gen, Google TV, speaker), whether C1.1 found it, and what a Cast device's volume and title looked like.
 
@@ -233,6 +238,7 @@ Please report: model (Chromecast gen, Google TV, speaker), whether C1.1 found it
 | R1.7 | Repeat with the window closed to the tray | It still runs |
 | R1.8 | Turn the automation's switch off, wait for its time | Nothing runs |
 | R1.9 | Quit Patchbay across an automation's time, reopen | It does not run late (by design: no catch-up) |
+| R1.10 | Put the laptop to sleep across an automation's time (it is due, the lid is closed, open it 3 minutes later) | The automation runs once after you wake it, and Activity says it was a few minutes late. Longer than 10 minutes late it is skipped |
 
 ## Phase 2 — Adaptive lighting and away mode
 
@@ -308,6 +314,8 @@ This is the first real-device test of the HomeKit code: tell me exactly which st
 | N2.6 | Notification → Stop, then check Settings | The toggle is off and the notification is gone |
 | N2.7 | Leave it on overnight | Note the battery use in Android settings and tell me; if it is high, the polling interval gets a power-saving mode |
 | N2.8 | Deny the notification permission | Watching still works; no alerts. The app does not nag |
+| N2.9 | Turn watching on, lock the phone, then kill the app (`adb shell am kill dev.patchbay`, or wait for Android to do it). Unlock and open Patchbay | Devices are still listed and the data is intact. If it says encrypted storage is unavailable or shows an empty home, tell me (review finding F-H6) |
+| N2.10 | Make an automation due 20 minutes ahead. Lock the phone and leave it unplugged and idle. Repeat with it on a charger. Look at Activity afterwards | It ran on time, or ran late with a line that says how late. "Not run" or nothing at all means the phone slept through it (review finding F-H3); tell me which case |
 
 ## Phase 2 — Scenes with the thermostat and TV volume
 
@@ -383,43 +391,49 @@ This is the first real-camera test of the RTSP video code (H.264 and H.265): tel
 | M2.1 | With Patchbay open, change a paired TV's or thermostat's address in the router (or restart the router) and do **not** press Scan | Within a few minutes the tile goes offline and then comes back by itself, as the same tile |
 | M2.2 | Switch a device off for 10 minutes, then on again | It comes back within a minute or two of being on; no flood of network scans (the Network screen's counters should not climb quickly) |
 
-## Phase 2 — Diagnostics report (D1.x)
+## Phase 2 — Diagnostics report (DG1.x)
 
 | # | Step | Expected |
 |---|---|---|
-| D1.1 | Settings → Diagnostics → **Read it first** | A scrollable text. Systems (with how many devices each has), devices numbered `#1`, `#2`… with kind, masked id (`tuya-…ef12`) and masked address (`192.168.*.23`), a Network summary, Recent activity, and the log tail |
-| D1.2 | Read it for anything private | No passwords, codes, setup codes, access codes or keys; none of the names you gave devices, rooms, scenes or automations (they read `(name)`); no full IP addresses or serial numbers |
-| D1.3 | Press **Copy diagnostics**, paste it somewhere | The same text. The button says "Copied" |
-| D1.4 | Pair or use one of each device you have, then copy again | Each device's block gains its own facts. For example: ecobee shows the pairing method that worked, the accessory and service layout and the thermostat's characteristic ranges; Tuya shows data point numbers with types; Bambu shows field names; webOS shows which requests the TV answered or refused; Google TV and Cast show message kinds; RTSP shows the login method and last status |
-| D1.5 | Switch the router's Wi-Fi off for a minute, then copy | The devices show offline for N minutes, and the systems list the problems they hit (timeouts, refused connections), newest last |
+| DG1.1 | Settings → Diagnostics → **Read it first** | A scrollable text. Systems (with how many devices each has), devices numbered `#1`, `#2`… with kind, masked id (`tuya-…ef12`) and masked address (`192.168.*.23`), a Network summary, Recent activity, and the log tail |
+| DG1.2 | Read it for anything private | No passwords, codes, setup codes, access codes or keys; none of the names you gave devices, rooms, scenes or automations (they read `(name)`); no full IP addresses or serial numbers |
+| DG1.3 | Press **Copy diagnostics**, paste it somewhere | The same text. The button says "Copied" |
+| DG1.4 | Pair or use one of each device you have, then copy again | Each device's block gains its own facts. For example: ecobee shows the pairing method that worked, the accessory and service layout and the thermostat's characteristic ranges; Tuya shows data point numbers with types; Bambu shows field names; webOS shows which requests the TV answered or refused; Google TV and Cast show message kinds; RTSP shows the login method and last status |
+| DG1.5 | Switch the router's Wi-Fi off for a minute, then copy | The devices show offline for N minutes, and the systems list the problems they hit (timeouts, refused connections), newest last |
 
-## Phase 2 — Backup and restore (B1.x)
+## Phase 2 — Backup and restore (BK1.x)
 
 | # | Step | Expected |
 |---|---|---|
-| B1.1 | Pair at least one device that needs pairing. Settings → Backup: type a passphrase of 8 or more characters, press **Copy encrypted backup** | The button is disabled below 8 characters. "Copied" appears. Paste into a text editor: one line starting `PATCHBAY-BACKUP-1:` and nothing readable after it |
-| B1.2 | Close Patchbay and start it again | The paired device comes back by itself, paired (this also checks the start-up fix: a saved paired device used to stop the app from starting) |
-| B1.3 | Settings → Backup: type a wrong passphrase, put the backup on the clipboard, **Restore**, **Confirm restore** | "That passphrase doesn't open this backup, or the backup is damaged". Nothing changes |
-| B1.4 | Same with the right passphrase | "Restored N devices and M pairings. Quit Patchbay completely and start it again (changes are not saved until then)". After restarting, devices, rooms, scenes and automations are back, and paired devices do not ask for their code |
-| B1.5 | Restore on another computer or phone (a fresh install) | Same result; devices show offline for a minute at most, then come back as the app finds them at their new addresses |
+| BK1.1 | Pair at least one device that needs pairing. Settings → Backup: type a passphrase of 8 or more characters, press **Copy encrypted backup** | The button is disabled below 8 characters. "Copied" appears. Paste into a text editor: one line starting `PATCHBAY-BACKUP-1:` and nothing readable after it |
+| BK1.2 | Close Patchbay and start it again | The paired device comes back by itself, paired (this also checks the start-up fix: a saved paired device used to stop the app from starting) |
+| BK1.3 | Settings → Backup: type a wrong passphrase, put the backup on the clipboard, **Restore**, **Confirm restore** | "That passphrase doesn't open this backup, or the backup is damaged". Nothing changes |
+| BK1.4 | Same with the right passphrase | "Restored N devices and M pairings. Quit Patchbay completely and start it again (changes are not saved until then)". After restarting, devices, rooms, scenes and automations are back, and paired devices do not ask for their code |
+| BK1.5 | Restore on another computer or phone (a fresh install) | Same result; devices show offline for a minute at most, then come back as the app finds them at their new addresses |
+| BK1.6 | With tray mode on, restore a backup, close the window to the tray (do not quit), change a scene or favourite, then quit completely and start again | The restored data is intact (the changes made before quitting were not saved, as the message says) |
 
-## Phase 2 — Device-triggered automations (A1.x)
+## Phase 2 — Device-triggered automations (AU1.x)
 
 Needs a Windows or Android build that has Automations → New → When: **Device**, one scene, and a light or plug you can switch by hand (its own app or button, not Patchbay).
 
 | # | Step | Expected |
 |---|---|---|
-| A1.1 | Make a scene that switches a second light off. Automations → New → When: Device → pick the first light → "Turns on" → pick the scene → Save | The row reads "When <light> turns on · <scene>" |
-| A1.2 | Start with the first light already on. Close and reopen Patchbay | Nothing runs when Patchbay starts (an already-on light is a baseline, not an event) |
-| A1.3 | Switch the first light off, then on, with its own app or button | A few seconds after "on" the scene runs. Activity shows "Automation: …  Running scene … because <light> turns on". Switching it off did nothing |
-| A1.4 | Switch the first light off and on again within 30 seconds of A1.3 | Nothing runs. Activity says "Not run: … right after an automation ran, and automations don't start each other" |
-| A1.5 | Wait a minute, switch it off and on again | The scene runs again |
-| A1.6 | Printer (Bambu): make a scene that turns a light on. Automation "print finishes" → that scene. Run a short print | When it finishes the light comes on once, not when Patchbay starts with a finished print showing |
-| A1.7 | TV or Google TV: "starts playing" → a scene. Start a video, pause it, resume it | It runs on the first start; a stalled or buffering video does not run it again |
-| A1.8 | Forget the first light (open it → Forget), then look at Automations | The row says "a removed device" in the attention colour and never runs |
-| A1.9 | Turn the automation's switch off and repeat A1.3 | Nothing runs |
-| A1.10 | Automations → New → When: Device → pick a light and "Turns on" → Only: **After dark** → Save (set your home location in Settings first) | The row reads "When <light> turns on · only after dark · <scene>" |
-| A1.11 | In daylight, switch that light off and on with its own app or button | Nothing runs. Activity shows "Not run: … but it only runs after dark" |
-| A1.12 | After dark (or make a window with **Between** that includes the current time, for example 00:00 until 23:59), repeat | The scene runs |
-| A1.13 | Make an automation with **Only at home**, turn Away mode on (Automations → Away), trigger it; then turn Away mode off and trigger it again | Away: "Not run: … only runs when you are at home". Home: it runs |
+| AU1.1 | Make a scene that switches a second light off. Automations → New → When: Device → pick the first light → "Turns on" → pick the scene → Save | The row reads "When <light> turns on · <scene>" |
+| AU1.2 | Start with the first light already on. Close and reopen Patchbay | Nothing runs when Patchbay starts (an already-on light is a baseline, not an event) |
+| AU1.3 | Switch the first light off, then on, with its own app or button | A few seconds after "on" the scene runs. Activity shows "Automation: …  Running scene … because <light> turns on". Switching it off did nothing |
+| AU1.4 | Switch the first light off and on again within 30 seconds of AU1.3 | Nothing runs. Activity says "Not run: … right after an automation ran, and automations don't start each other" |
+| AU1.5 | Wait a minute, switch it off and on again | The scene runs again |
+| AU1.6 | Printer (Bambu): make a scene that turns a light on. Automation "print finishes" → that scene. Run a short print | When it finishes the light comes on once, not when Patchbay starts with a finished print showing |
+| AU1.7 | TV or Google TV: "starts playing" → a scene. Start a video, pause it, resume it | It runs on the first start; a stalled or buffering video does not run it again |
+| AU1.8 | Forget the first light (open it → Forget), then look at Automations | The row says "a removed device" in the attention colour and never runs |
+| AU1.9 | Turn the automation's switch off and repeat AU1.3 | Nothing runs |
+| AU1.10 | Automations → New → When: Device → pick a light and "Turns on" → Only: **After dark** → Save (set your home location in Settings first) | The row reads "When <light> turns on · only after dark · <scene>" |
+| AU1.11 | In daylight, switch that light off and on with its own app or button | Nothing runs. Activity shows "Not run: … but it only runs after dark" |
+| AU1.12 | After dark (or make a window with **Between** that includes the current time, for example 00:00 until 23:59), repeat | The scene runs |
+| AU1.13 | Make an automation with **Only at home**, turn Away mode on (Automations → Away), trigger it; then turn Away mode off and trigger it again | Away: "Not run: … only runs when you are at home". Home: it runs |
 
+## Algorithm self-check (X1)
+
+| ID | Do this | Expect |
+|---|---|---|
+| X1 | On the phone, Settings → Diagnostics → Copy diagnostics, and read the "Crypto" lines | Each algorithm Patchbay uses (ChaCha20-Poly1305, AES-GCM, AES-ECB, PBKDF2, HMAC, SHA, RSA signatures, PKCS12) says "ok". Any that says MISSING explains a feature that cannot work on that phone |

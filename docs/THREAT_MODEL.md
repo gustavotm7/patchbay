@@ -47,7 +47,7 @@ Two clients (an Android phone and a Windows laptop) and, from Phase 3, an option
 
 | Threat | Mitigation | Brief | Status |
 |---|---|---|---|
-| A1 parser exploits | Strict, bounded parsers; size caps on every frame; every parser is mutation-tested with random and damaged inputs (tens of thousands each; Jazzer is a possible later addition); no reflection-based deserialisation of device data | §3 Untrusted input | Phase 1 |
+| A1 parser exploits | Strict, bounded parsers; size caps on every frame; every parser is run against random and damaged inputs (tens of thousands each, checking only that it never throws, which is not mutation testing; the socket read loops are not covered yet; Jazzer is a possible later addition); no reflection-based deserialisation of device data | §3 Untrusted input | Phase 1 |
 | A1 device impersonation | TOFU SPKI pinning; loud `TrustChanged` alarm, never silent re-pin (ADR 0005). HAP/ESPHome authenticate cryptographically | §2.5 | Phase 1–2 |
 | A1 credential phishing (fake device asks for a code) | Credentials are bound to a device identity at pairing and only sent over the pinned channel | §2.5 | Phase 1 |
 | A1 discovery spoofing to redirect us to the internet | `NetGuard` checks the **resolved** address after DNS/mDNS, before connect. IPv4-mapped IPv6, NAT64 and 6to4 are refused; tested (`AddressPolicyTest`) | §2.1 | **Policy done (Phase 0)**, sockets Phase 1 |

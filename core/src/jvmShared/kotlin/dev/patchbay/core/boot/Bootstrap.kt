@@ -108,6 +108,7 @@ public object Bootstrap {
         val ctx = AdapterContext(netGuard, scope, log) { msg -> problems += msg; log.warn("boot", msg) }
         val built = adapters.map { it.create(ctx) }
         val home = LanHome(netGuard, built, scope, log, store, NetworkCensus(netGuard))
+        home.addDiagnosticsSource("Crypto") { dev.patchbay.core.crypto.CryptoSelfCheck.lines() }
         problems.forEach(home::reportStartupProblem)
         storageProblem?.let(home::reportStartupProblem)
         log.info("boot", "ready: ${built.size} adapter(s)")
