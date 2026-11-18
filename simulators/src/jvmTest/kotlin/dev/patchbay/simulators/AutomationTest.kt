@@ -95,6 +95,47 @@ class AutomationTest {
     }
 
     @Test
+    fun aTimeThatFellInASleepGapRunsLateOnceButNotWhenTooOldOrAlreadyPast(): Unit = runBlocking {
+        val db = File(Files.createTempDirectory("pbauto").toFile(), "a.db")
+        val lamp = GoveeSimulator("127.0.0.10", "1F:80:C5:32:32:36:72:4E", "H6076", replyPort = 0)
+        lamp.on = true; lamp.brightness = 62
+        val s = open(db, lamp)
+        s.home.scan()
+        repeat(60) { if (s.home.devices.value.single().snapshot?.states?.isNotEmpty() == true) return@repeat else delay(50) }
+        assertTrue(s.home.saveScene("Evening", listOf(lampId)) is PatchbayResult.Ok) // the scene remembers the lamp as on
+        val scene = s.home.scenes.value.single()
+        lamp.on = false
+        fun lines(title: String) = s.home.activity.value.filter { it.deviceName == "Automation: $title" }.map { it.event }
+
+        assertTrue(s.home.saveAutomation("Early", scene.id, 6, 45, setOf(1, 2, 3, 4, 5)) is PatchbayResult.Ok)
+        assertTrue(s.home.saveAutomation("Missed", scene.id, 6, 50, setOf(1, 2, 3, 4, 5)) is PatchbayResult.Ok)
+
+        // The computer looks at 06:40, sleeps, and wakes at 06:48 and again at 07:10.
+        s.home.tickAutomations(at(2, 6, 40))
+        s.home.tickAutomations(at(2, 6, 48)) // 06:45 fell in the gap, 3 minutes ago: it runs, late
+        delay(400)
+        assertTrue(lamp.on)
+        assertEquals(1, lines("Early").size)
+        assertTrue(lines("Early").single().contains("3 minutes late"), lines("Early").toString())
+        assertEquals(0, lines("Missed").size)
+
+        lamp.on = false
+        s.home.tickAutomations(at(2, 6, 48) + 15_000) // the next tick does not run it again
+        s.home.tickAutomations(at(2, 7, 10)) // 06:50 is 20 minutes old: too late, skipped
+        delay(300)
+        assertEquals(false, lamp.on)
+        assertEquals(1, lines("Early").size)
+        assertEquals(0, lines("Missed").size)
+
+        // An automation created after its time today does not run for that time.
+        assertTrue(s.home.saveAutomation("Created late", scene.id, 7, 0, setOf(1, 2, 3, 4, 5)) is PatchbayResult.Ok)
+        s.home.tickAutomations(at(2, 7, 12))
+        delay(300)
+        assertEquals(0, lines("Created late").size)
+        s.close(); lamp.close()
+    }
+
+    @Test
     fun surviveARestartAndSkipWhenTheirSceneIsDeleted(): Unit = runBlocking {
         val db = File(Files.createTempDirectory("pbauto2").toFile(), "a.db")
         val lamp = GoveeSimulator("127.0.0.10", "1F:80:C5:32:32:36:72:4E", "H6076", replyPort = 0)

@@ -77,10 +77,12 @@ class TuyaProtocolTest {
         val ok = TuyaProtocol.parseDps("""{"devId":"x","dps":{"20":true,"22":500,"21":"white"}}""".encodeToByteArray())
         assertIs<PatchbayResult.Ok<Map<String, JsonPrimitive>>>(ok)
         assertEquals(3, ok.value.size)
-        listOf(
-            "{}", "[]", "nope", """{"dps":[]}""", """{"dps":{"abcd":1}}""", """{"dps":{"":1}}""", """{"dps":{"20":{"a":1}}}""",
-            """{"dps":{"20":"${"a".repeat(300)}"}}""", "",
-        ).forEach { assertIs<PatchbayResult.Err>(TuyaProtocol.parseDps(it.encodeToByteArray()), it) }
+        // The whole message is refused when its shape is wrong ...
+        listOf("{}", "[]", "nope", """{"dps":[]}""", "").forEach { assertIs<PatchbayResult.Err>(TuyaProtocol.parseDps(it.encodeToByteArray()), it) }
+        // ... but a data point we cannot use is skipped on its own (see oneOddDataPointDoesNotCostTheWholeReport).
+        listOf("""{"dps":{"abcd":1}}""", """{"dps":{"":1}}""", """{"dps":{"20":{"a":1}}}""", """{"dps":{"20":"${"a".repeat(2_000)}"}}""").forEach {
+            assertEquals(emptyMap(), (TuyaProtocol.parseDps(it.encodeToByteArray()) as PatchbayResult.Ok).value, it)
+        }
     }
 
     @Test
@@ -139,5 +141,18 @@ class TuyaProtocolTest {
             TuyaProtocol.parseDps(cut)
             TuyaProtocol.parseDps(TuyaProtocol.stripVersionHeader(cut))
         }
+    }
+
+    @Test
+    fun oneOddDataPointDoesNotCostTheWholeReport() {
+        val long = "A".repeat(TuyaProtocol.MAX_DP_STRING + 1)
+        val ok = "B".repeat(TuyaProtocol.MAX_DP_STRING)
+        val json = """{"dps":{"1":true,"2":"$long","3":"$ok","4":{"nested":1},"12345":1,"x":2,"5":42}}"""
+        val dps = (TuyaProtocol.parseDps(json.encodeToByteArray()) as dev.patchbay.core.result.PatchbayResult.Ok).value
+        assertEquals(setOf("1", "3", "5"), dps.keys)
+        // Still bounded: too many data points and oversize payloads are refused outright.
+        val many = (1..65).joinToString(",") { "\"$it\":1" }
+        assertTrue(TuyaProtocol.parseDps("""{"dps":{$many}}""".encodeToByteArray()) is dev.patchbay.core.result.PatchbayResult.Err)
+        assertTrue(TuyaProtocol.parseDps(ByteArray(TuyaProtocol.MAX_PAYLOAD + 1) { 'a'.code.toByte() }) is dev.patchbay.core.result.PatchbayResult.Err)
     }
 }

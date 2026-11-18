@@ -22,7 +22,10 @@ public object TuyaProtocol {
 
     public const val PORT: Int = 6668
     public const val HEADER_BYTES: Int = 16
-    public const val MAX_PAYLOAD: Int = 4_096
+    public const val MAX_PAYLOAD: Int = 16_384
+
+    /** A string data point longer than this (a raw cleaning map, say) is skipped on its own; the rest of the report is kept. */
+    public const val MAX_DP_STRING: Int = 1_024
     private const val PREFIX = 0x000055AA
     private const val SUFFIX = 0x0000AA55
 
@@ -115,7 +118,7 @@ public object TuyaProtocol {
             payload[2] in '3'.code.toByte()..'5'.code.toByte() && (3 until VERSION_HEADER.size).all { payload[it] == 0.toByte() }
         ) payload.copyOfRange(VERSION_HEADER.size, payload.size) else payload
 
-    /** Parses decrypted JSON into data points. Keys are 1–3 digits; values are booleans, integers or short strings. */
+    /** Parses decrypted JSON into data points. Keys are 1–3 digits; values are booleans, integers or strings up to [MAX_DP_STRING]; anything else is skipped. */
     public fun parseDps(plain: ByteArray): PatchbayResult<Map<String, JsonPrimitive>> {
         if (plain.isEmpty() || plain.size > MAX_PAYLOAD) return violation("bad json size")
         val root = try {
@@ -128,9 +131,11 @@ public object TuyaProtocol {
         if (dps.size > 64) return violation("too many dps")
         val out = LinkedHashMap<String, JsonPrimitive>()
         for ((k, v) in dps) {
-            if (k.length !in 1..3 || !k.all { it in '0'..'9' }) return violation("bad dp id")
-            val p = v as? JsonPrimitive ?: return violation("dp value type")
-            if (p.isString && p.content.length > 256) return violation("dp value too long")
+            // One odd data point must not cost the whole report: robot vacuums send long raw (base64) values and sometimes nested ones. Skip what we cannot
+            // use (bounded: at most 64 entries and the payload cap above) and keep the rest.
+            if (k.length !in 1..3 || !k.all { it in '0'..'9' }) continue
+            val p = v as? JsonPrimitive ?: continue
+            if (p.isString && p.content.length > MAX_DP_STRING) continue
             out[k] = p
         }
         return PatchbayResult.Ok(out)

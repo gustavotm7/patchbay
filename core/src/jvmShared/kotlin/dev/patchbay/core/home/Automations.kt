@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Scenes that start by themselves: at a time of day or sunrise/sunset on chosen days ([tick], called every 15 seconds), or when a device does
+ * Scenes that start by themselves: at a time of day or sunrise/sunset on chosen days ([tick], called every 15 seconds, with catch-up after sleep), or when a device does
  * something ([onDeviceEvent]). They run only while Patchbay runs.
  *
  * One limit keeps a device-triggered automation from running away: while an automation's scene is running, and for [CHAIN_WINDOW_MS] afterwards,
@@ -31,11 +31,15 @@ internal class Automations(
     private val _automations = MutableStateFlow<List<Automation>>(emptyList())
     val automations: StateFlow<List<Automation>> = _automations.asStateFlow()
     @Volatile private var stored: List<StoredAutomation> = emptyList()
-    private val lastRun = ConcurrentHashMap<String, Long>()
+    /** For each enabled automation, the time of the last tick that looked at it (see [tick]). */
+    private val checkedUntil = ConcurrentHashMap<String, Long>()
     @Volatile private var chainBlockedUntil = Long.MIN_VALUE
 
     companion object {
         const val CHAIN_WINDOW_MS = 30_000L
+
+        /** How late a scheduled time may still run (after sleep or Doze); older than this it is skipped. */
+        const val GRACE_MS = 10 * 60_000L
     }
 
     fun load() {
@@ -175,33 +179,51 @@ internal class Automations(
         }
     }
 
-    /** Runs every enabled automation whose time is this minute on a matching day, once per minute. */
+    /**
+     * Runs every enabled automation whose time came up since it was last looked at, once. Called every 15 seconds, but a sleeping laptop or a phone in Doze
+     * can leave a gap of many minutes: a time that fell inside the gap still runs, late, as long as it is at most [GRACE_MS] old (Activity says how late). A time
+     * that passed before the automation was created, enabled or Patchbay started is never run, and nothing runs twice, because each moment falls in exactly one gap.
+     * A local time that does not exist (the clocks went forward) runs at the first moment after it.
+     */
     fun tick(nowMillis: Long) {
-        val t = java.time.Instant.ofEpochMilli(nowMillis).atZone(ctx.zone)
-        val minuteKey = t.toLocalDate().toEpochDay() * 1_440 + t.hour * 60 + t.minute
+        val today = java.time.Instant.ofEpochMilli(nowMillis).atZone(ctx.zone).toLocalDate()
+        val seen = HashSet<String>()
         for (a in stored) {
-            if (!a.enabled || t.dayOfWeek.value !in a.days) continue
-            val sunName = a.sun
-            if (sunName == null) {
-                if (t.hour != a.hour || t.minute != a.minute) continue
-            } else {
-                val loc = location.value ?: continue
-                val (rise, set) = SunTimes.compute(loc.latitude, loc.longitude, t.dayOfYear) ?: continue
-                val minutes = if (sunName == "sunrise") rise else set
-                val instant = t.toLocalDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant().plusSeconds((minutes * 60).toLong() + a.offset * 60L)
-                val local = instant.atZone(ctx.zone)
-                if (local.toLocalDate() != t.toLocalDate() || local.hour != t.hour || local.minute != t.minute) continue
+            if (!a.enabled) continue
+            seen += a.id
+            // First look at an automation: only the last minute counts, which is what "at exactly this minute" meant before catch-up existed.
+            val from = checkedUntil[a.id] ?: (nowMillis - 60_000L)
+            checkedUntil[a.id] = nowMillis
+            // The grace window is far shorter than a day, so today and yesterday are the only dates that can hold a due moment.
+            for (day in listOf(today.minusDays(1), today)) {
+                if (day.dayOfWeek.value !in a.days) continue
+                val due = scheduledAt(a, day) ?: continue
+                if (due <= from || due > nowMillis || nowMillis - due >= GRACE_MS) continue
+                val scene = scenes.find(a.sceneId)
+                if (scene == null) {
+                    activity.record("Automation: ${a.name}", "Skipped: its scene was deleted")
+                    continue
+                }
+                val late = (nowMillis - due) / 60_000L
+                val lateNote = if (late >= 2) " ($late minutes late: Patchbay was asleep or busy at the time)" else ""
+                (check(a, nowMillis) as? Conditions.Verdict.Fails)?.let { activity.record("Automation: ${a.name}", "Not run: it ${it.why}$lateNote"); continue }
+                activity.record("Automation: ${a.name}", "Running scene ${scene.name}$lateNote")
+                launchScene(scene.id)
             }
-            if (lastRun[a.id] == minuteKey) continue
-            lastRun[a.id] = minuteKey
-            val scene = scenes.find(a.sceneId)
-            if (scene == null) {
-                activity.record("Automation: ${a.name}", "Skipped: its scene was deleted")
-                continue
-            }
-            (check(a, nowMillis) as? Conditions.Verdict.Fails)?.let { activity.record("Automation: ${a.name}", "Not run: it ${it.why}"); continue }
-            activity.record("Automation: ${a.name}", "Running scene ${scene.name}")
-            launchScene(scene.id)
         }
+        checkedUntil.keys.retainAll(seen) // a disabled or deleted automation starts afresh when it comes back
+    }
+
+    /** When [a] is due on [day] (epoch millis), or null for a sunrise or sunset that cannot be worked out (no location, no sunrise at this latitude). */
+    private fun scheduledAt(a: StoredAutomation, day: java.time.LocalDate): Long? {
+        val sunName = a.sun ?: return day.atTime(a.hour, a.minute).atZone(ctx.zone).toInstant().toEpochMilli()
+        val loc = location.value ?: return null
+        val (rise, set) = SunTimes.compute(loc.latitude, loc.longitude, day.dayOfYear) ?: return null
+        val minutes = if (sunName == "sunrise") rise else set
+        val instant = day.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().plusSeconds((minutes * 60).toLong() + a.offset * 60L)
+        // Sun times are minutes after 00:00 UTC; a result that lands on another local date belongs to that date's own entry.
+        // Whole minutes, as the time-of-day automations are: a sunset at 16:44:37 is due at 16:44.
+        val due = instant.truncatedTo(java.time.temporal.ChronoUnit.MINUTES)
+        return if (due.atZone(ctx.zone).toLocalDate() == day) due.toEpochMilli() else null
     }
 }
