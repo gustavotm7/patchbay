@@ -84,6 +84,16 @@ class RtspContractTest {
     }
 
     @Test
+    fun aCameraThatUsedDigestIsNeverSentABasicLoginLater(): Unit = runBlocking {
+        assertTrue(adapter.pair(found(), Prompt("patch", "s3cret!pw")) is PatchbayResult.Ok) // Digest
+        cam.requests.clear()
+        cam.mode = RtspSimulator.Mode.BASIC // someone answers for the camera and asks for a plain-text login
+        val r = adapter.pair(found(), Prompt("patch", "s3cret!pw"))
+        assertIs<PatchbayError.Unauthorized>(r.errorOrNull())
+        assertFalse(cam.requests.any { it.contains("Authorization: Basic") }, "the password must not be sent as Basic after Digest was seen")
+    }
+
+    @Test
     fun credentialsAreSentOnlyAfterAChallenge(): Unit = runBlocking {
         adapter.pair(found(), Prompt("patch", "s3cret!pw"))
         assertEquals(2, cam.requests.size)

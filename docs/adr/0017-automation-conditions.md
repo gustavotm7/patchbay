@@ -17,7 +17,7 @@ Movie night, but only after dark", "when the printer finishes, light up the work
 - **Home or away is the Away mode switch.** Patchbay has no location permission and no presence detection (invariant 8), so "at home" means Away mode is off and "away" means it is on.
 - It is checked at the moment of running, for both kinds of automation (the clock's tick and a device event). When it does not hold nothing runs and Activity says why: "Not run: it only
   runs after dark", "Not run: Floor lamp turns on, but it only runs when you are at home".
-- It is saved with the automation in the same encrypted setting (so backups carry it); files from before this read as no condition, and a damaged window is dropped while an away flag is kept.
+- It is saved with the automation in the same encrypted setting (so backups carry it); files from before this read as no condition, and an automation whose stored window cannot be read back is switched off (it must never turn into "always"; review finding L4, ADR 0018), while an away flag alone is kept.
 - The form offers *Any time, After dark, Daytime, Between* (two text boxes taking `18:00`, `sunset`, `sunset+30`) and *Home or away, Only at home, Only away*.
 
 ## Not included

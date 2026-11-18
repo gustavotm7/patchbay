@@ -2,14 +2,20 @@
 
 > Continuing in a new session? Start with `docs/HANDOFF.md`: it has a copy-paste prompt and the next steps.
 
-Last updated: 2026-11-17. Work branch: **`ci/verification-bootstrap`** (ahead of `main`).
+Last updated: 2026-11-18. Work branch: **`ci/verification-bootstrap`** (ahead of `main`).
 `main` holds the Phase 0 baseline. No pull request is open (the author's GitHub token can't create one): open one from the compare page when you want a reviewed baseline.
+
+## Independent review (2026-11-18)
+
+An independent review of the whole project is in `docs/reviews/2026-11-18-opus-review.md` (ratings, ranked findings, the ten things most likely to break on real hardware). Decisions and
+what was fixed since: `docs/adr/0018-review-follow-ups.md`. Still open from it: Cast certificate pinning (hardware check C1.9 decides), a compiled-code network check, signed dependency
+verification, a CI interop job. Its advice is to freeze features until the hardware pass is done.
 
 ## Works today
 
 | Area | State | Verified how |
 |---|---|---|
-| CI | **All 6 jobs green:** policy, JVM tests, screenshots (including the UI behaviour tests), Android APK (R8 + lint + permission allowlist), Windows MSI and portable zip, SBOM | GitHub Actions on `ci/verification-bootstrap` |
+| CI | **All 7 jobs green:** policy, JVM tests, screenshots (including the UI behaviour tests), Android APK (R8 + lint + permission allowlist), Windows MSI and portable zip, SBOM | GitHub Actions on `ci/verification-bootstrap` |
 | Dependency verification | Strict; covers Android/Compose/AGP 9.4.1 (bootstrapped by CI, reviewed) | Every build |
 | Demo home UI | Floor plan, thermostat, printer, design system, in dark/light/night, phone and desktop | Screenshot renders (`docs/design/screens/`) |
 | **NetGuard** | LAN-only TCP/UDP/multicast; no DNS, no proxies; non-LAN inbound dropped | 18 unit tests (policy + sockets) |

@@ -3,13 +3,14 @@
 Written 2026-11-05 at the end of the first long session; the "Current state" section below was refreshed on 2026-11-17 and the dated sections after it are history. Read this first,
 then `docs/STATUS.md`.
 
-## Current state (2026-11-17)
+## Current state (2026-11-18)
 
 - Branch `ci/verification-bootstrap` holds everything (`main` is the Phase 0 baseline; no PR is open because the sandbox's GitHub token cannot create one). CI has 7 jobs (policy, JVM tests,
   screenshots with the UI behaviour tests, Android APK, Windows MSI and portable zip, SBOM, and a desktop smoke test). The latest green run and the Windows portable link are in `docs/STATUS.md` ("Get the builds").
 - **Nothing has run on a real device.** Everything is tested against simulators written here; most protocols are also checked against independent reference code (HomeKit against
   HAP-python, Tuya against tinytuya at 3.3 to 3.5, Kasa, Cast, Google TV, Bambu MQTT, Govee, webOS, and the camera video client against ffmpeg's RTP packetizer and decoder:
   `docs/protocols/interop.md`, `tools/interop/`). Those checks found real bugs (H.265 refused, a four-second video start-up, simulator mistakes), which is why they are worth repeating when a protocol changes.
+- **Review done (2026-11-18):** `docs/reviews/2026-11-18-opus-review.md`; most of its High and Medium findings are fixed (ADR 0018 lists what, and what is open). Features are frozen until the hardware pass.
 - **Next: the owner's first hardware pass** (`docs/HARDWARE_TEST.md`, one section per device; after each device press Settings → Diagnostics → Copy diagnostics and send it with the failing step).
   Reproduce a failure in the simulator first, then fix it. Open owner decisions: `docs/PLAN.md` W5 (Home Assistant or continue; keep the hand-written crypto or adopt a library).
 - Backlog, only after hardware results: HomeKit event subscriptions, Android widgets and tiles, ESPHome, a read-only to commands step for

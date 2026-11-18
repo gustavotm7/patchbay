@@ -31,14 +31,22 @@ class WatchService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val app = application as PatchbayApplication
         if (intent?.action == ACTION_STOP) {
-            (application as PatchbayApplication).services.store.putSetting(SETTING, "false")
+            // Nothing is touched while the phone is locked: the database cannot be opened then, and a setting written to a stand-in would be lost.
+            if (!app.deviceLocked()) app.services.store.putSetting(SETTING, "false")
             stopSelf()
             return START_NOT_STICKY
         }
         createChannels()
         val n = ongoing()
         if (Build.VERSION.SDK_INT >= 34) startForeground(ONGOING_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(ONGOING_ID, n)
+        if (app.deviceLocked()) {
+            // Android restarted this service while the phone is locked: Patchbay's storage cannot be opened yet, so there is nothing to watch with. Stop instead of
+            // running on an empty home; opening the app after unlock starts watching again (MainActivity). The foreground call above is required first on Android 12+.
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (!watching) {
             watching = true
             val live = (application as PatchbayApplication).services.home

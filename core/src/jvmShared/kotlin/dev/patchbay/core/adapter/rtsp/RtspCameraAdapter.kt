@@ -79,6 +79,9 @@ public class RtspCameraAdapter(
     private val problems = RecentProblems()
     private val probes = ConcurrentHashMap<LanAddress, String>()
 
+    /** Cameras that have offered Digest login during this run; they are not sent a Basic (plain-text) login afterwards. */
+    private val digestSeen = ConcurrentHashMap.newKeySet<LanAddress>()
+
     private fun rejected(why: String) {
         rejectedMessages++
         problems.add(why)
@@ -207,6 +210,14 @@ public class RtspCameraAdapter(
                 if (creds == null) { probes[addr] = "RTSP 401, login method $scheme, no login stored"; return PatchbayResult.Err(PatchbayError.Unauthorized("the camera needs a username and password")) }
                 val challenge = RtspProtocol.parseChallenge(first.header("www-authenticate"))
                     ?: run { probes[addr] = "RTSP 401, login method $scheme is not supported"; problems.add("login method not supported: $scheme"); return PatchbayResult.Err(PatchbayError.Unsupported("the camera offered no login method Patchbay supports")) }
+                // Basic sends the password as plain text. A camera that offered Digest and now offers Basic is either reconfigured or someone on the network answering for it:
+                // either way the password is not sent that way.
+                if (challenge is RtspProtocol.Challenge.Digest) digestSeen += addr
+                else if (addr in digestSeen) {
+                    probes[addr] = "RTSP 401, Basic offered after Digest: refused"
+                    problems.add("a camera that used a secure login now asks for a plain-text one; Patchbay did not send the password")
+                    return PatchbayResult.Err(PatchbayError.Unauthorized("the camera now asks for a plain-text login after using a secure one, so Patchbay did not send your password"))
+                }
                 val cnonce = Random.nextBytes(8).joinToString("") { "%02x".format(it) }
                 val auth = RtspAuth.authorization(challenge, creds.user, creds.password, "DESCRIBE", uri, cnonce)
                 val second = when (val r = request(addr, RtspProtocol.describe(uri, 2, auth))) {

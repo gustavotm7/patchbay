@@ -34,3 +34,4 @@ Status: Proposed · Date: YYYY-MM-DD
 | [0015](0015-tuya-34-35-version-detection.md) | Tuya local protocols 3.4 and 3.5; the version is found out at pairing | Accepted |
 | [0016](0016-camera-video-h265-and-decoder-probing.md) | Camera video: H.265 support and a small decoder probe (found by checking against ffmpeg) | Accepted |
 | [0017](0017-automation-conditions.md) | Automation conditions: a daily window (after dark, between times) and home or away | Accepted |
+| [0018](0018-review-follow-ups.md) | Follow-ups from the independent review: what was fixed and what is still open | Accepted |
