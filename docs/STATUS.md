@@ -62,11 +62,11 @@ verification, a CI interop job. Its advice is to freeze features until the hardw
 
 ## Get the builds
 
-Latest build: CI run `44329749650` on `e7ce6c7` (all 7 jobs green, including the new desktop start-up check; the portable, Android and MSI links below are all from it). You need to be signed in to GitHub; artifacts are kept about 30 days. If the links have expired, open the latest green `ci` run on `ci/verification-bootstrap` and download from its Artifacts.
+Latest build: CI run `44408494061` on `b66dda4` (all 7 jobs green, including the new desktop start-up check; the portable, Android and MSI links below are all from it). You need to be signed in to GitHub; artifacts are kept about 30 days. If the links have expired, open the latest green `ci` run on `ci/verification-bootstrap` and download from its Artifacts.
 
-- Windows portable (no install, recommended): https://github.com/gustavotm7/patchbay/actions/runs/44329749650/artifacts/14438208563
-- Android (install `app-android-debug.apk` from inside; ignore the unsigned release one): https://github.com/gustavotm7/patchbay/actions/runs/44329749650/artifacts/14438418210
-- Windows MSI (optional installer): https://github.com/gustavotm7/patchbay/actions/runs/44329749650/artifacts/14439062030
+- Windows portable (no install, recommended): https://github.com/gustavotm7/patchbay/actions/runs/44408494061/artifacts/14474869309
+- Android (install `app-android-debug.apk` from inside; ignore the unsigned release one): https://github.com/gustavotm7/patchbay/actions/runs/44408494061/artifacts/14475563033
+- Windows MSI (optional installer): https://github.com/gustavotm7/patchbay/actions/runs/44408494061/artifacts/14475133581
 
 Then run `docs/HARDWARE_TEST.md`: app lock, Govee, TV, Bambu, Kasa, then ecobee (E2.x) and the vacuum (V1.x). Older notes, ideas and the Phase 0 report are in `docs/archive/`.
 
