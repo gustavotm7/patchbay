@@ -1,5 +1,5 @@
 # Patchbay CI. Every third-party action is pinned to a full commit SHA (tag in the comment).
-# Permissions are read-only. No caches or artifacts are shared across forks. Last forced run: 2026-11-17, Automations golden re-record.
+# Permissions are read-only. No caches or artifacts are shared across forks. Last forced run: 2026-11-18, desktop smoke job added.
 name: ci
 
 on:
@@ -136,6 +136,26 @@ jobs:
           name: patchbay-windows-portable
           path: portable-out/Patchbay-portable.zip
           retention-days: 30
+
+  # The Windows app's entry point is otherwise only ever run by the owner. On Linux it uses the file-based key fallback, so it can be started here under a virtual display.
+  desktop-smoke:
+    name: Desktop app starts (virtual display)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with: { distribution: temurin, java-version: "${{ env.JAVA_VERSION }}" }
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Install a virtual display and image tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb x11-utils imagemagick
+      - name: Start the app and look at it
+        run: xvfb-run -a -s "-screen 0 1280x800x24" tools/desktop-smoke.sh desktop-smoke-out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: desktop-smoke
+          path: desktop-smoke-out/
+          retention-days: 14
 
   # Plugin resolution from Gradle Central can fail transiently (seen once at 5df65a6); re-run the job before debugging.
   sbom:
