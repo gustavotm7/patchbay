@@ -15,7 +15,7 @@ failures=0
 fail() { echo "FAIL: $*"; failures=$((failures + 1)); }
 pass() { echo "PASS: $*"; }
 
-./gradlew --console=plain :app-windows:run > "$OUT/gradle.log" 2>&1 &
+./gradlew --console=plain -Ppatchbay.desktopCurrentOs=true :app-windows:run > "$OUT/gradle.log" 2>&1 &
 GRADLE_PID=$!
 
 log_file() { find "$DATA" -name 'patchbay_windows_*.log' 2>/dev/null | head -1; }
