@@ -96,8 +96,18 @@ public class CameraVideo(private val netGuard: NetGuard, private val ffmpeg: Fil
     @Volatile private var lastCodec: VideoCodec? = null
 
     /** Facts for the diagnostics report: whether a decoder was found, how many streams were tried, which codec the last one used, how many pictures arrived, and why the last ones stopped. Never an address or a login. */
+    /**
+     * Where the program came from. One found through PATH is whatever program of that name comes first there, so it is said out loud: a copy beside Patchbay is the
+     * one the owner chose (review finding F-M8).
+     */
+    private fun ffmpegSource(): String {
+        val f = ffmpeg ?: return ""
+        val onPath = System.getenv("PATH").orEmpty().split(File.pathSeparatorChar).any { it.isNotBlank() && File(it).absoluteFile == f.absoluteFile.parentFile }
+        return if (onPath) " (from PATH, not beside Patchbay)" else " (beside Patchbay)"
+    }
+
     public fun diagnostics(): List<String> =
-        listOf("ffmpeg found: ${ffmpeg != null}; streams started: ${started.get()}; codec of the last stream: ${lastCodec?.label ?: "none yet"}; pictures decoded: ${framesShown.get()}") +
+        listOf("ffmpeg found: ${ffmpeg != null}${ffmpegSource()}; streams started: ${started.get()}; codec of the last stream: ${lastCodec?.label ?: "none yet"}; pictures decoded: ${framesShown.get()}") +
             problems.list().map { "problem: $it" }
 
     /** Runs until cancelled or the stream ends. [onFrame] gets JPEG bytes at the decoder's frame rate. */

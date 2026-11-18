@@ -19,4 +19,14 @@ class CameraVideoDiagnosticsTest {
         assertTrue("ffmpeg found: false" in text && "problem: no ffmpeg found" in text, text)
         assertFalse("s3cret" in text || "192.168" in text)
     }
+
+    @Test
+    fun diagnosticsSayWhetherFfmpegIsBesidePatchbayOrOnPath(): Unit {
+        val dir = java.nio.file.Files.createTempDirectory("pbffmpeg").toFile()
+        val exe = java.io.File(dir, "ffmpeg").apply { writeText("#!/bin/sh\n"); setExecutable(true) }
+        // Found in the folder the app was given, not through PATH.
+        val beside = CameraVideo(NetGuard(), ffmpeg = FfmpegLocator.find(listOf(dir), path = ""))
+        assertTrue("ffmpeg found: true (beside Patchbay)" in beside.diagnostics().joinToString("\n"), beside.diagnostics().toString())
+        assertTrue(exe.isFile)
+    }
 }
