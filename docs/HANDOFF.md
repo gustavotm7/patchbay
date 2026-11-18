@@ -5,8 +5,8 @@ then `docs/STATUS.md`.
 
 ## Current state (2026-11-17)
 
-- Branch `ci/verification-bootstrap` holds everything (`main` is the Phase 0 baseline; no PR is open because the sandbox's GitHub token cannot create one). CI has 6 jobs (policy, JVM tests,
-  screenshots with the UI behaviour tests, Android APK, Windows MSI and portable zip, SBOM). The latest green run and the Windows portable link are in `docs/STATUS.md` ("Get the builds").
+- Branch `ci/verification-bootstrap` holds everything (`main` is the Phase 0 baseline; no PR is open because the sandbox's GitHub token cannot create one). CI has 7 jobs (policy, JVM tests,
+  screenshots with the UI behaviour tests, Android APK, Windows MSI and portable zip, SBOM, and a desktop smoke test). The latest green run and the Windows portable link are in `docs/STATUS.md` ("Get the builds").
 - **Nothing has run on a real device.** Everything is tested against simulators written here; most protocols are also checked against independent reference code (HomeKit against
   HAP-python, Tuya against tinytuya at 3.3 to 3.5, Kasa, Cast, Google TV, Bambu MQTT, Govee, webOS, and the camera video client against ffmpeg's RTP packetizer and decoder:
   `docs/protocols/interop.md`, `tools/interop/`). Those checks found real bugs (H.265 refused, a four-second video start-up, simulator mistakes), which is why they are worth repeating when a protocol changes.
@@ -14,6 +14,9 @@ then `docs/STATUS.md`.
   Reproduce a failure in the simulator first, then fix it. Open owner decisions: `docs/PLAN.md` W5 (Home Assistant or continue; keep the hand-written crypto or adopt a library).
 - Backlog, only after hardware results: HomeKit event subscriptions, Android widgets and tiles, ESPHome, a read-only to commands step for
   the Lefant vacuum (needs its model and data points), peer sync or the hub, Windows Hello. Device-triggered automations, automation conditions (ADR 0017) and Tuya 3.4 and 3.5 are done.
+- Desktop smoke test (`tools/desktop-smoke.sh`, CI job "Desktop app starts"): starts the real `:app-windows:run` under Xvfb with `-Ppatchbay.desktopCurrentOs=true` (the Windows runtime would not load on Linux),
+  waits for the bootstrap `ready` line, checks that a Patchbay window exists and the screen is not blank, that there are no ERROR/WARN lines in the session log, and that SIGTERM shuts it down and logs `shutdown`.
+  It renders in software (no GL on the runner; the `Cannot create Linux GL context` line is Skiko falling back). It proves start-up and a first paint, not touch or real devices.
 - Local builds: `gradle -Ppatchbay.jvmOnly=true --offline :core:jvmTest :simulators:jvmTest :hub:build` (about 1.5 minutes). UI, Android and Windows compile only in CI (no Google Maven here).
   A docs-only push does not start the `ci` workflow; touch a comment in `.github/workflows/ci.yml` to force one (for example after re-recording a screenshot golden).
 
