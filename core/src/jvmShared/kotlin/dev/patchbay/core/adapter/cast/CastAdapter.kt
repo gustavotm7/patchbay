@@ -71,6 +71,7 @@ public class CastAdapter(
 
     override val id: AdapterId = ID
     override fun trustChanged(device: DeviceId): Boolean = device in trustBroken
+    override suspend fun unpair(device: DeviceId) { trustBroken -= device }
     override val requiresPairing: Boolean = true
     override val systemName: String = "Cast and Google TV"
     override val discoveryNote: String =
@@ -151,6 +152,7 @@ public class CastAdapter(
     override fun capabilities(device: DeviceId): List<Capability> = CAPABILITIES
 
     override fun restore(device: DeviceId, address: String, pairing: Pairing?): PatchbayResult<Unit> {
+        if (pairing?.pinnedFingerprint != known[device]?.pin) trustBroken -= device // a fresh pairing with a different key is a fresh decision to trust
         val a = when (val r = netGuard.address(address)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
@@ -301,6 +303,8 @@ public class CastAdapter(
 
     private suspend fun connect(device: DeviceId): PatchbayResult<Session> {
         val k = known[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown device"))
+        // Sticky: once a different key was presented nothing is sent to this device until the owner removes it and pairs again.
+        if (device in trustBroken) return PatchbayResult.Err(PatchbayError.TrustChanged(k.name, "${k.name} presented a different key than the one you paired"))
         val tls = when (val r = netGuard.connectTls(k.address, config.port, k.pin, k.name, config.connectTimeoutMs)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> {
@@ -308,7 +312,6 @@ public class CastAdapter(
                 return r
             }
         }
-        trustBroken -= device
         return try {
             tls.socket.soTimeout = config.heartbeatMs
             val s = Session(tls, tls.socket.getOutputStream())

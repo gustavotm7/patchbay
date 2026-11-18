@@ -50,6 +50,12 @@ internal object Conditions {
 
     fun toStored(c: AutomationCondition): StoredCondition = StoredCondition(c.window?.from?.text(), c.window?.until?.text(), c.whileAway)
 
+    /** True when a window was stored but cannot be read back (one end missing or unreadable): such an automation must not run as if it had no condition. */
+    fun isDamaged(s: StoredCondition?): Boolean {
+        if (s == null || (s.from == null && s.until == null)) return false
+        return s.from?.let(DayPoint::parse) == null || s.until?.let(DayPoint::parse) == null
+    }
+
     /** Null when nothing is set; a damaged window (one end missing or unreadable) is dropped, keeping the away flag. */
     fun fromStored(s: StoredCondition?): AutomationCondition? {
         if (s == null) return null

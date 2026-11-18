@@ -97,10 +97,13 @@ public object Bootstrap {
         val netGuard = NetGuard()
         // 5. logger
         val log = SessionLog.start(paths.logs, platform)
-        log.info("boot", "patchbay starting on $platform; key=${keyWrapper.kind}" + if (keyWrapper.osProtected) "" else " (NOT OS-protected)")
+        log.info("boot", "patchbay starting on $platform; keystore=${keyWrapper.kind}" + if (keyWrapper.osProtected) "" else " (NOT OS-protected)")
         storageProblem?.let { log.error("boot", it) }
         // 6. adapters
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        // Last line of defence: an exception nobody caught is logged (class name only, never the message) instead of ending the process on Android or silently
+        // stopping a job on desktop. The long-running loops catch their own errors and carry on (LanHome.guarded).
+        val onUncaught = kotlinx.coroutines.CoroutineExceptionHandler { _, e -> log.error("boot", "uncaught ${e.javaClass.name} in a background job") }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + onUncaught)
         val problems = ArrayList<String>()
         val ctx = AdapterContext(netGuard, scope, log) { msg -> problems += msg; log.warn("boot", msg) }
         val built = adapters.map { it.create(ctx) }

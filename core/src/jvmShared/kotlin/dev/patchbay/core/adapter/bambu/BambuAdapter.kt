@@ -71,6 +71,7 @@ public class BambuAdapter(
 
     override val id: AdapterId = ID
     override fun trustChanged(device: DeviceId): Boolean = device in trustBroken
+    override suspend fun unpair(device: DeviceId) { trustBroken -= device }
     override val systemName: String = "Bambu printers"
     override val discoveryNote: String = "Needs LAN Only Mode on. If a scan can't see it (VLANs, client isolation), use Add by address with the IP and serial."
     override val requiresPairing: Boolean = true
@@ -185,6 +186,7 @@ public class BambuAdapter(
     }
 
     override fun restore(device: DeviceId, address: String, pairing: Pairing?): PatchbayResult<Unit> {
+        if (pairing?.pinnedFingerprint != known[device]?.pin) trustBroken -= device // a fresh pairing with a different key is a fresh decision to trust
         val a = when (val r = netGuard.address(address)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
@@ -277,6 +279,8 @@ public class BambuAdapter(
     private suspend fun connect(device: DeviceId): PatchbayResult<MqttClient> {
         val k = known[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown printer"))
         val code = k.accessCode ?: return PatchbayResult.Err(PatchbayError.Unauthorized("printer not paired"))
+        // Sticky: once a different key was presented nothing is sent to this device until the owner removes it and pairs again.
+        if (device in trustBroken) return PatchbayResult.Err(PatchbayError.TrustChanged("printer", "The printer presented a different key than the one you paired"))
         val tls = when (val r = netGuard.connectTls(k.address, config.mqttPort, k.pin, "printer", config.connectTimeoutMs)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> {
@@ -284,7 +288,6 @@ public class BambuAdapter(
                 return r
             }
         }
-        trustBroken -= device
         tls.socket.soTimeout = config.idleMs
         val m = when (val r = MqttClient.connect(tls.socket, clientId(), BambuReport.USERNAME, code)) {
             is PatchbayResult.Ok -> r.value

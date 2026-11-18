@@ -95,7 +95,17 @@ internal object Aead {
 
     private fun cipher(mode: Int, key: ByteArray, nonce: ByteArray): Cipher {
         require(key.size == 32 && nonce.size == 12) { "key/nonce size" }
-        return Cipher.getInstance("ChaCha20-Poly1305").apply { init(mode, SecretKeySpec(key, "ChaCha20"), IvParameterSpec(nonce)) }
+        return Cipher.getInstance(transformation).apply { init(mode, SecretKeySpec(key, "ChaCha20"), IvParameterSpec(nonce)) }
+    }
+
+    /**
+     * The JDK calls this transformation "ChaCha20-Poly1305"; Android's documented name (Conscrypt) is "ChaCha20/Poly1305/NoPadding". Whichever the platform
+     * provides is used, found once, so HomeKit pairing does not depend on one platform's spelling.
+     */
+    private val transformation: String by lazy {
+        listOf("ChaCha20-Poly1305", "ChaCha20/Poly1305/NoPadding").firstOrNull { name ->
+            try { Cipher.getInstance(name); true } catch (e: java.security.GeneralSecurityException) { false }
+        } ?: "ChaCha20-Poly1305"
     }
 
     /** HAP's 12-byte nonce for pairing messages: four zero bytes then the ASCII label ("PS-Msg05"). */

@@ -74,6 +74,7 @@ public class WebOsAdapter(
 
     override val id: AdapterId = ID
     override fun trustChanged(device: DeviceId): Boolean = device in trustBroken
+    override suspend fun unpair(device: DeviceId) { trustBroken -= device }
     override val systemName: String = "LG TVs"
     override val discoveryNote: String = "The TV must be on, on the same network, with “LG Connect Apps” (or “Mobile TV On”) enabled in its settings."
     override val requiresPairing: Boolean = true
@@ -160,6 +161,7 @@ public class WebOsAdapter(
     )
 
     override fun restore(device: DeviceId, address: String, pairing: Pairing?): PatchbayResult<Unit> {
+        if (pairing?.pinnedFingerprint != known[device]?.pin) trustBroken -= device // a fresh pairing with a different key is a fresh decision to trust
         val a = when (val r = netGuard.address(address)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> return r
@@ -296,6 +298,8 @@ public class WebOsAdapter(
         sessions[device]?.let { return PatchbayResult.Ok(it) }
         val k = known[device] ?: return PatchbayResult.Err(PatchbayError.Unreachable("unknown TV"))
         val key = k.clientKey ?: return PatchbayResult.Err(PatchbayError.Unauthorized("TV not paired"))
+        // Sticky: once a different key was presented nothing is sent to this device until the owner removes it and pairs again.
+        if (device in trustBroken) return PatchbayResult.Err(PatchbayError.TrustChanged(k.name, "${k.name} presented a different key than the one you paired"))
         val tls = when (val r = netGuard.connectTls(k.address, config.wssPort, k.pin, k.name, config.replyTimeoutMs)) {
             is PatchbayResult.Ok -> r.value
             is PatchbayResult.Err -> {
@@ -303,7 +307,6 @@ public class WebOsAdapter(
                 return r
             }
         }
-        trustBroken -= device
         return withContext(Dispatchers.IO) {
             val ws = when (val r = WebSocketClient.handshake(tls.socket, "${k.address.literal}:${config.wssPort}")) {
                 is PatchbayResult.Ok -> r.value

@@ -38,6 +38,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
+private const val OBSERVER_RETRY_MS = 5_000L
+private const val OBSERVER_RETRY_MAX_MS = 60_000L
+
 /**
  * [LiveHome] over real adapters. One instance per process, created by Bootstrap.
  *
@@ -81,8 +84,11 @@ public class LanHome(
     /** What each paired device's adapter was last given, kept so a device that moves can be re-registered at its new address without losing its secret or pinned key. */
     private val pairings = ConcurrentHashMap<DeviceId, Pairing>()
 
+    /** Every write the session makes goes through this; a restored backup freezes it (see [FreezableStore]). */
+    private val frozenWrites = java.util.concurrent.atomic.AtomicInteger()
+    private val live: FreezableStore? = store?.let { s -> FreezableStore(s) { if (frozenWrites.incrementAndGet() == 1) log?.warn("home", "a backup was restored: changes are not saved until Patchbay is restarted") } }
     private val extraSources = java.util.concurrent.CopyOnWriteArrayList<Pair<String, () -> List<String>>>()
-    private val ctx = HomeContext(scope, clock, zone, random, store, log, devices)
+    private val ctx = HomeContext(scope, clock, zone, random, live, log, devices)
     private val activityLog = ActivityLog(ctx)
     private val notifier = Notifier(ctx)
     private val prefs = HomePreferences(ctx)
@@ -149,9 +155,10 @@ public class LanHome(
         return when (r) {
             is PatchbayResult.Err -> r
             is PatchbayResult.Ok -> {
+                live?.freeze()
                 log?.info("home", "restored a backup: ${r.value.devices} devices, ${r.value.pairings} pairings")
-                report("Backup restored. Close Patchbay and open it again to use it.")
-                PatchbayResult.Ok("Restored ${r.value.devices} devices and ${r.value.pairings} pairings. Close Patchbay and open it again to use them.")
+                report("Backup restored. Quit Patchbay completely and start it again to use it. Until then, changes are not saved.")
+                PatchbayResult.Ok("Restored ${r.value.devices} devices and ${r.value.pairings} pairings. Quit Patchbay completely (tray menu, Quit; on Android also stop background watching) and start it again to use them. Until then, changes are not saved.")
             }
         }
     }
@@ -181,9 +188,10 @@ public class LanHome(
         scope.launch {
             while (true) {
                 delay(15_000)
-                tickAutomations()
-                tickAdaptive()
-                tickAway()
+                // One failing job (a full disk under the activity log, say) must not stop the others, or the loop, for the rest of the session.
+                guarded("automations") { tickAutomations() }
+                guarded("adaptive lighting") { tickAdaptive() }
+                guarded("away mode") { tickAway() }
             }
         }
         scope.launch {
@@ -214,10 +222,10 @@ public class LanHome(
 
     /** Devices saved by earlier sessions appear immediately and are polled; no scan needed. */
     private fun restoreSaved() {
-        val saved = store?.devices() ?: return
+        val saved = live?.devices() ?: return
         for (sd in saved) {
             val adapter = adapters.firstOrNull { it.id.value == sd.adapter } ?: continue
-            val pairing = store.pairing(sd.id)?.let { Pairing(it.deviceId, it.secret, it.pinnedSha256) }
+            val pairing = live.pairing(sd.id)?.let { Pairing(it.deviceId, it.secret, it.pinnedSha256) }
             if (pairing != null) pairings[sd.id] = pairing
             if (adapter.restore(sd.id, sd.address, pairing) is PatchbayResult.Err) continue
             val device = Device(
@@ -243,7 +251,27 @@ public class LanHome(
 
     private fun startObserving(adapter: DeviceAdapter, id: DeviceId) {
         observers[id]?.cancel()
-        observers[id] = scope.launch { adapter.observe(id).collect { snap -> updateSnapshot(snap) } }
+        observers[id] = scope.launch {
+            // An adapter that throws must not freeze this device at its last state while the screen still says online: log it and observe again.
+            var wait = OBSERVER_RETRY_MS
+            while (true) {
+                try {
+                    adapter.observe(id).collect { snap -> wait = OBSERVER_RETRY_MS; updateSnapshot(snap) }
+                    return@launch
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log?.warn("home", "observing ${id.value.take(8)} failed (${e.javaClass.simpleName}); trying again in ${wait / 1000} s")
+                }
+                delay(wait)
+                wait = (wait * 2).coerceAtMost(OBSERVER_RETRY_MAX_MS)
+            }
+        }
+    }
+
+    /** Runs one round of a periodic job; anything but cancellation is logged (class name only, never the message) and the job runs again next round. */
+    private inline fun guarded(what: String, block: () -> Unit) {
+        try { block() } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { log?.warn("home", "$what failed (${e.javaClass.simpleName}); it will run again") }
     }
 
     override suspend fun pair(device: DeviceId, prompt: PairingPrompt): PatchbayResult<Unit> {
@@ -257,7 +285,7 @@ public class LanHome(
                 return r
             }
         }
-        store?.savePairing(StoredPairing(device, pairing.secret, pairing.pinnedFingerprint, clock()))
+        live?.savePairing(StoredPairing(device, pairing.secret, pairing.pinnedFingerprint, clock()))
         adapter.restore(device, found.address, pairing)
         pairings[device] = pairing
         pendingPairing.remove(device)
@@ -304,7 +332,7 @@ public class LanHome(
             refreshRooms()
         }
         schedule.publish()
-        store?.forget(device)
+        live?.forget(device)
         activityLog.record(name, "Removed from Patchbay")
         log?.info("home", "removed a device and its saved pairing")
     }
@@ -338,7 +366,7 @@ public class LanHome(
             _devices.update { list -> list.map { if (it.device.id == device) it.copy(device = it.device.copy(roomId = roomId)) else it } }
             refreshRooms()
         }
-        store?.setRoom(device, roomId)
+        live?.setRoom(device, roomId)
     }
 
     override suspend fun rename(device: DeviceId, name: String): PatchbayResult<Unit> {
@@ -350,7 +378,7 @@ public class LanHome(
         synchronized(this) {
             _devices.update { list -> list.map { if (it.device.id == device) it.copy(device = it.device.copy(name = clean)) else it } }
         }
-        store?.devices()?.firstOrNull { it.id == device }?.let { store.saveDevice(it.copy(name = clean), clock()) }
+        live?.devices()?.firstOrNull { it.id == device }?.let { live.saveDevice(it.copy(name = clean), clock()) }
         if (old != clean) activityLog.record(clean, "Renamed (was $old)")
         schedule.publish()
         return PatchbayResult.Ok(Unit)
@@ -403,7 +431,7 @@ public class LanHome(
                 kind = found.kind, vendor = found.vendor, model = found.model, roomId = null, placement = null,
                 controlPath = found.controlPath, capabilities = adapter.capabilities(id), adapter = adapter.id,
             )
-            val unpaired = adapter.requiresPairing && store?.pairing(id) == null
+            val unpaired = adapter.requiresPairing && live?.pairing(id) == null
             if (unpaired) pendingPairing[id] = found
             track(adapter, device, found.address, observe = !unpaired)
             log?.info("home", "found ${device.name} at ${found.address}" + if (unpaired) " (needs pairing)" else "")
@@ -419,7 +447,7 @@ public class LanHome(
             }
         }
         val d = (existing?.device ?: _devices.value.first { it.device.id == id }.device)
-        store?.saveDevice(
+        live?.saveDevice(
             StoredDevice(
                 d.id, adapter.id.value, found.key, d.name, d.kind, d.vendor, d.model, found.address, found.port,
                 d.controlPath, d.roomId, 0, 0,

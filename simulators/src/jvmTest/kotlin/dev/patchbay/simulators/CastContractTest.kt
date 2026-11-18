@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.security.KeyStore
 import java.util.concurrent.CopyOnWriteArrayList
@@ -163,6 +164,37 @@ class CastContractTest {
             assertEquals(dev.patchbay.core.adapter.HealthState.TRUST_CHANGED, a2.health(p.deviceId).state)
         } finally {
             impostor.close()
+        }
+    }
+
+    @Test
+    fun aKeyChangeAlertStaysEvenWhenTheRealDeviceComesBack(): Unit = runBlocking {
+        val d = found()
+        val p = adapter.pair(d, Prompt()).getOrNull()!!
+        val port = cast.port
+        cast.close()
+        val impostor = CastSimulator("127.0.0.80", keystore("device-b.p12"), "testpass".toCharArray(), port = port)
+        var real: CastSimulator? = null
+        try {
+            val a2 = CastAdapter(NetGuard(), { listOf(finding) }, CastAdapter.Config(port = port, connectTimeoutMs = 2_000, heartbeatMs = 300, maxBackoffMs = 300))
+            a2.restore(p.deviceId, "127.0.0.80", p)
+            withTimeout(5_000) { a2.observe(p.deviceId).first() }
+            assertTrue(a2.trustChanged(p.deviceId))
+
+            // The impostor goes away and the genuine device is back on the same address and port: the alert must not clear by itself, and nothing may reconnect.
+            impostor.close()
+            real = CastSimulator("127.0.0.80", keystore("device-a.p12"), "testpass".toCharArray(), port = port)
+            val seen = CopyOnWriteArrayList<dev.patchbay.core.model.DeviceSnapshot>()
+            withTimeoutOrNull(2_500) { a2.observe(p.deviceId).collect { seen += it } }
+            assertTrue(a2.trustChanged(p.deviceId))
+            assertEquals(dev.patchbay.core.adapter.HealthState.TRUST_CHANGED, a2.health(p.deviceId).state)
+            assertTrue(seen.none { it.reachability == Reachability.ONLINE })
+
+            // Only removing the device and pairing again clears it.
+            a2.unpair(p.deviceId)
+            assertFalse(a2.trustChanged(p.deviceId))
+        } finally {
+            impostor.close(); real?.close()
         }
     }
 

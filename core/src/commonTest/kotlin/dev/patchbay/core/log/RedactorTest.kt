@@ -18,6 +18,21 @@ class RedactorTest {
     }
 
     @Test
+    fun masksCredentialsInUrlsHeadersAndPlainSentences() {
+        val rtsp = r("camera rtsp://admin:hunter2pass@192.168.1.5/live0 refused")
+        assertFalse("hunter2pass" in rtsp); assertFalse("admin" in rtsp); assertTrue("192.168.1.5/live0" in rtsp)
+        assertFalse("YWRtaW46aHVudGVyMg" in r("Authorization: Basic YWRtaW46aHVudGVyMg=="))
+        assertFalse("abcdefgh12345" in r("sent Bearer abcdefgh12345 to the device"))
+        assertFalse("12345678" in r("access code 12345678 rejected"))
+        assertFalse("123-45-678" in r("setup code 123-45-678 refused"))
+        assertFalse("123-45-678" in r("accessory 123-45-678"))
+        assertFalse("4821" in r("pin 4821 wrong"))
+        // Ordinary sentences stay readable.
+        assertEquals("the code was rejected, no pin set", r("the code was rejected, no pin set"))
+        assertEquals("http://192.168.1.5/info ok", r("http://192.168.1.5/info ok"))
+    }
+
+    @Test
     fun masksMacsAndDeviceIdsKeepingTail() {
         assertEquals("light **:**:**:**:**:**:72:4E on", r("light 1F:80:C5:32:32:36:72:4E on"))
         assertEquals("gw **:**:**:**:ee:ff", r("gw aa:bb:cc:dd:ee:ff"))

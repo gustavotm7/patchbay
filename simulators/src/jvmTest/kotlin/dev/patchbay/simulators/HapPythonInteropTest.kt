@@ -36,8 +36,8 @@ class HapPythonInteropTest {
 
     @Test
     fun pairsAndTalksToHapPython(): Unit = runBlocking {
-        val port = System.getenv("PATCHBAY_HAP_PYTHON_PORT")?.toIntOrNull() ?: return@runBlocking
-        val id = System.getenv("PATCHBAY_HAP_PYTHON_ID") ?: return@runBlocking
+        val port = System.getenv("PATCHBAY_HAP_PYTHON_PORT")?.toIntOrNull() ?: skipInterop("PATCHBAY_HAP_PYTHON_PORT is not set")
+        val id = System.getenv("PATCHBAY_HAP_PYTHON_ID") ?: skipInterop("PATCHBAY_HAP_PYTHON_ID is not set")
         val finding = Finding("127.0.0.1", emptySet(), setOf("_hap._tcp"), setOf(port), "Hallway", "HAP-python", null, HapAdvert(port, id, 9, true, 0))
         val adapter = HomeKitAdapter(NetGuard(), CastAdapter.CastFinder { listOf(finding) }, HomeKitAdapter.Config(connectTimeoutMs = 3_000, ioTimeoutMs = 5_000, pollIntervalMs = 300, maxBackoffMs = 1_000))
         try {

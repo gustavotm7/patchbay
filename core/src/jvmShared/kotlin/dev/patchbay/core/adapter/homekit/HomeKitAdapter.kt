@@ -55,6 +55,8 @@ public class HomeKitAdapter(
     private val finder: CastAdapter.CastFinder,
     private val config: Config = Config(),
     private val clock: () -> Long = { System.currentTimeMillis() },
+    /** Told about a problem the owner should know about (shown on the network screen). */
+    private val report: (String) -> Unit = {},
 ) : DeviceAdapter {
 
     public data class Config(
@@ -207,10 +209,11 @@ public class HomeKitAdapter(
         return PatchbayResult.Ok(Pairing(id, storedKeys.encode(), fingerprint))
     }
 
-    private suspend fun removePairing(addr: LanAddress, port: Int, keys: HapPairingKeys) {
-        val conn = (connect(addr, port) as? PatchbayResult.Ok)?.value ?: return
-        conn.use {
-            try { withContext(Dispatchers.IO) { HapPairing.verify(it, keys); HapPairing.remove(it, keys) } } catch (_: IOException) {}
+    /** True when the accessory confirmed it dropped our pairing. */
+    private suspend fun removePairing(addr: LanAddress, port: Int, keys: HapPairingKeys): Boolean {
+        val conn = (connect(addr, port) as? PatchbayResult.Ok)?.value ?: return false
+        return conn.use {
+            try { withContext(Dispatchers.IO) { HapPairing.verify(it, keys); HapPairing.remove(it, keys) }; true } catch (_: IOException) { false }
         }
     }
 
@@ -219,7 +222,10 @@ public class HomeKitAdapter(
         val k = known[device] ?: return
         val keys = k.keys ?: return
         drop(device)
-        removePairing(k.address, k.port, keys)
+        if (!removePairing(k.address, k.port, keys)) {
+            // Never silent: the thermostat still holds our pairing, and a later pairing (here or in Apple Home) would be refused as "already paired".
+            report("${k.name} could not be told to forget Patchbay (it did not answer). If it refuses to pair later, reset its HomeKit pairing in its own settings.")
+        }
         known.remove(device)
         trustBroken -= device
     }

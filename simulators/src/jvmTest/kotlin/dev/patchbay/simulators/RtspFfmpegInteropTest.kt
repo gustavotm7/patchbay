@@ -18,8 +18,8 @@ import kotlin.test.assertTrue
 class RtspFfmpegInteropTest {
     @Test
     fun playsAnIndependentlyPacketizedEncode(): Unit = runBlocking {
-        val port = System.getenv("PATCHBAY_RTSP_PORT")?.toIntOrNull() ?: return@runBlocking
-        val out = System.getenv("PATCHBAY_RTSP_OUT")?.let(::File) ?: return@runBlocking
+        val port = System.getenv("PATCHBAY_RTSP_PORT")?.toIntOrNull() ?: skipInterop("PATCHBAY_RTSP_PORT is not set")
+        val out = System.getenv("PATCHBAY_RTSP_OUT")?.let(::File) ?: skipInterop("PATCHBAY_RTSP_OUT is not set")
         val client = RtspStreamClient(NetGuard(), RtspStreamClient.Config(readTimeoutMs = 200, stallMs = 5_000))
         val delivered = java.io.ByteArrayOutputStream()
         var count = 0
@@ -36,9 +36,9 @@ class RtspFfmpegInteropTest {
      */
     @Test
     fun decodesThroughTheRealFfmpeg(): Unit = runBlocking {
-        val port = System.getenv("PATCHBAY_RTSP_PORT")?.toIntOrNull() ?: return@runBlocking
-        val out = System.getenv("PATCHBAY_RTSP_OUT")?.let(::File) ?: return@runBlocking
-        val ffmpeg = System.getenv("PATCHBAY_FFMPEG")?.let(::File) ?: return@runBlocking
+        val port = System.getenv("PATCHBAY_RTSP_PORT")?.toIntOrNull() ?: skipInterop("PATCHBAY_RTSP_PORT is not set")
+        val out = System.getenv("PATCHBAY_RTSP_OUT")?.let(::File) ?: skipInterop("PATCHBAY_RTSP_OUT is not set")
+        val ffmpeg = System.getenv("PATCHBAY_FFMPEG")?.let(::File) ?: skipInterop("PATCHBAY_FFMPEG is not set")
         val video = CameraVideo(NetGuard(), ffmpeg, RtspStreamClient.Config(readTimeoutMs = 200, stallMs = 5_000))
         var frames = 0
         var jpegs = 0

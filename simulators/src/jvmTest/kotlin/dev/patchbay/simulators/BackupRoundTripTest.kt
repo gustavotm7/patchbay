@@ -54,8 +54,17 @@ class BackupRoundTripTest {
             assertTrue(newHome.restoreBackup(text, "not the passphrase!") is PatchbayResult.Err)
             assertEquals(emptyList(), newStore.devices())
             val message = (newHome.restoreBackup(text, "a long enough passphrase") as PatchbayResult.Ok).value
-            assertTrue("Close Patchbay" in message)
-            assertTrue(newHome.problem.value!!.contains("Close Patchbay"))
+            assertTrue("Quit Patchbay" in message)
+            assertTrue(newHome.problem.value!!.contains("Quit Patchbay"))
+
+            // Until the real restart, the running session must not write its old state over what was just restored.
+            val before = newStore.setting("favourites")
+            newHome.setFavourite(id, true)
+            newHome.rename(id, "Changed after restore")
+            newHome.assignRoom(id, "Garage")
+            assertEquals(before, newStore.setting("favourites"))
+            assertEquals("Bedside lamp", newStore.devices().single().name)
+            assertEquals("Bedroom", newStore.devices().single().roomId?.value)
 
             // "Restart": a home built from what was restored.
             val restarted = LanHome(guard, listOf(adapter()), scope, null, newStore)

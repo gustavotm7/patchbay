@@ -400,7 +400,7 @@ This is the first real-camera test of the RTSP video code (H.264 and H.265): tel
 | B1.1 | Pair at least one device that needs pairing. Settings → Backup: type a passphrase of 8 or more characters, press **Copy encrypted backup** | The button is disabled below 8 characters. "Copied" appears. Paste into a text editor: one line starting `PATCHBAY-BACKUP-1:` and nothing readable after it |
 | B1.2 | Close Patchbay and start it again | The paired device comes back by itself, paired (this also checks the start-up fix: a saved paired device used to stop the app from starting) |
 | B1.3 | Settings → Backup: type a wrong passphrase, put the backup on the clipboard, **Restore**, **Confirm restore** | "That passphrase doesn't open this backup, or the backup is damaged". Nothing changes |
-| B1.4 | Same with the right passphrase | "Restored N devices and M pairings. Close Patchbay and open it again". After restarting, devices, rooms, scenes and automations are back, and paired devices do not ask for their code |
+| B1.4 | Same with the right passphrase | "Restored N devices and M pairings. Quit Patchbay completely and start it again (changes are not saved until then)". After restarting, devices, rooms, scenes and automations are back, and paired devices do not ask for their code |
 | B1.5 | Restore on another computer or phone (a fresh install) | Same result; devices show offline for a minute at most, then come back as the app finds them at their new addresses |
 
 ## Phase 2 — Device-triggered automations (A1.x)

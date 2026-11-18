@@ -69,7 +69,7 @@ public object AdapterRegistry {
     /** HomeKit thermostats (ecobee): HAP over the LAN with the setup code; found through the network census (mDNS). */
     public val HOMEKIT: AdapterFactory = AdapterFactory { ctx ->
         val census = NetworkCensus(ctx.netGuard)
-        HomeKitAdapter(ctx.netGuard, CastAdapter.CastFinder { (census.run() as? PatchbayResult.Ok)?.value.orEmpty() })
+        HomeKitAdapter(ctx.netGuard, CastAdapter.CastFinder { (census.run() as? PatchbayResult.Ok)?.value.orEmpty() }, report = ctx.report)
     }
 
     /** Local adapters enabled by default, in discovery order. */

@@ -12,7 +12,7 @@ import kotlin.test.Test
 class SimulatorHostForInterop {
     @Test
     fun host() {
-        val dir = System.getenv("PATCHBAY_SIM_HOST_DIR")?.let(::File) ?: return
+        val dir = System.getenv("PATCHBAY_SIM_HOST_DIR")?.let(::File) ?: skipInterop("PATCHBAY_SIM_HOST_DIR is not set")
         val tuya = TuyaSimulator("127.0.0.171", "bf1234567890abcdef12", "0123456789abcdef")
         val tuya34 = TuyaSimulator("127.0.0.176", "bf1234567890abcdef12", "0123456789abcdef", version = "3.4")
         val tuya35 = TuyaSimulator("127.0.0.177", "bf1234567890abcdef12", "0123456789abcdef", version = "3.5")

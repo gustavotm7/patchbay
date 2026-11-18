@@ -44,6 +44,12 @@ internal class Automations(
         // A trigger this version doesn't know (a newer file, or damage) is dropped, never fatal.
         stored = decoded.filter { a -> a.trigger == null || DeviceEvent.entries.any { it.name == a.trigger.event } }
         if (stored.size != decoded.size) ctx.log?.warn("home", "dropped ${decoded.size - stored.size} automations with an unknown trigger")
+        // A condition that can no longer be read must not quietly turn into "always": switch that automation off, where its owner will see it.
+        val damaged = stored.count { it.enabled && Conditions.isDamaged(it.condition) }
+        if (damaged > 0) {
+            stored = stored.map { if (it.enabled && Conditions.isDamaged(it.condition)) it.copy(enabled = false) else it }
+            ctx.log?.warn("home", "switched off $damaged automations whose condition could not be read")
+        }
         publish()
     }
 
