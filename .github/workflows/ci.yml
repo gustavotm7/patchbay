@@ -1,5 +1,5 @@
 # Patchbay CI. Every third-party action is pinned to a full commit SHA (tag in the comment).
-# Permissions are read-only. No caches or artifacts are shared across forks. Last forced run: 2026-11-18, desktop smoke job diagnostics.
+# Permissions are read-only. No caches or artifacts are shared across forks. Last forced run: 2026-11-18, desktop smoke job diagnostics 2.
 name: ci
 
 on:

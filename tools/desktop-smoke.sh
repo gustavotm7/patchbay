@@ -70,12 +70,6 @@ f="$(log_file)"
 echo "---- session log ----"
 [ -f "$OUT/session.log" ] && sed 's/^/    /' "$OUT/session.log" | head -60
 echo "---- gradle output (tail) ----"
-tail -15 "$OUT/gradle.log" | sed 's/^/    /'
-if [ "$failures" -gt 0 ]; then
-  echo "---- first error in the gradle output ----"
-  grep -n -m1 -E "Exception|Error|UnsatisfiedLink|FAILED|went wrong" "$OUT/gradle.log" | cut -d: -f1 | while read -r n; do
-    sed -n "$((n > 5 ? n - 5 : 1)),$((n + 30))p" "$OUT/gradle.log" | sed 's/^/    /'
-  done
-fi
+tail -70 "$OUT/gradle.log" | sed 's/^/    /'
 if [ "$failures" -gt 0 ]; then echo "desktop smoke test: $failures failure(s)"; exit 1; fi
 echo "desktop smoke test: OK"
